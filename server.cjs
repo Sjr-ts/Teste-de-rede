@@ -134,43 +134,11 @@ setInterval(async () => {
     if (sseClients.size === 0) return;
     try {
         const painel = monitor.obterPainel();
-        // Tenta incluir dados do Zabbix se disponivel
-        try {
-            const zb = require('./monitor/zabbix-bridge');
-            const cfg = zb.loadConfig ? zb.loadConfig() : null;
-            if (cfg && cfg.url) {
-                const dadosZb = await zb.dadosMonitoramentoZabbix();
-                // Merge Zabbix data into panel linhas
-                if (Array.isArray(dadosZb) && dadosZb.length) {
-                    const zbMap = {};
-                    for (const z of dadosZb) { if (!zbMap[z.ip] || zbMap[z.ip].disponivel === null) zbMap[z.ip] = z; }
-                    for (const linha of (painel.linhas || [])) {
-                        const z = zbMap[linha.ip];
-                        if (z) {
-                            linha.zabbix = {
-                                disponivel: z.disponivel,
-                                latenciaMs: z.latenciaMs,
-                                perdaPct: z.perdaPct,
-                                available: z.available,
-                                error: z.error
-                            };
-                            // Merge inteligente: coletor local tem precedencia se fresco (<120s)
-                            // (Docker Zabbix nao alcanca o IP do host local)
-                            const localFresco = linha.ultimoHorario && (Date.now() - new Date(linha.ultimoHorario).getTime()) < 120000;
-                            if (!localFresco) {
-                                if (z.disponivel === true) {
-                                    if (linha.estado !== 'ACESSIVEL') linha.estado = 'ACESSIVEL';
-                                } else if (z.disponivel === false) {
-                                    if (linha.estado === 'ACESSIVEL') linha.estado = 'SEM_RESPOSTA';
-                                }
-                                if (z.latenciaMs != null) linha.latenciaMediaMs = z.latenciaMs;
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (e) {}
-        sseBroadcast('painel', painel);
+        // Usa o mesmo enriquecimento da API (/api/monitor/painel) para que
+        // CPU/RAM/Disco/Uptime do Zabbix sejam incluidos no SSE. Antes o SSE
+        // so enriquecia disponibilidade/latencia, causando "piscar" INDISP./valor.
+        const painelEnr = await enriquecerPainelComZabbix(painel);
+        sseBroadcast('painel', painelEnr);
     } catch (e) {}
 }, 5000);
 
