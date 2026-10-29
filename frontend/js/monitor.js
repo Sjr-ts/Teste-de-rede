@@ -821,7 +821,7 @@ function monRenderTabela(p) {
             '<td>' + ramCell + '</td>' +
             '<td>' + discoCell + '</td>' +
             '<td>' + alertas + '</td>' +
-            '<td><span style="font-size:10px;color:var(--cyan);">' + esc(l.fonte || '-') + (l.zabbix ? ' + ZABBIX' : '') + '</span></td>' +
+            '<td><span style="font-size:10px;color:var(--cyan);">' + esc(l.fonte || '-') + '</span></td>' +
             '<td><button class="action-btn action-btn-edit" onclick="monVerDetalhe(\'' + esc(l.ip) + '\')" title="Detalhes"><i class="fas fa-chart-line"></i></button></td>' +
             '</tr>';
     }).join('');
