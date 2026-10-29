@@ -1324,16 +1324,41 @@ async function monVerDetalhe(ip) {
             // CPU
             const cpu = zbx.metricas && zbx.metricas.cpu;
             if (cpu && cpu.valor) {
-                html += monDetailItem('CPU', cpu.valor.valor + '% <span style="color:var(--text-muted);font-size:10px;">(' + cpu.valor.nome + ')</span>');
+                const cpuVal = parseFloat(cpu.valor.valor);
+                const cpuStr = isNaN(cpuVal) ? cpu.valor.valor : (Math.round(cpuVal * 10) / 10) + '%';
+                html += monDetailItem('CPU', cpuStr + ' <span style="color:var(--text-muted);font-size:10px;">(' + (cpu.valor.nome || '') + ')</span>');
             } else if (cpu && cpu.indisponivel) {
                 html += monDetailItem('CPU', '<span style="color:var(--text-muted);">' + esc(cpu.indisponivel) + '</span>');
+            }
+            // GPU
+            const gpu = zbx.metricas && zbx.metricas.gpu;
+            if (gpu && gpu.valor) {
+                const gpuVal = parseFloat(gpu.valor.valor);
+                const gpuStr = isNaN(gpuVal) ? gpu.valor.valor : (Math.round(gpuVal * 10) / 10) + '%';
+                html += monDetailItem('GPU', gpuStr + ' <span style="color:var(--text-muted);font-size:10px;">(' + (gpu.valor.nome || '') + ')</span>');
+            } else if (gpu && gpu.indisponivel) {
+                html += monDetailItem('GPU', '<span style="color:var(--text-muted);">' + esc(gpu.indisponivel) + '</span>');
             }
             // RAM
             const ram = zbx.metricas && zbx.metricas.memoria;
             if (ram && ram.valor) {
-                html += monDetailItem('RAM disponivel', ram.valor.valor + '%');
+                const ramVal = parseFloat(ram.valor.valor);
+                const ramStr = isNaN(ramVal) ? ram.valor.valor : (Math.round(ramVal * 10) / 10) + '%';
+                html += monDetailItem('RAM', ramStr + ' <span style="color:var(--text-muted);font-size:10px;">(' + (ram.valor.nome || '') + ')</span>');
             } else if (ram && ram.indisponivel) {
                 html += monDetailItem('RAM', '<span style="color:var(--text-muted);">' + esc(ram.indisponivel) + '</span>');
+            }
+            // Uptime
+            const uptime = zbx.metricas && zbx.metricas.uptime;
+            if (uptime && uptime.valor) {
+                const secs = parseInt(uptime.valor.valor);
+                if (!isNaN(secs)) {
+                    const dias = Math.floor(secs / 86400);
+                    const horas = Math.floor((secs % 86400) / 3600);
+                    html += monDetailItem('Uptime', dias + 'd ' + horas + 'h <span style="color:var(--text-muted);font-size:10px;">(' + (uptime.valor.nome || '') + ')</span>');
+                } else {
+                    html += monDetailItem('Uptime', esc(uptime.valor.valor));
+                }
             }
             html += '</div>';
             // Triggers
@@ -1355,11 +1380,25 @@ async function monVerDetalhe(ip) {
                 '</div></div>';
         }
 
-        // Indisponiveis
-        html += '<div class="glass-panel"><div class="glass-panel-header"><h3><i class="fas fa-ban"></i> Dados Indisponiveis</h3></div><div style="padding:14px;font-size:11px;color:var(--text-muted);line-height:2;">';
+        // Indisponiveis (apenas metricas realmente indisponiveis — exclui as que o Zabbix fornece)
         const indisps = (mon && mon.indisponiveis) || [];
-        for (const i of indisps) html += '<div><i class="fas fa-ban" style="color:var(--red);width:14px;"></i> ' + esc(i) + '</div>';
-        html += '</div></div>';
+        // Filtra mensagens stale quando Zabbix fornece a metrica
+        const indispsFiltradas = indisps.filter(function(i) {
+            const txt = (i || '').toLowerCase();
+            if (zbx && zbx.encontrado && zbx.metricas) {
+                if (txt.includes('cpu') && zbx.metricas.cpu && zbx.metricas.cpu.valor) return false;
+                if (txt.includes('ram') && zbx.metricas.memoria && zbx.metricas.memoria.valor) return false;
+                if (txt.includes('memoria') && zbx.metricas.memoria && zbx.metricas.memoria.valor) return false;
+            }
+            return true;
+        });
+        if (indispsFiltradas.length > 0) {
+            html += '<div class="glass-panel"><div class="glass-panel-header"><h3><i class="fas fa-ban"></i> Dados Indisponiveis</h3></div><div style="padding:14px;font-size:11px;color:var(--text-muted);line-height:2;">';
+            for (const i of indispsFiltradas) html += '<div><i class="fas fa-ban" style="color:var(--red);width:14px;"></i> ' + esc(i) + '</div>';
+            html += '</div></div>';
+        } else if (zbx && zbx.encontrado) {
+            html += '<div class="glass-panel" style="border-left:3px solid var(--green);"><div style="padding:14px;font-size:11px;color:var(--green);"><i class="fas fa-check-circle"></i> Todas as metricas disponiveis via Zabbix (CPU, RAM, Disco, Uptime, GPU).</div></div>';
+        }
 
         html += '</div>';
 

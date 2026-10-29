@@ -315,6 +315,7 @@ async function obterMetricasHost(hostid) {
     const metricas = {
         cpu: null,
         memoria: null,
+        gpu: null,
         disco: null,
         rede: null,
         uptime: null,
@@ -326,13 +327,18 @@ async function obterMetricasHost(hostid) {
         const key = item.key_ || '';
         
         // CPU
-        if (key === 'system.cpu.util' || key.includes('cpu.util[,avg1]')) {
+        if (key === 'system.cpu.util' || key.includes('cpu.util')) {
             metricas.cpu = { itemid: item.itemid, nome: item.name, key };
         }
         
-        // Memoria
-        if (key === 'vm.memory.size[pavailable]') {
+        // Memoria (pavailable OU vm.memory.util)
+        if (key === 'vm.memory.size[pavailable]' || key === 'vm.memory.util') {
             metricas.memoria = { itemid: item.itemid, nome: item.name, key, unidade: item.units };
+        }
+        
+        // GPU
+        if (key.toLowerCase().includes('gpu')) {
+            metricas.gpu = { itemid: item.itemid, nome: item.name, key, unidade: item.units };
         }
         
         // Disco (espaco livre)
@@ -352,8 +358,8 @@ async function obterMetricasHost(hostid) {
             metricas.uptime = { itemid: item.itemid, nome: item.name, key };
         }
         
-        // Disponibilidade (ICMP)
-        if (key === 'icmpping' || key === 'net.tcp.service[icmpping]') {
+        // Disponibilidade (ICMP ou agent.ping)
+        if (key === 'icmpping' || key === 'net.tcp.service[icmpping]' || key === 'agent.ping' || key === 'zabbix[host,active_agent,available]') {
             metricas.disponibilidade = { itemid: item.itemid, nome: item.name, key };
         }
     }
@@ -547,8 +553,14 @@ async function monitoramentoHost(ip) {
         const itemids = [];
         if (metricas.cpu) itemids.push(metricas.cpu.itemid);
         if (metricas.memoria) itemids.push(metricas.memoria.itemid);
+        if (metricas.gpu) itemids.push(metricas.gpu.itemid);
         if (metricas.uptime) itemids.push(metricas.uptime.itemid);
         if (metricas.disponibilidade) itemids.push(metricas.disponibilidade.itemid);
+        // Inclui agent.ping e active_agent para disponibilidade de agentes ativos
+        const agentItems = (await listarItens(host.hostid)).filter(it =>
+            it.key_ === 'agent.ping' || it.key_ === 'zabbix[host,active_agent,available]'
+        );
+        for (const ai of agentItems) itemids.push(ai.itemid);
 
         let valores = [];
         if (itemids.length) {
@@ -598,11 +610,12 @@ async function monitoramentoHost(ip) {
             },
             metricas: {
                 cpu: metricas.cpu ? { definicao: metricas.cpu, valor: valoresMap['system.cpu.util'] || null } : { indisponivel: 'CPU nao configurada no Zabbix' },
-                memoria: metricas.memoria ? { definicao: metricas.memoria, valor: valoresMap['vm.memory.size[pavailable]'] || null } : { indisponivel: 'Memoria nao configurada no Zabbix' },
+                memoria: metricas.memoria ? { definicao: metricas.memoria, valor: (metricas.memoria.key === 'vm.memory.util' ? valoresMap['vm.memory.util'] : valoresMap['vm.memory.size[pavailable]']) || null } : { indisponivel: 'Memoria nao configurada no Zabbix' },
+                gpu: metricas.gpu ? { definicao: metricas.gpu, valor: valoresMap[metricas.gpu.key] || null } : { indisponivel: 'GPU nao configurada no Zabbix' },
                 uptime: metricas.uptime ? { definicao: metricas.uptime, valor: valoresMap['system.uptime'] || null } : null,
                 disco: metricas.disco || [],
                 rede: metricas.rede || [],
-                disponibilidade: metricas.disponibilidade ? { definicao: metricas.disponibilidade, valor: valoresMap['icmpping'] || null } : null
+                disponibilidade: metricas.disponibilidade ? { definicao: metricas.disponibilidade, valor: valoresMap['icmpping'] || valoresMap['agent.ping'] || null } : null
             },
             problemas: problemas.map(p => ({
                 eventid: p.eventid,
