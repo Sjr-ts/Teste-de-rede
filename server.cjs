@@ -45,8 +45,10 @@ app.get('/api/monitor/stream', (req, res) => {
 });
 
 // ---- Enriquecimento do painel com Zabbix (unico caminho p/ SSE e API — evita dados piscando) ----
-let _zbCache = { dados: null, metricas: null, ts: 0 };
-const ZB_CACHE_MS = 60000; // se o Zabbix falhar/timeout, reutiliza o ultimo dado valido por 60s
+// Cache separado para dados e metricas (timestamps independentes) para evitar
+// que a expiracao de um invalide o outro.
+let _zbCache = { dados: null, dadosTs: 0, metricas: null, metricasTs: 0 };
+const ZB_CACHE_MS = 300000; // 5 min: reutiliza ultimo dado valido por mais tempo
 
 async function enriquecerPainelComZabbix(painel) {
     if (!painel || !Array.isArray(painel.linhas)) return painel;
@@ -59,9 +61,9 @@ async function enriquecerPainelComZabbix(painel) {
         let dadosZb = null;
         try {
             const fresh = await zb.dadosMonitoramentoZabbix();
-            if (Array.isArray(fresh) && fresh.length) { dadosZb = fresh; _zbCache.dados = fresh; _zbCache.ts = Date.now(); }
+            if (Array.isArray(fresh) && fresh.length) { dadosZb = fresh; _zbCache.dados = fresh; _zbCache.dadosTs = Date.now(); }
         } catch (e) {}
-        if (!dadosZb && _zbCache.dados && (Date.now() - _zbCache.ts) < ZB_CACHE_MS) dadosZb = _zbCache.dados;
+        if (!dadosZb && _zbCache.dados) dadosZb = _zbCache.dados; // fallback permanente (sem TTL)
 
         if (Array.isArray(dadosZb) && dadosZb.length) {
             const zbMap = {};
@@ -76,7 +78,6 @@ async function enriquecerPainelComZabbix(painel) {
                         available: z.available,
                         error: z.error
                     };
-                    // Coletor local tem precedencia se fresco (<120s)
                     const localFresco = linha.ultimoHorario && (Date.now() - new Date(linha.ultimoHorario).getTime()) < 120000;
                     if (!localFresco) {
                         if (z.disponivel === true) {
@@ -94,9 +95,9 @@ async function enriquecerPainelComZabbix(painel) {
         let metricasZb = null;
         try {
             const freshM = await zb.dadosCompletosZabbix();
-            if (Array.isArray(freshM) && freshM.length) { metricasZb = freshM; _zbCache.metricas = freshM; _zbCache.ts = Date.now(); }
+            if (Array.isArray(freshM) && freshM.length) { metricasZb = freshM; _zbCache.metricas = freshM; _zbCache.metricasTs = Date.now(); }
         } catch (e) {}
-        if (!metricasZb && _zbCache.metricas && (Date.now() - _zbCache.ts) < ZB_CACHE_MS) metricasZb = _zbCache.metricas;
+        if (!metricasZb && _zbCache.metricas) metricasZb = _zbCache.metricas; // fallback permanente (sem TTL)
 
         if (Array.isArray(metricasZb) && metricasZb.length) {
             const mzMap = {};
@@ -717,4 +718,16 @@ app.listen(PORT, () => {
     console.log('Servidor rodando em http://192.168.0.186:' + PORT);
     // Inicia o coletor em background (ciclos automaticos + SSE)
     try { monitor.iniciar(); } catch (e) { console.error('[server] falha ao iniciar monitor:', e.message); }
+
+    // Pre-aquecimento do cache Zabbix (evita primeiro SSE com INDISP.)
+    setTimeout(async () => {
+        try {
+            const zb = require('./monitor/zabbix-bridge');
+            const cfg = zb.loadConfig ? zb.loadConfig() : null;
+            if (cfg && cfg.url) {
+                await enriquecerPainelComZabbix(monitor.obterPainel());
+                console.log('[zabbix] cache pre-aquecido com sucesso');
+            }
+        } catch (e) { console.log('[zabbix] pre-aquecimento falhou:', e.message); }
+    }, 5000);
 });
