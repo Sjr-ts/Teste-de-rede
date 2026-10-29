@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventário TI & Monitoramento Preventivo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script>
+      tailwindConfig = {
+        theme: {
+          extend: {
+            fontFamily: {
+              display: ['Space Grotesk', 'sans-serif'],
+              mono: ['JetBrains Mono', 'monospace'],
+            },
+            colors: {
+              bg: '#0a0e1a',
+              card: '#111827',
+              border: '#1f2937',
+              foreground: '#f8fafc',
+              muted: '#64748b',
+              accent: '#06d6a0',
+              accentHover: '#0891b2',
+              warning: '#f59e0b',
+              error: '#ef4444',
+              info: '#3b82f6',
+              success: '#10b981',
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+        :root {
+            --bg: #0a0e1a;
+            --card: #111827;
+            --border: #1f2937;
+            --fg: #f8fafc;
+            --muted: #64748b;
+            --accent: #06d6a0;
+            --accent-hover: #0891b2;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --info: #3b82f6;
+            --success: #10b981;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background: var(--bg);
+            color: var(--fg);
+            margin: 0;
+            overflow-x: hidden;
+        }
+
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* Slide container */
+        .slide-container { width: 100%; height: 100vh; position: relative; }
+
+        .slide {
+            position: absolute;
+            left: 0; top: 0;
+            width: 100%; height: 100%;
+            opacity: 0; visibility: hidden;
+            transition: opacity 0.8s ease, visibility 0.8s ease;
+            z-index: 1;
+        }
+
+        .slide.active { opacity: 1; visibility: visible; z-index: 10; }
+
+        /* Background gradient animation */
+        .bg-animate {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: 
+                radial-gradient(ellipse 80% 50% at 20% 20%, rgba(6,214,160,0.15) 0%, transparent 50%),
+                radial-gradient(ellipse 60% 40% at 80% 80%, rgba(6,214,160,0.1) 0%, transparent 50%),
+                var(--bg);
+            background-attachment: fixed;
+            animation: bgShift 20s ease infinite;
+        }
+
+        @keyframes bgShift {
+            0%, 100% { background-position: 0% 0%, 100% 100%; }
+            50% { background-position: 50% 50%, 50% 50%; }
+        }
+
+        .noise-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter name='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+            opacity: 0.03;
+        }
+
+        .header-pattern {
+            position: absolute; top: 0; left: 0; right: 0; height: 100px;
+            background: linear-gradient(180deg, rgba(6,214,160,0.03) 0%, transparent 100%);
+            pointer-events: none;
+        }
+
+        /* Nav bullets */
+        .nav-bullets {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 8px; z-index: 20;
+        }
+        .nav-bullets button {
+            width: 12px; height: 12px; border: none; border-radius: 50%;
+            background: var(--muted); cursor: pointer; transition: all 0.3s ease; padding: 0;
+        }
+        .nav-bullets button.active, .nav-bullets button:hover {
+            background: var(--accent); transform: scale(1.3);
+        }
+
+        /* Slide content */
+        .slide-content { max-width: 960px; margin: 0 auto; padding: 40px 24px; height: 100%; display: flex; flex-direction: column; justify-content: space-between; }
+
+        .slide-title { font-size: clamp(2.5rem, 6vw, 4rem); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; margin-bottom: 16px; }
+
+        .slide-subtitle { font-size: 1rem; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 32px; }
+
+        .slide-text { font-size: 1rem; line-height: 1.8; color: var(--muted); margin: 16px 0; }
+
+        .slide-text strong { color: var(--fg); }
+
+        .slide-text .accent { color: var(--accent); }
+
+        .feature-card {
+            background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; transition: all 0.3s ease;
+        }
+        .feature-card:hover { border-color: var(--accent); transform: translateY(-4px); }
+
+        .feature-icon {
+            width: 48px; height: 48px; border-radius: 8px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+            display: flex; align-items: center; justify-content: center; margin-bottom: 16px; flex-shrink: 0;
+        }
+        .feature-icon i { color: var(--bg); font-size: 20px; }
+
+        .kpi-card {
+            background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px; text-align: center; transition: all 0.3s ease;
+        }
+        .kpi-card:hover { border-color: var(--accent); }
+        .kpi-value { font-size: 2.5rem; font-weight: 700; margin-bottom: 4px; }
+        .kpi-label { font-size: 0.875rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+
+        .status-dot {
+            width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+        }
+        .status-dot.connected { background: var(--success); box-shadow: 0 0 12px var(--success); }
+        .status-dot.disconnected { background: var(--error); box-shadow: 0 0 12px var(--error); }
+        .status-dot.pending { background: var(--warning); box-shadow: 0 0 12px var(--warning); }
+
+        /* Table styles */
+        .slide-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        .slide-table th {
+            background: var(--card); padding: 12px 16px; text-align: left; font-size: 0.75rem;
+            text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); border-bottom: 1px solid var(--border);
+        }
+        .slide-table td { padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
+        .slide-table tr:hover td { background: var(--cardHover); }
+
+        /* Progress bar */
+        .progress-bar {
+            position: fixed; top: 0; left: 0; height: 3px; background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+            z-index: 100; width: 0%; transition: width 0.3s ease;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(8px); display: none; align-items: center; justify-content: center; z-index: 100;
+        }
+        .modal-content {
+            background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 32px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto;
+        }
+        .close-modal {
+            position: absolute; top: 16px; right: 16px; width: 28px; height: 28px; border: none; background: transparent; color: var(--muted); font-size: 1.25rem; cursor: pointer;
+        }
+
+        /* Nav arrows */
+        .nav-arrow {
+            position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border: none;
+            background: rgba(255,255,255,0.1); color: var(--fg); font-size: 1.5rem; border-radius: 8px; cursor: pointer; z-index: 10; transition: background 0.3s ease;
+        }
+        .nav-arrow:hover { background: rgba(255,255,255,0.2); }
+        .nav-arrow.prev { left: 20px; }
+        .nav-arrow.next { right: 20px; }
+
+        /* Reduced motion */
+        @media (prefers-reduced-motion: reduce) {
+            .bg-animate { animation: none; }
+            .slide { transition: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="progress-bar" id="progressBar"></div>
+    
+    <div class="slide-container" id="slideContainer">
+        <!-- Slide 1: Capa -->
+        <section class="slide" data-slide="1">
+            <div class="slide-content">
+                <div class="header-pattern"></div>
+                <div class="bg-animate"></div>
+                <div class="noise-overlay"></div>
+                <h1 class="slide-title">Sistema de Inventário de TI</h1>
+                <p class="slide-subtitle">Monitoramento Preventivo Zabbix 7.0 LTS</p>
+                <p class="slide-text" style="margin-top:40px;">Clone local testado • Dados reais do ativo • Zero alterações no produção</p>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:40px;">
+                    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;">
+                        <div style="font-weight:600;color:var(--accent);margin-bottom:8px;">101 Computadores</div>
+                        <p style="color:var(--muted);font-size:0.875rem;">Inventário completo</p>
+                    </div>
+                    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;">
+                        <div style="font-weight:600;color:var(--accent);margin-bottom:8px;">Zabbix 7.0</div>
+                        <p style="color:var(--muted);font-size:0.875rem;">LTS via Docker</p>
+                    </div>
+                    <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;">
+                        <div style="font-weight:600;color:var(--accent);margin-bottom:8px;">Agentless</div>
+                        <p style="color:var(--muted);font-size:0.875rem;">Sem agente nos PCs</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Slide 2: Visão Geral -->
+        <section class="slide" data-slide="2">
+            <div class="slide-content">
+                <div class="header-pattern"></div>
+                <h2 class="slide-title">Visão Geral do Sistema</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div>
+                        <h3>Inventário</h3>
+                        <ul class="slide-text">
+                            <li>101 computadores cadastrados</li>
+                            <li>97 ramais gerenciados</li>
+                            <li>22 setores configurados</li>
+                            <li>486 logs de operação</li>
+                            <li>48 softwares/licenças</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3>Arquitetura</h3>
+                        <ul class="slide-text">
+                            <li>Node.js + Express (porta 5903)</li>
+                            <li>H2 database (arquivo)</li>
+                            <li>WebSocket em tempo real</li>
+                            <li>Docker Desktop 29.6.2</li>
+                            <li>Zabbix 7.0.31 (4 containers)</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="kpi-grid" style="margin-top:32px;">
+                    <div class="kpi-card"><div class="kpi-value mono" id="kpi-comps">101</div><div class="kpi-label">Computadores</div></div>
+                    <div class="kpi-card"><div class="kpi-value mono" id="kpi-ramais">97</div><div class="kpi-label">Ramais</div></div>
+                    <div class="kpi-card"><div class="kpi-value mono" id="kpi-setores">22</div><div class="kpi-label">Setores</div></div>
+                    <div class="kpi-card"><div class="kpi-value mono" id="kpi-logs">486</div><div class="kpi-label">Logs</div></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Slide 3: Monitoramento -->
+        <section class="slide" data-slide="3">
+            <div class="slide-content">
+                <div class="header-pattern"></div>
+                <h2 class="slide-title">Módulo de Monitoramento</h2>
+                <p class="slide-subtitle">Nova aba no dashboard — ICMP + Métricas Locais</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div>
+                        <h3>Status em Tempo Real</h3>
+                        <ul class="slide-text">
+                            <li>Zabbix: <span class="status-dot connected"></span> Conectado (7.0.31)</li>
+                            <li>Hosts monitorados: 5 (ping nativo)</li>
+                            <li>Latência média: 1-68ms</li>
+                            <li>Auto-refresh: 30s</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3>KPIs Coletados</h3>
+                        <ul class="slide-text">
+                            <li>CPU: Node os.cpus() — delta de tempo</li>
+                            <li>GPU: nvidia-smi / Performance Counter</li>
+                            <li>RAM: total/usado/livre via os.freemem()</li>
+                            <li>Disco: WMI Win32_LogicalDisk</li>
+                            <li>Uptime: segundos desde boot</li>
+                            <li>Reinício: detectado por queda de uptime</li>
+                        </ul>
+                    </div>
+                </div>
+                <div style="margin-top:32px;">
+                    <div class="feature-card"><div class="feature-icon"><i class="fas fa-satellite-dish"></i></div><div><h4>Coletor Agentless</h4><p style="color:var(--muted)">Sem agente nos PCs. Somente ping a partir deste servidor.</p></div></div>
+                    <div class="feature-card"><div class="feature-icon"><i class="fas fa-database"></i></div><div><h4>Persistência JSONL</h4><p style="color:var(--muted)">Medicoes brutas + agregados diarios (30/365 dias)</p></div></div>
+                    <div class="feature-card"><div class="feature-icon"><i class="fas fa-shield-alt"></i></div><div><h4>Alertas Inteligentes</h4><p style="color:var(--muted)">5 gravidades x 5 confiancas + correlacao por setor</p></div></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Slide 4: Zabbix Integration -->
+        <section class="slide" data-slide="4">
+            <div class="slide-content">
+                <div class="header-pattern"></div>
+                <h2 class="slide-title">Integração Zabbix 7.0 LTS</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div>
+                        <h3>Stack Docker</h3>
+                        <ul class="slide-text">
+                            <li>zbx-postgres:16-alpine</li>
+                            <li>zbx-server:7.0.31</li>
+                            <li>zbx-web:8081 (Admin/zabbix)</li>
+                            <li>zbx-agent-local:10050</li>
+                            <li>Todos os containers: Up & Healthy</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3>API Bridge</h3>
+                        <ul class="slide-text">
+                            <li>JSON-RPC 192.168.0.186:8081/api_jsonrpc.php</li>
+                            <li>Métodos: host.get, problem.get, history.get</li>
+                            <li>selectTags: 'extend' (correcao aplicada)</li>
+                            <li>Token API dedicado gerado</li>
+                            <li>Bridge: monitor/zabbix-bridge.js</li>
+                        </ul>
+                    </div>
+                </div>
+                <div style="margin-top:32px;">
+                    <div class="feature-card"><div class="feature-icon"><i class="fas fa-database"></i></div><div><h4>Status API</h4><p style="color:var(--muted)">/api/zabbix/status → versao 7.0.31, ok:true</p></div></div>
+                    <div class="feature-card"><div class="feature-icon"><i class="fas fa-network-wired"></i></div><div><h4>Hosts Zabbix</h4><p style="color:var(--muted)">1 host local (agente) + configuracao para .131</p></div></div>
+                    <div class="feature-card"><div class="feature-icon"><i class="fas fa-sync"></i></div><div><h4>Sincronizacao</h4><p style="color:var(--muted)">/api/zabbix/sincronizar — cria/atualiza hosts automaticos</p></div></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Slide 5: Zabbix Agent -->
+        <section class="slide" data-slide="5">
+            <div class="slide-content">
+                <div class="header-pattern"></div>
+                <h2 class="slide-title">Zabbix Agent 2 — Deploy Remoto</h2>
+                <p class="slide-subtitle">Instalacao silenciosa via MSI + PSK</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div>
+                        <h3>Arquivos Disponiveis</h3>
+                        <ul class="slide-text">
+                            <li>zabbix_agent2-7.0-latest-windows-amd64-openssl.msi (17.6 MB)</li>
+                            <li>zabbix_agent2.conf — config com PSK</li>
+                            <li>MANUAL_INSTALACAO_131.md — passo a passo</li>
+                            <li>psk.txt — chave de criptografia: 593a91a9e1fad99ef8965bdcc830e8be6326ae30d5050fac5c2c5a9ee3ae552b</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3>Metodo de Deploy</h3>
+                        <ul class="slide-text">
+                            <li>WinRM + PsExec (requer credenciais admin)</li>
+                            <li>WMI RPC (porta 135 aberta)</li>
+                            <li>SMB copy (porta 445 aberta) + execucao remota</li>
+                            <li>Manual via RDP/TeamViewer</li>
+                        </ul>
+                    </div>
+                </div>
+                <div style="margin-top:32px;">
+                    <div class="feature-card"><div class="feature-icon"><i class="fas fa-key"></i></div><div><h4>PSK Configurado</h4><p style="color:var(--muted)">Chave: 593a91a9e1fad99ef8965bdcc830e8be6326ae30d5050fac5c2c5a9ee3ae552b</p></div></div>
+                    <div class="feature-card"><div class="feature-icon"><i class="fas fa-shield-alt"></i></div><div><h4>Criptografia TLS</h4><p style="color:var(--muted)">TLS Connect/Accept: psk | Identity: inventario-ti-psk</p></div></div>
+                    <div class="feature-card"><div class="feature-icon"><i class="fas fa-upload"></i></div><div><h4>Hosts Criados</h4><p style="color:var(--muted)">pc-131 (192.168.0.131) no Zabbix</p></div></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Slide 6: Alertas -->
+        <section class="slide" data-slide="6">
+            <div class="slide-content">
+                <div class="header-pattern"></div>
+                <h2 class="slide-title">Motor de Alertas e Diagnostico</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div>
+                        <h3>Niveis de Gravidade</h3>
+                        <div class="grid grid-cols-5 gap-2">
+                            <div><span class="status-dot" style="background:var(--error);"></span> CRITICA</div>
+                            <div><span class="status-dot" style="background:var(--error);"></span> ALTA</div>
+                            <div><span class="status-dot" style="background:var(--warning);"></span> MEDIA</div>
+                            <div><span class="status-dot" style="background:var(--warning);"></span> BAIXA</div>
+                            <div><span class="status-dot" style="background:var(--info);"></span> INFO</div>
+                        </div>
+                    </div>
+                    <div>
+                        <h3>Niveis de Confianca</h3>
+                        <div class="grid grid-cols-5 gap-2">
+                            <div><span class="status-dot" style="background:var(--success);"></span> CONFIRMADO</div>
+                            <div><span class="status-dot" style="background:var(--success);"></span> ALTA</div>
+                            <div><span class="status-dot" style="background:var(--accent);"></span> MODERADA</div>
+                            <div><span class="status-dot" style="background:var(--muted);"></span> BAIXA</div>
+                            <div><span class="status-dot" style="background:var(--muted);"></span> INCONCLUSIVO</div>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top:32px;">
+                    <div class="feature-card"><div class="feature-icon"><i class="fas fa-exchange-alt"></i></div><div><h4>Correlacao por Setor</h4><p style="color:var(--muted)">Detecta incidentes em massa</p></div></div>
+                    <div class="feature-card"><div class="feature-icon"><i class="fas fa-clock"></i></div><div><h4>Auto-Resolucao</h4><p style="color:var(--muted)">Silenciar repetidos (15 min) + resolver apos N ciclos normais</p></div></div>
+                    <div class="feature-card"><div class="feature-icon"><i class="fas fa-bell"></i></div><div><h4>Notificacoes</h4><p style="color:var(--muted)">Integracao futura: email, Telegram, Webhook</p></div></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Slide 7: Arquitetura -->
+        <section class="slide" data-slide="7">
+            <div class="slide-content">
+                <div class="header-pattern"></div>
+                <h2 class="slide-title">Arquitetura do Sistema</h2>
+                <p style="color:var(--muted); font-size:0.875rem; margin-bottom:24px; text-align:center;">
+                    Fluxo: Ping → Armazenamento → Dashboard → Zabbix API → Alertas
+                </p>
+                <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:32px;position:relative;">
+                    <div style="font-size:0.9rem; line-height:1.8; color:var(--muted);">
+                        <div style="margin-bottom:24px;">
+                            <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;">
+                                <div style="font-weight:600;color:var(--accent);margin-bottom:8px;">PCs da Rede</div>
+                                <div>192.168.0.216 (MEU PC)</div>
+                                <div>192.168.0.131 (a instalar)</div>
+                                <div>8.8.8.8 (DNS)</div>
+                                <div>192.168.0.10 (Gateway)</div>
+                            </div>
+                            <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;">
+                                <div style="font-weight:600;color:var(--accent);margin-bottom:8px;">Coletor Agentless</div>
+                                <div>ICMP nativo SO (Windows/Linux)</div>
+                                <div>Ping com parse PT/EN</div>
+                                <div>TCP Check</div>
+                                <div>JSONL + Agregados</div>
+                            </div>
+                            <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;">
+                                <div style="font-weight:600;color:var(--accent);margin-bottom:8px;">Zabbix 7.0</div>
+                                <div>Docker: 4 containers</div>
+                                <div>API JSON-RPC :8081</div>
+                                <li>host.get / problem.get</li>
+                                <li>PSK encryption</li>
+                                <li>Templates Windows</li>
+                            </div>
+                            <div style="background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;">
+                                <div style="font-weight:600;color:var(--accent);margin-bottom:8px;">Inventario TI</div>
+                                <div>192.168.0.186:5903</div>
+                                <div>Express + H2</div>
+                                <div>API REST (/api/*)</div>
+                                <div>WebSocket realtime</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Slide 8: Roadmap -->
+        <section class="slide" data-slide="8">
+            <div class="slide-content">
+                <div class="header-pattern"></div>
+                <h2 class="slide-title">Roadmap — Próximos Passos</h2>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <div class="feature-card"><div class="feature-icon"><i class="fas fa-wifi"></i></div><h4>WMI Remoto</h4><p style="color:var(--muted)">CPU/RAM sem agente via WMI DCOM</p></div>
+                    <div class="feature-card"><div class="feature-icon"><i class="fas fa-server"></i></div><h4>Agente Zabbix em todos</h4><p style="color:var(--muted)">Deploy em 101 PCs via MSI</p></div>
+                    <div class="feature-card"><div class="feature-icon"><i class="fas fa-chart-line"></i></div><h4>Gráficos Históricos</h4><p style="color:var(--muted)">Chart.js + retention 30/365 dias</p></div>
+                    <div class="feature-card"><div class="feature-icon"><i class="fas fa-envelope"></i></div><h4>Notificacoes</h4><p style="color:var(--muted)">Email + Telegram bot</p></div>
+                    <div class="feature-card"><div class="feature-icon"><i class="fas fa-shield-check"></i></div><h4>Manutencao Preditiva</h4><p style="color:var(--muted)">Previsao de falha baseada em tendencias</p></div>
+                    <div class="feature-card"><div class="feature-icon"><i class="fas fa-users-cog"></i></div><h4>Multiusuario</h4><p style="color:var(--muted)">Perfis: ADMIN / TECNICO / USER</p></div>
+                </div>
+                <p style="margin-top:32px;padding-top:24px;border-top:1px solid var(--border);color:var(--muted);font-size:0.875rem;">
+                    Prioridade: 1) WMI remoto 2) Agentes Zabbix 3) Graficos 4) Notificacoes
+                </p>
+            </div>
+        </section>
+
+        <!-- Slide 9: Endpoints -->
+        <section class="slide" data-slide="9">
+            <div class="slide-content">
+                <div class="header-pattern"></div>
+                <h2 class="slide-title">API Endpoints</h2>
+                <table class="slide-table">
+                    <thead>
+                        <tr><th>Endpoint</th><th>Metodo</th><th>Descricao</th></tr></thead>
+                        <tbody>
+                            <tr><td>/api/monitor/painel</td><td>GET</td><td>Resumo completo (KPIs, tabela, sistema, Zabbix)</td></tr>
+                            <tr><td>/api/monitor/sistema</td><td>GET</td><td>Metricas reais do PC local (CPU/GPU/RAM/Disco)</td></tr>
+                            <tr><td>/api/monitor/ciclo</td><td>POST</td><td>Executar verificacao agora (ping + metricas)</td></tr>
+                            <tr><td>/api/monitor/host/:ip</td><td>GET</td><td>Detalhe de host (ICMP + Zabbix + metricas locais)</td></tr>
+                            <tr><td>/api/monitor/alertas</td><td>GET</td><td>Alertas ativos com filtros de gravidade</td></tr>
+                            <tr><td>/api/zabbix/status</td><td>GET</td><td>Status da conexao Zabbix (versao, ok)</td></tr>
+                            <tr><td>/api/zabbix/hosts</td><td>GET</td><td>Lista de hosts cadastrados no Zabbix</td></tr>
+                            <tr><td>/api/zabbix/sincronizar</td><td>POST</td><td>Sincronizar hosts do inventario com Zabbix</td></tr>
+                            <tr><td>/api/monitor/targets</td><td>GET/POST</td><td>Lista de IPs para monitoramento ICMP</td></tr>
+                            <tr><td>/api/monitor/config</td><td>GET/POST</td><td>Configuracao do coletor (intervalos, limites)</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Slide 10: Credenciais -->
+        <section class="slide" data-slide="10">
+            <div class="slide-content">
+                <div class="header-pattern"></div>
+                <h2 class="slide-title">Acesso e Credenciais</h2>
+                <div class="grid grid-cols-2 gap-8">
+                    <div>
+                        <h3>Inventário TI</h3>
+                        <ul class="slide-text">
+                            <li>URL: <code>http://192.168.0.186:5903</code></li>
+                            <li>Login: <code>admin</code> / <code>admin123</code></li>
+                            <li>Usuario: <code>tecnico</code> / <code>123456</code></li>
+                            <li>Usuario: <code>usuario</code> / <code>123456</code></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3>Zabbix</h3>
+                        <ul class="slide-text">
+                            <li>URL: <code>http://192.168.0.186:8081</code></li>
+                            <li>Login: <code>Admin</code> / <code>zabbix</code></li>
+                            <li>API: <code>http://192.168.0.186:8081/api_jsonrpc.php</code></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3>Servidor</h3>
+                        <ul class="slide-text">
+                            <li>Build: <code>1790777219</code></li>
+                            <li>App.js: <code>372956 bytes</code></li>
+                            <li>Porta: <code>5903</code></li>
+                            <li>Versao: <code>v3578-local</code></li>
+                        </ul>
+                    </div>
+                </div>
+                <p style="margin-top:24px;color:var(--muted);font-size:0.875rem;">
+                    Regra inegociavel: so editar em <code>C:\Users\usuario\Documents\cadastro-computadores-v3</code>
+                </p>
+            </div>
+        </section>
+
+        <!-- Slide 11: Footer -->
+        <section class="slide" data-slide="11">
+            <div class="slide-content">
+                <div class="header-pattern" style="height:50px;"></div>
+                <div style="text-align:center;padding:60px 24px;">
+                    <p style="color:var(--muted);font-size:0.9rem;margin-bottom:24px;">
+                        Sistema profissional de monitoramento preventivo<br>
+                        Baseada em Zabbix 7.0 LTS • Agenteless + Agent2
+                    </p>
+                    <p style="color:var(--muted);font-size:0.8rem;">
+                        Clone local de teste • Dados reais do ativo • Produção em 192.168.0.94:3030
+                    </p>
+                    <p style="color:var(--muted);font-size:0.75rem;margin-top:24px;">
+                        © 2026 - Todos os direitos reservados
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Navigation arrows -->
+        <button class="nav-arrow prev" aria-label="Slide anterior" id="prevArrow"><i class="fas fa-chevron-left"></i></button>
+        <button class="nav-arrow next" aria-label="Proximo slide" id="nextArrow"><i class="fas fa-chevron-right"></i></button>
+    </div>
+
+    <script>
+        const totalSlides = 11;
+        let currentSlide = 1;
+        const slideContainer = document.getElementById('slideContainer');
+        const progressBar = document.getElementById('progressBar');
+        const prevArrow = document.getElementById('prevArrow');
+        const nextArrow = document.getElementById('nextArrow');
+        const navBulletsContainer = document.querySelector('.nav-bullets');
+
+        for (let i = 1; i <= totalSlides; i++) {
+            const btn = document.createElement('button');
+            btn.setAttribute('aria-label', `Slide ${i}`);
+            btn.dataset.slide = i;
+            btn.addEventListener('click', () => goToSlide(i));
+            navBulletsContainer.appendChild(btn);
+        }
+        const navBullets = document.querySelectorAll('.nav-bullets button');
+
+        function goToSlide(slideNum) {
+            currentSlide = slideNum;
+            updateSlide();
+        }
+
+        function updateSlide() {
+            const slides = document.querySelectorAll('.slide');
+            slides.forEach(s => s.classList.remove('active'));
+            const currentSlideEl = document.querySelector(`[data-slide="${currentSlide}"]`);
+            if (currentSlideEl) currentSlideEl.classList.add('active');
+
+            const progressPercent = ((currentSlide - 1) / (totalSlides - 1)) * 100;
+            progressBar.style.width = `${progressPercent}%`;
+
+            navBullets.forEach((btn, index) => {
+                if (parseInt(btn.dataset.slide) === currentSlide) btn.classList.add('active');
+                else btn.classList.remove('active');
+            });
+
+            prevArrow.style.display = currentSlide === 1 ? 'none' : 'block';
+            nextArrow.style.display = currentSlide === totalSlides ? 'none' : 'block';
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight') goToSlide(currentSlide + 1);
+            if (e.key === 'ArrowLeft') goToSlide(currentSlide - 1);
+        });
+
+        prevArrow.addEventListener('click', () => goToSlide(currentSlide - 1));
+        nextArrow.addEventListener('click', () => goToSlide(currentSlide + 1));
+
+        updateSlide();
+    </script>
+</body>
+</html>

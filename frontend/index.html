@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Sistema de Gestao de Inventario de TI - Controle de computadores, manutencoes e licencas">
+    <meta name="color-scheme" content="dark">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <title>Inventario de TI</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230a1628'/%3E%3Ctext x='16' y='22' text-anchor='middle' fill='%23ffd700' font-size='14' font-weight='bold' font-family='Arial'%3ETI%3C/text%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css?v=3578-local">
+    <style>
+        .print-header, .print-footer { display: none; }
+    </style>
+</head>
+<body>
+    <div class="bg-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <div id="toast-container" class="toast-container"></div>
+
+    <aside id="sidebar" class="sidebar">
+        <div class="sidebar-logo">
+            <img src="assets/logo.png" alt="TI" onerror="this.style.display='none'" style="width:52px;height:52px;border-radius:12px;">
+            <div class="sidebar-logo-text">
+                <h1>INVENTARIO TI</h1>
+                <p>Gestao de Equipamentos</p>
+            </div>
+        </div>
+
+        <nav class="sidebar-nav">
+            <button onclick="showSection('painel')" class="nav-btn active" data-section="painel">
+                <i class="fas fa-chart-pie nav-icon"></i><span>Dashboard</span>
+            </button>
+            <button onclick="showSection('computadores')" class="nav-btn" data-section="computadores">
+                <i class="fas fa-desktop nav-icon"></i><span>Computadores</span>
+                <span class="nav-badge" id="nav-total">0</span>
+            </button>
+            <button onclick="showSection('manutencoes')" class="nav-btn" data-section="manutencoes">
+                <i class="fas fa-wrench nav-icon"></i><span>Manutencoes</span>
+            </button>
+             <button onclick="showSection('ordens-servico')" class="nav-btn" data-section="ordens-servico">
+                <i class="fas fa-clipboard-list nav-icon"></i><span>Ordens de Servico</span>
+            </button>
+             <button onclick="showSection('departamentos')" class="nav-btn" data-section="departamentos">
+                <i class="fas fa-sitemap nav-icon"></i><span>Setores</span>
+            </button>
+             <button onclick="showSection('software-licencas')" class="nav-btn" data-section="software-licencas">
+                <i class="fas fa-key nav-icon"></i><span>Software/Licencas</span>
+            </button>
+             <button onclick="showSection('ramais')" class="nav-btn" data-section="ramais">
+                <i class="fas fa-phone-alt nav-icon"></i><span>Ramais</span>
+                <span class="nav-badge" id="nav-ramais-total">0</span>
+            </button>
+             <button onclick="showSection('trocas')" class="nav-btn" data-section="trocas">
+                <i class="fas fa-exchange-alt nav-icon"></i><span>Trocas</span>
+            </button>
+             <button onclick="showSection('logs')" class="nav-btn" data-section="logs">
+                <i class="fas fa-history nav-icon"></i><span>Historico</span>
+            </button>
+            <button onclick="showSection('relatorios')" class="nav-btn" data-section="relatorios">
+                <i class="fas fa-chart-bar nav-icon"></i><span>Relatorios</span>
+            </button>
+            <button onclick="showSection('usuarios')" class="nav-btn" data-section="usuarios">
+                <i class="fas fa-users nav-icon"></i><span>Usuários</span>
+            </button>
+             <button onclick="showSection('admin')" class="nav-btn" data-section="admin">
+                <i class="fas fa-cogs nav-icon"></i><span>Ferramentas</span>
+            </button>
+            <button onclick="showSection('monitoramento')" class="nav-btn" data-section="monitoramento">
+                <i class="fas fa-heartbeat nav-icon"></i><span>Monitoramento</span>
+                <span class="nav-badge" id="nav-monitor-alerts" style="background:var(--red);display:none;">0</span>
+            </button>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="sidebar-user">
+                <div class="sidebar-user-avatar"><i class="fas fa-user"></i></div>
+                <div class="sidebar-user-info">
+                    <p id="sidebarUserName">Carregando...</p>
+                    <p class="sidebar-perfil" id="sidebarUserRole">-</p>
+                </div>
+            </div>
+            <button onclick="handleLogout()" class="btn btn-ghost btn-sm" style="margin-top:10px;width:100%;justify-content:center;">
+                <i class="fas fa-sign-out-alt"></i> Sair
+            </button>
+        </div>
+    </aside>
+
+    <button onclick="toggleSidebar()" class="mobile-toggle" id="mobile-toggle">
+        <i class="fas fa-bars"></i>
+    </button>
+    <div id="sidebar-overlay" onclick="toggleSidebar()" class="sidebar-overlay"></div>
+
+    <main class="main-content">
+        <header class="header">
+            <div class="header-left">
+                <div class="header-title">
+                    <h2 id="page-title">Dashboard</h2>
+                    <p id="page-subtitle">Visao geral do sistema</p>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="hdr-actions">
+                    <button class="hdr-icon-btn" id="notifBtn" onclick="toggleNotifPanel(event)" title="Notificações">
+                        <i class="fas fa-bell"></i>
+                        <span class="hdr-badge" id="notifBadge" style="display:none;">0</span>
+                    </button>
+                    <button class="hdr-icon-btn" id="settingsBtn" onclick="toggleSettingsPanel(event)" title="Configurações">
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
+                <button onclick="showManual()" class="btn btn-ghost btn-sm" title="Manual do Sistema" style="margin-right:8px;">
+                    <i class="fas fa-question-circle"></i> <span style="display:inline;">Manual</span>
+                </button>
+                <div class="header-user">
+                    <i class="fas fa-user" style="color:var(--cyan);font-size:12px;"></i>
+                    <span id="header-user-name">Admin</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="hdr-dropdown" id="notifPanel" style="display:none;" onclick="event.stopPropagation();">
+            <div class="hdr-dropdown-header">
+                <h4><i class="fas fa-bell"></i> Notificações</h4>
+                <span class="hdr-dropdown-count" id="notifCountLabel">0</span>
+            </div>
+            <div class="hdr-dropdown-body" id="notifList">
+                <div class="hdr-notif-empty"><i class="fas fa-check-circle"></i><p>Nenhuma notificação</p></div>
+            </div>
+            <div class="hdr-dropdown-footer">
+                <button class="btn btn-ghost btn-sm" onclick="hideHdrDropdowns();showSection('logs');"><i class="fas fa-history"></i> Ver histórico</button>
+            </div>
+        </div>
+
+        <div class="hdr-dropdown" id="settingsPanel" style="display:none;" onclick="event.stopPropagation();">
+            <div class="hdr-dropdown-header">
+                <h4><i class="fas fa-cog"></i> Configurações</h4>
+            </div>
+            <div class="hdr-dropdown-body">
+                <p class="settings-label">Plano de Fundo</p>
+                <div class="bg-options" id="bgOptions">
+                    <button class="bg-option" data-bg="dots" onclick="event.stopPropagation();setAppBg('dots')">
+                        <span class="bg-preview bg-preview-dots"></span>
+                        <span class="bg-option-name">Pontos</span>
+                        <i class="fas fa-check bg-option-check"></i>
+                    </button>
+                    <button class="bg-option" data-bg="xbox" onclick="event.stopPropagation();setAppBg('xbox')">
+                        <span class="bg-preview bg-preview-xbox"></span>
+                        <span class="bg-option-name">Xbox</span>
+                        <i class="fas fa-check bg-option-check"></i>
+                    </button>
+                    <button class="bg-option" data-bg="universe" onclick="event.stopPropagation();setAppBg('universe')">
+                        <span class="bg-preview bg-preview-universe"></span>
+                        <span class="bg-option-name">Universo</span>
+                        <i class="fas fa-check bg-option-check"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== DASHBOARD ==================== -->
+        <section id="painel" class="section-content">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+                <div></div>
+                <div style="display:flex;gap:8px;">
+                    <button onclick="generateRelatorioMensalPDF()" class="btn btn-sm" style="background:linear-gradient(135deg, #f59e0b, #d97706);color:#fff;border:none;"><i class="fas fa-calendar-alt"></i> Relatorio Mensal</button>
+                    <button onclick="generateRelatorioGeralPDF()" class="btn btn-primary btn-sm"><i class="fas fa-file-pdf"></i> Relatorio</button>
+                    <button onclick="showSection('relatorios')" class="btn btn-ghost btn-sm"><i class="fas fa-chart-line"></i> Ver Relatórios</button>
+                </div>
+            </div>
+            <div class="kpi-grid" id="dashboardKpis"></div>
+            <div id="kpiDetail" class="stat-detail-panel"></div>
+            <div class="dashboard-grid">
+                <div class="glass-panel dashboard-chart-half">
+                    <div class="glass-panel-header"><h3><i class="fas fa-chart-pie"></i> Status dos Equipamentos</h3></div>
+                    <div class="dsh-status-wrap">
+                        <div class="dsh-donut">
+                            <div class="chart-wrapper"><canvas id="chartStatus"></canvas></div>
+                            <div class="dsh-donut-center"><span id="dshDonutTotal">0</span><small>Total</small></div>
+                        </div>
+                        <div id="chartStatusLegend" class="dsh-count-list"></div>
+                    </div>
+                </div>
+                <div class="glass-panel dashboard-chart-half">
+                    <div class="glass-panel-header"><h3><i class="fas fa-wrench"></i> Manutencoes e Ordens</h3></div>
+                    <div id="dashboardManutRows" class="dsh-rows"></div>
+                    <div class="dsh-subhead"><i class="fas fa-clipboard-list"></i> Ordens por Prioridade</div>
+                    <div id="dashboardOrdemRows" class="dsh-rows"></div>
+                </div>
+                <div class="glass-panel dashboard-chart-half">
+                    <div class="glass-panel-header"><h3><i class="fas fa-history"></i> Atividade Recente</h3><button class="btn btn-ghost btn-sm dsh-link" onclick="showSection('logs')">Ver todas</button></div>
+                    <div id="dashboardAtividade" class="dsh-table-wrap"></div>
+                </div>
+                <div class="glass-panel dashboard-chart-half">
+                    <div class="glass-panel-header"><h3><i class="fas fa-desktop"></i> Computadores</h3><button class="btn btn-ghost btn-sm dsh-link" onclick="showSection('computadores')">Ver lista</button></div>
+                    <div id="dashboardCompList" class="dsh-table-wrap"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== COMPUTADORES ==================== -->
+        <section id="computadores" class="section-content hidden">
+            <div class="toolbar">
+                <div class="search-wrapper">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="busca-input" placeholder="Buscar por nome, modelo, serie..." class="search-input">
+                </div>
+                <select id="filtro-status" class="form-input" style="width:auto;min-width:180px;">
+                    <option value="">Todos os Status</option>
+                    <option value="ATIVO">Ativo</option>
+                    <option value="MANUTENCAO_PREDITIVA">Man. Preditiva</option>
+                    <option value="MANUTENCAO_PREVENTIVA">Man. Preventiva</option>
+                    <option value="MANUTENCAO_EMERGENCIAL">Man. Emergencial</option>
+                    <option value="CONCLUIDO">Concluido</option>
+                </select>
+                <div class="toolbar-actions">
+                    <button onclick="generateRelatorioComputadoresPDF()" class="btn btn-ghost btn-sm" title="Exportar PDF">
+                        <i class="fas fa-file-pdf"></i> PDF
+                    </button>
+                    <button onclick="exportComputadoresCSV()" class="btn btn-ghost btn-sm" title="Exportar CSV">
+                        <i class="fas fa-download"></i> CSV
+                    </button>
+                    <label class="btn btn-ghost btn-sm" title="Importar CSV" style="cursor:pointer;">
+                        <i class="fas fa-upload"></i> Importar
+                        <input type="file" accept=".csv" onchange="importComputadoresCSV(event)" style="display:none;">
+                    </label>
+                    <button onclick="showComputadorForm()" class="btn btn-primary btn-sm">
+                        <i class="fas fa-plus"></i> Novo
+                    </button>
+                </div>
+            </div>
+            <div id="bulk-toolbar" class="bulk-toolbar">
+                <span class="bulk-count" id="bulk-count">0 selecionados</span>
+                <select id="bulk-status" class="form-input" style="width:auto;min-width:180px;">
+                    <option value="">Alterar status...</option>
+                    <option value="ATIVO">Ativar</option>
+                    <option value="MANUTENCAO_PREDITIVA">Man. Preditiva</option>
+                    <option value="MANUTENCAO_PREVENTIVA">Man. Preventiva</option>
+                    <option value="MANUTENCAO_EMERGENCIAL">Man. Emergencial</option>
+                    <option value="CONCLUIDO">Concluir</option>
+                </select>
+                <button onclick="applyBulkStatus()" class="btn btn-primary btn-sm"><i class="fas fa-check"></i> Aplicar</button>
+                <button onclick="clearBulkSelection()" class="btn btn-ghost btn-sm"><i class="fas fa-times"></i> Cancelar</button>
+            </div>
+            <div id="pc-cards-grid" class="pc-cards-grid">
+                <div class="empty-state" style="grid-column:1/-1;"><div class="spinner"></div></div>
+            </div>
+            <div id="cards-pagination" class="pagination" style="justify-content:center;margin-top:16px;"></div>
+        </section>
+
+        <!-- ==================== MANUTENCOES ==================== -->
+        <section id="manutencoes" class="section-content hidden">
+            <div class="kpi-grid" id="manKpis" style="margin-bottom:16px;"></div>
+            <div id="manKpiDetail" class="stat-detail-panel"></div>
+            <div class="toolbar">
+                <div class="search-wrapper">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="man-busca-input" placeholder="Buscar manutenção..." class="search-input">
+                </div>
+                <select id="man-filtro-status" class="form-input" style="width:auto;min-width:180px;">
+                    <option value="">Todos os Status</option>
+                    <option value="PENDENTE">Pendente</option>
+                    <option value="EM_ANDAMENTO">Em Andamento</option>
+                    <option value="CONCLUIDA">Concluida</option>
+                    <option value="CANCELADA">Cancelada</option>
+                </select>
+                <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);cursor:pointer;white-space:nowrap;">
+                    <input type="checkbox" id="man-show-concluidas" onchange="_manFilters.showConcluidas=this.checked;loadManutencoes(0);" style="accent-color:var(--primary);">
+                    Mostrar Concluidas
+                </label>
+                <div class="toolbar-actions">
+                    <button onclick="showManutencaoForm()" class="btn btn-primary btn-sm">
+                        <i class="fas fa-plus"></i> Nova
+                    </button>
+                </div>
+            </div>
+            <div class="glass-panel">
+                <table class="data-table" id="manutencoesTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Equipamento</th>
+                            <th>Tipo</th>
+                            <th>Status</th>
+                            <th>Tecnico</th>
+                            <th>Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div id="man-pagination" class="pagination" style="justify-content:center;"></div>
+        </section>
+
+        <!-- ==================== ORDENS DE SERVICO ==================== -->
+        <section id="ordens-servico" class="section-content hidden">
+            <div class="kpi-grid" id="osKpis" style="margin-bottom:16px;"></div>
+            <div id="osKpiDetail" class="stat-detail-panel"></div>
+            <div class="toolbar">
+                <div class="search-wrapper">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="os-busca-input" placeholder="Buscar ordem..." class="search-input">
+                </div>
+                <select id="os-filtro-status" class="form-input" style="width:auto;min-width:160px;">
+                    <option value="">Todos Status</option>
+                    <option value="ABERTA">Aberta</option>
+                    <option value="EM_ANALISE">Em Analise</option>
+                    <option value="EM_EXECUCAO">Em Execucao</option>
+                    <option value="CONCLUIDA">Concluida</option>
+                    <option value="CANCELADA">Cancelada</option>
+                </select>
+                <select id="os-filtro-prioridade" class="form-input" style="width:auto;min-width:160px;">
+                    <option value="">Todas Prioridades</option>
+                    <option value="BAIXA">Baixa</option>
+                    <option value="MEDIA">Media</option>
+                    <option value="ALTA">Alta</option>
+                    <option value="CRITICA">Critica</option>
+                </select>
+                <div class="toolbar-actions">
+                    <button onclick="showOrdemForm()" class="btn btn-primary btn-sm">
+                        <i class="fas fa-plus"></i> Nova
+                    </button>
+                </div>
+            </div>
+            <div class="glass-panel">
+                <table class="data-table" id="ordensTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Titulo</th>
+                            <th>Equipamento</th>
+                            <th>Prioridade</th>
+                            <th>Status</th>
+                            <th>Solicitante</th>
+                            <th>Previsao</th>
+                            <th>Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div id="os-pagination" class="pagination" style="justify-content:center;"></div>
+        </section>
+
+        <!-- ==================== SETORES ==================== -->
+        <section id="departamentos" class="section-content hidden">
+            <div style="max-width:700px;">
+                <div style="display:flex;gap:10px;margin-bottom:18px;">
+                    <input type="text" id="depto-busca-input" placeholder="Buscar setor..." class="form-input" style="flex:1;">
+                    <button onclick="showDeptoForm()" class="btn btn-primary btn-sm">
+                        <i class="fas fa-plus"></i> Criar
+                    </button>
+                </div>
+                <div class="glass-panel">
+                    <table class="data-table" id="departamentosTable">
+                        <thead>
+                            <tr>
+                                <th>Setor</th>
+                                <th>Computadores</th>
+                                <th style="width:50px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== HISTORICO ==================== -->
+        <section id="logs" class="section-content hidden">
+            <div class="toolbar">
+                <div class="search-wrapper">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="log-busca-usuario" placeholder="Buscar por usuário..." class="search-input">
+                </div>
+                <select id="log-filtro-entidade" class="form-input" style="width:auto;min-width:180px;">
+                    <option value="">Todas Entidades</option>
+                    <option value="USUARIO">Usuário</option>
+                    <option value="COMPUTADOR">Computador</option>
+                    <option value="MANUTENCAO">Manutenção</option>
+                    <option value="ORDEM_SERVICO">Ordem de Servico</option>
+                    <option value="SETOR">Setor</option>
+                    <option value="CHECKOUT">Checkout</option>
+                    <option value="CHECKIN">Checkin</option>
+                    <option value="IMPORTACAO">Importacao</option>
+                </select>
+                <select id="log-filtro-mes" class="form-input" style="width:auto;min-width:140px;">
+                </select>
+                <select id="log-filtro-ano" class="form-input" style="width:auto;min-width:110px;">
+                </select>
+                <div class="toolbar-actions">
+                    <button onclick="generateRelatorioHistoricoPDF()" class="btn btn-ghost btn-sm" title="Exportar PDF">
+                        <i class="fas fa-file-pdf"></i> PDF
+                    </button>
+                </div>
+            </div>
+            <div class="glass-panel">
+                <table class="data-table" id="logsTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Acao</th>
+                            <th>Entidade</th>
+                            <th>Usuário</th>
+                            <th>Descricao</th>
+                            <th>Data</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div id="logs-pagination" class="pagination" style="justify-content:center;"></div>
+        </section>
+
+        <!-- ==================== RELATORIOS ==================== -->
+        <section id="relatorios" class="section-content hidden">
+            <div class="print-header">
+                <img src="assets/logo.png" alt="TI" onerror="this.style.display='none'" style="height:40px;">
+                <div>
+                    <h1 style="font-size:20px;color:#00897b;font-weight:800;letter-spacing:-0.3px;">INVENTARIO DE TI</h1>
+                    <p style="font-size:11px;color:#546e7a;font-weight:500;">Sistema de Gestao de Inventario - Relatorio Gerencial</p>
+                </div>
+                <span class="print-date" id="printDate" style="font-size:11px;color:#78909c;font-weight:500;"></span>
+            </div>
+            <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center;">
+                <button onclick="generateRelatorioGeralPDF()" class="btn btn-primary btn-sm"><i class="fas fa-file-pdf"></i> Relatorio Geral</button>
+                <button onclick="generateRelatorioMensalPDF()" class="btn btn-primary btn-sm" style="background:linear-gradient(135deg, #f59e0b, #d97706);"><i class="fas fa-calendar-alt"></i> Relatorio Mensal</button>
+                <button onclick="generateRelatorioComputadoresPDF()" class="btn btn-ghost btn-sm"><i class="fas fa-desktop"></i> Computadores</button>
+                <button onclick="generateRelatorioRamaisPDF()" class="btn btn-ghost btn-sm"><i class="fas fa-phone-alt"></i> Ramais</button>
+                <button onclick="generateRelatorioTrocasPDF()" class="btn btn-ghost btn-sm"><i class="fas fa-exchange-alt"></i> Trocas</button>
+                <button onclick="generateRelatorioHistoricoPDF()" class="btn btn-ghost btn-sm"><i class="fas fa-history"></i> Histórico</button>
+                <button onclick="exportRelatoriosCSV()" class="btn btn-ghost btn-sm"><i class="fas fa-file-csv"></i> CSV</button>
+                <span style="margin-left:auto;font-size:11px;color:var(--text-muted);" id="relatorioTimestamp"></span>
+            </div>
+            <div class="glass-panel" style="margin-bottom:16px;">
+                <div class="glass-panel-header"><h3><i class="fas fa-chart-line"></i> Resumo Geral</h3></div>
+                <div style="padding:16px;">
+                    <div id="statsGerais"></div>
+                </div>
+            </div>
+            <div id="statDetail" class="stat-detail-panel"></div>
+            <div class="glass-panel" style="margin-bottom:16px;">
+                <div class="glass-panel-header"><h3><i class="fas fa-chart-pie"></i> Analise Visual</h3></div>
+                <div style="padding:16px;">
+                    <div class="reports-grid">
+                <div class="glass-panel">
+                    <div class="glass-panel-header"><h3><i class="fas fa-chart-bar"></i> Computadores por Marca</h3></div>
+                    <div class="chart-container"><div class="chart-wrapper"><canvas id="chartMarcas"></canvas></div></div>
+                </div>
+                <div class="glass-panel">
+                    <div class="glass-panel-header"><h3><i class="fas fa-chart-doughnut"></i> Manutencoes por Tipo</h3></div>
+                    <div class="chart-container"><div class="chart-wrapper"><canvas id="chartManTipo"></canvas></div></div>
+                </div>
+                <div class="glass-panel">
+                    <div class="glass-panel-header"><h3><i class="fas fa-chart-line"></i> Manutencoes por Mes</h3></div>
+                    <div class="chart-container"><div class="chart-wrapper"><canvas id="chartManutencoesMes"></canvas></div></div>
+                </div>
+                <div class="glass-panel">
+                    <div class="glass-panel-header"><h3><i class="fas fa-chart-doughnut"></i> OS por Prioridade</h3></div>
+                    <div class="chart-container"><div class="chart-wrapper"><canvas id="chartOSPrioridade"></canvas></div></div>
+                </div>
+                <div class="glass-panel">
+                    <div class="glass-panel-header"><h3><i class="fas fa-chart-doughnut"></i> OS por Status</h3></div>
+                    <div class="chart-container"><div class="chart-wrapper"><canvas id="chartOSStatus"></canvas></div></div>
+                </div>
+                <div class="glass-panel">
+                    <div class="glass-panel-header"><h3><i class="fas fa-chart-bar"></i> Manutencoes por Status</h3></div>
+                    <div class="chart-container"><div class="chart-wrapper"><canvas id="chartManStatus"></canvas></div></div>
+                </div>
+                </div>
+            </div>
+            <div class="print-footer">
+                <span style="font-weight:600;color:#00897b;">Inventario de TI - Gestao de Equipamentos</span>
+                <span style="color:#78909c;">Documento gerado automaticamente pelo sistema</span>
+                <span id="printFooterDate"></span>
+            </div>
+        </section>
+
+        <!-- ==================== USUARIOS ==================== -->
+        <section id="usuarios" class="section-content hidden">
+            <div class="toolbar">
+                <div class="search-wrapper">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="user-busca-input" placeholder="Buscar usuário..." class="search-input">
+                </div>
+                <div class="toolbar-actions">
+                    <button onclick="showUsuarioForm()" class="btn btn-primary btn-sm">
+                        <i class="fas fa-plus"></i> Novo
+                    </button>
+                </div>
+            </div>
+            <div class="glass-panel">
+                <table class="data-table" id="usuariosTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Username</th>
+                            <th>Email</th>
+                            <th>Perfil</th>
+                            <th>Status</th>
+                            <th>Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ==================== FERRAMENTAS ADMIN ==================== -->
+        <section id="admin" class="section-content hidden">
+            <div style="margin-bottom:20px;">
+                <h2 style="font-size:20px;font-weight:800;color:var(--cyan);letter-spacing:-0.3px;margin-bottom:4px;">
+                    <i class="fas fa-shield-alt" style="margin-right:8px;"></i>Painel Administrativo
+                </h2>
+                <p style="font-size:13px;color:var(--text-muted);">Ferramentas e configuracoes do sistema</p>
+            </div>
+
+            <div class="dashboard-grid" style="margin-bottom:20px;">
+                <div class="glass-panel" style="border-left:3px solid var(--cyan);">
+                    <div style="padding:20px;">
+                        <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+                            <div style="width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,rgba(255,215,0,0.12),rgba(255,170,0,0.06));display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,215,0,0.1);">
+                                <i class="fas fa-server" style="font-size:20px;color:var(--cyan);"></i>
+                            </div>
+                            <div>
+                                <h3 style="font-size:15px;font-weight:700;color:var(--text-primary);margin:0;">Status do Sistema</h3>
+                                <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">Informacoes em tempo real</p>
+                            </div>
+                        </div>
+                        <div id="admin-db-info" style="font-size:12px;color:var(--text-secondary);line-height:1.8;">
+                            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);"><span>Servidor</span><span style="color:var(--green);font-weight:600;">Online</span></div>
+                            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);"><span>Banco de Dados</span><span style="font-weight:600;">Carregando...</span></div>
+                            <div style="display:flex;justify-content:space-between;padding:6px 0;"><span>Computadores</span><span style="font-weight:600;" id="admin-stat-comps">-</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="glass-panel" style="border-left:3px solid var(--purple);">
+                    <div style="padding:20px;">
+                        <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+                            <div style="width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,rgba(180,74,255,0.12),rgba(140,40,220,0.06));display:flex;align-items:center;justify-content:center;border:1px solid rgba(180,74,255,0.1);">
+                                <i class="fas fa-chart-pie" style="font-size:20px;color:var(--purple);"></i>
+                            </div>
+                            <div>
+                                <h3 style="font-size:15px;font-weight:700;color:var(--text-primary);margin:0;">Resumo do Inventario</h3>
+                                <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">Visao geral dos ativos</p>
+                            </div>
+                        </div>
+                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.8;">
+                            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);"><span>Total de Computadores</span><span style="font-weight:600;color:var(--cyan);" id="admin-total-comps">-</span></div>
+                            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);"><span>Ativos</span><span style="font-weight:600;color:var(--green);" id="admin-ativos-comps">-</span></div>
+                            <div style="display:flex;justify-content:space-between;padding:6px 0;"><span>Em Manutenção</span><span style="font-weight:600;color:var(--yellow);" id="admin-manut-comps">-</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-panel" style="margin-bottom:16px;">
+                <div class="glass-panel-header">
+                    <h3><i class="fas fa-tools"></i> Ferramentas do Sistema</h3>
+                </div>
+                <div style="padding:20px; display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap:14px;">
+                    <div class="glass-panel admin-tool-card" onclick="showSystemInfo()" style="cursor:pointer;">
+                        <div style="padding:20px;">
+                            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                                <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,rgba(0,188,212,0.1),rgba(0,150,180,0.05));display:flex;align-items:center;justify-content:center;border:1px solid rgba(0,188,212,0.1);flex-shrink:0;">
+                                    <i class="fas fa-server" style="font-size:18px;color:var(--cyan);"></i>
+                                </div>
+                                <div>
+                                    <h4 style="margin:0;font-size:14px;font-weight:600;color:var(--text-primary);">Status do Sistema</h4>
+                                    <p style="margin:2px 0 0;font-size:11px;color:var(--green);">Ver informações</p>
+                                </div>
+                            </div>
+                            <p style="color:var(--text-muted); font-size:12px; margin:0;">Verificar status do servidor, banco de dados e conectividade.</p>
+                        </div>
+                    </div>
+                    <div class="glass-panel admin-tool-card" onclick="showManual()" style="cursor:pointer;">
+                        <div style="padding:20px;">
+                            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                                <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,rgba(0,230,118,0.1),rgba(0,200,83,0.05));display:flex;align-items:center;justify-content:center;border:1px solid rgba(0,230,118,0.1);flex-shrink:0;">
+                                    <i class="fas fa-book" style="font-size:18px;color:var(--green);"></i>
+                                </div>
+                                <div>
+                                    <h4 style="margin:0;font-size:14px;font-weight:600;color:var(--text-primary);">Manual do Sistema</h4>
+                                    <p style="margin:2px 0 0;font-size:11px;color:var(--green);">Guia completo</p>
+                                </div>
+                            </div>
+                            <p style="color:var(--text-muted); font-size:12px; margin:0;">Consulte o manual de uso do sistema de inventario de TI.</p>
+                        </div>
+                    </div>
+                    <div class="glass-panel admin-tool-card" onclick="clearSystemCache()" style="cursor:pointer;">
+                        <div style="padding:20px;">
+                            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                                <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,rgba(255,230,0,0.1),rgba(255,200,0,0.05));display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,230,0,0.1);flex-shrink:0;">
+                                    <i class="fas fa-broom" style="font-size:18px;color:var(--yellow);"></i>
+                                </div>
+                                <div>
+                                    <h4 style="margin:0;font-size:14px;font-weight:600;color:var(--text-primary);">Limpar Cache</h4>
+                                    <p style="margin:2px 0 0;font-size:11px;color:var(--yellow);">Dados locais</p>
+                                </div>
+                            </div>
+                            <p style="color:var(--text-muted); font-size:12px; margin:0;">Limpar dados salvos no navegador (cache e tokens).</p>
+                        </div>
+                    </div>
+                    <div class="glass-panel admin-tool-card" onclick="showBackupInfo()" style="cursor:pointer;">
+                        <div style="padding:20px;">
+                            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+                                <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,rgba(180,74,255,0.1),rgba(140,40,220,0.05));display:flex;align-items:center;justify-content:center;border:1px solid rgba(180,74,255,0.1);flex-shrink:0;">
+                                    <i class="fas fa-database" style="font-size:18px;color:var(--purple);"></i>
+                                </div>
+                                <div>
+                                    <h4 style="margin:0;font-size:14px;font-weight:600;color:var(--text-primary);">Backup do Banco</h4>
+                                    <p style="margin:2px 0 0;font-size:11px;color:var(--purple);">Informacoes</p>
+                                </div>
+                            </div>
+                            <p style="color:var(--text-muted); font-size:12px; margin:0;">Informacoes sobre localizacao e backup do banco de dados.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashboard-grid">
+                <div class="glass-panel">
+                    <div style="padding:20px;">
+                        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+                            <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,rgba(255,215,0,0.1),rgba(184,134,11,0.05));display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,215,0,0.1);flex-shrink:0;">
+                                <i class="fas fa-info-circle" style="font-size:18px;color:var(--cyan);"></i>
+                            </div>
+                            <div>
+                                <h4 style="margin:0;font-size:14px;font-weight:600;color:var(--text-primary);">Sobre o Sistema</h4>
+                            </div>
+                        </div>
+                        <div style="font-size:11px; color:var(--text-muted); line-height:2;">
+                            <div style="display:flex;align-items:center;gap:8px;"><i class="fab fa-java" style="color:var(--orange);width:14px;"></i> Java 21 + Spring Boot 3.2.5</div>
+                            <div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-database" style="color:var(--cyan);width:14px;"></i> H2 Database (arquivo)</div>
+                            <div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-key" style="color:var(--cyan);width:14px;"></i> JWT Authentication</div>
+                            <div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-code" style="color:var(--green);width:14px;"></i> SpringDoc OpenAPI</div>
+                            <div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-globe" style="color:var(--purple);width:14px;"></i> Frontend vanilla JS</div>
+                            <div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-gift" style="color:var(--yellow);width:14px;"></i> 100% gratuito</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="glass-panel">
+                    <div style="padding:20px;">
+                        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+                            <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,rgba(0,230,118,0.1),rgba(0,200,83,0.05));display:flex;align-items:center;justify-content:center;border:1px solid rgba(0,230,118,0.1);flex-shrink:0;">
+                                <i class="fas fa-shield-alt" style="font-size:18px;color:var(--green);"></i>
+                            </div>
+                            <div>
+                                <h4 style="margin:0;font-size:14px;font-weight:600;color:var(--text-primary);">Seguranca</h4>
+                            </div>
+                        </div>
+                        <div style="font-size:11px; color:var(--text-muted); line-height:2;">
+                            <div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-check-circle" style="color:var(--green);width:14px;"></i> Senhas criptografadas (BCrypt)</div>
+                            <div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-check-circle" style="color:var(--green);width:14px;"></i> Tokens JWT com expiracao</div>
+                            <div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-check-circle" style="color:var(--green);width:14px;"></i> Bloqueio apos 5 falhas</div>
+                            <div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-check-circle" style="color:var(--green);width:14px;"></i> Perfis: Admin, Tecnico, Usuario</div>
+                            <div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-check-circle" style="color:var(--green);width:14px;"></i> Log de todas as atividades</div>
+                            <div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-check-circle" style="color:var(--green);width:14px;"></i> CORS e Headers configurados</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== SOFTWARE/LICENCAS ==================== -->
+        <section id="software-licencas" class="section-content hidden">
+            <div style="max-width:1000px;">
+                <div style="display:flex;gap:10px;margin-bottom:18px;">
+                    <input type="text" id="sw-busca-input" placeholder="Buscar software..." class="form-input" style="flex:1;">
+                    <button onclick="showSoftwareLicencaForm()" class="btn btn-primary btn-sm">
+                        <i class="fas fa-plus"></i> Novo
+                    </button>
+                </div>
+                <div class="glass-panel">
+                    <table class="data-table" id="softwareTable">
+                        <thead>
+                            <tr>
+                                <th>Software</th>
+                                <th>Fabricante</th>
+                                <th>Tipo</th>
+                                <th>Licencas</th>
+                                <th>Vencimento</th>
+                                <th style="width:80px;">Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div id="software-pagination" class="pagination" style="margin-top:12px;text-align:center;"></div>
+            </div>
+        </section>
+
+        <!-- ==================== RAMAIS ==================== -->
+        <section id="ramais" class="section-content hidden">
+            <div class="toolbar">
+                <div class="search-wrapper">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="ramal-busca-input" placeholder="Buscar por numero, setor..." class="search-input">
+                </div>
+                <div class="toolbar-actions">
+                    <button onclick="generateRelatorioRamaisPDF()" class="btn btn-ghost btn-sm" title="Exportar PDF">
+                        <i class="fas fa-file-pdf"></i> PDF
+                    </button>
+                    <button onclick="showRamalForm()" class="btn btn-primary btn-sm">
+                        <i class="fas fa-plus"></i> Novo Ramal
+                    </button>
+                </div>
+            </div>
+            <div class="toolbar-filters" style="margin-bottom:16px;">
+                <select id="ramal-filtro-status" class="form-input" style="width:auto;min-width:140px;font-size:11px;">
+                    <option value="">Todos os Status</option>
+                    <option value="ATIVO">Ativo</option>
+                    <option value="EM_MANUTENCAO">Em Manutencao</option>
+                    <option value="INATIVO">Inativo</option>
+                    <option value="CONFERIR">Conferir</option>
+                </select>
+                <select id="ramal-filtro-setor" class="form-input" style="width:auto;min-width:140px;font-size:11px;">
+                    <option value="">Todos os Setores</option>
+                    <option value="TI">TI</option>
+                    <option value="Financeiro">Financeiro</option>
+                    <option value="RH">RH</option>
+                    <option value="Operacoes">Operacoes</option>
+                    <option value="Marketing">Marketing</option>
+                </select>
+                <select id="ramal-filtro-periodo" class="form-input" style="width:auto;min-width:140px;font-size:11px;">
+                    <option value="">Todos os Periodos</option>
+                    <option value="atrasado">Atrasado</option>
+                    <option value="30d">Ate 30 dias</option>
+                    <option value="90d">Ate 90 dias</option>
+                    <option value="180d">Ate 180 dias</option>
+                    <option value="365d">Acima de 180 dias</option>
+                </select>
+                <select id="ramal-filtro-prioridade" class="form-input" style="width:auto;min-width:140px;font-size:11px;">
+                    <option value="">Todas Prioridades</option>
+                    <option value="ATRASADO">Atrasado</option>
+                    <option value="PREVENTIVO">Preventivo</option>
+                    <option value="PREDITIVO">Preditivo</option>
+                    <option value="ATIVO">Ativo</option>
+                </select>
+            </div>
+            <div id="ramal-cards-grid" class="pc-cards-grid">
+                <div class="empty-state" style="grid-column:1/-1;"><div class="spinner"></div></div>
+            </div>
+            <div id="ramal-pagination" class="pagination" style="justify-content:center;margin-top:16px;"></div>
+        </section>
+
+        <!-- ==================== TROCA DE EQUIPAMENTO ==================== -->
+        <section id="trocas" class="section-content hidden">
+            <div class="toolbar">
+                <div class="search-wrapper">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="troca-busca-input" placeholder="Buscar por equipamento, responsavel..." class="search-input">
+                </div>
+                <select id="troca-filtro-tipo" class="form-input" style="width:auto;min-width:180px;">
+                    <option value="">Todos os Equipamentos</option>
+                    <option value="COMPUTADOR">Computadores</option>
+                    <option value="RAMAL">Ramais</option>
+                </select>
+                <div class="toolbar-actions">
+                    <button onclick="generateRelatorioTrocasPDF()" class="btn btn-ghost btn-sm" title="Exportar PDF">
+                        <i class="fas fa-file-pdf"></i> PDF
+                    </button>
+                    <button onclick="showTrocaForm()" class="btn btn-primary btn-sm">
+                        <i class="fas fa-plus"></i> Nova Troca
+                    </button>
+                </div>
+            </div>
+            <div class="glass-panel">
+                <table class="data-table" id="trocasTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Tipo</th>
+                            <th>Equipamento</th>
+                            <th>Movimento</th>
+                            <th>Descricao</th>
+                            <th>Responsavel</th>
+                            <th>Data</th>
+                            <th>Acoes</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <div id="troca-pagination" class="pagination" style="justify-content:center;"></div>
+        </section>
+
+        <!-- ==================== MONITORAMENTO E DIAGNOSTICO ==================== -->
+        <section id="monitoramento" class="section-content hidden">
+            <div id="mon-zabbix-status" style="margin-bottom:16px;"></div>
+            <div id="mon-sistema" style="margin-bottom:16px;"></div>
+            <div class="kpi-grid" id="mon-kpis"></div>
+            <div class="toolbar">
+                <div class="search-wrapper">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="mon-busca-input" placeholder="Buscar por nome, IP, setor..." class="search-input">
+                </div>
+                <select id="mon-filtro-estado" class="form-input" style="width:auto;min-width:170px;">
+                    <option value="">Todos os Estados</option>
+                    <option value="ACESSIVEL">Acessivel</option>
+                    <option value="SEM_RESPOSTA">Sem Resposta</option>
+                    <option value="INSTAVEL">Instavel</option>
+                    <option value="SEM_DADOS">Sem Dados</option>
+                </select>
+                <select id="mon-filtro-setor" class="form-input" style="width:auto;min-width:170px;">
+                    <option value="">Todos os Setores</option>
+                </select>
+                <div class="toolbar-actions">
+                    <button onclick="monExecutarCiclo()" class="btn btn-primary btn-sm" title="Executar verificacao agora">
+                        <i class="fas fa-sync"></i> Verificar Agora
+                    </button>
+                    <button onclick="monAtualizar()" class="btn btn-ghost btn-sm" title="Atualizar painel">
+                        <i class="fas fa-rotate"></i> Atualizar
+                    </button>
+                    <button onclick="monExportarCSV()" class="btn btn-ghost btn-sm" title="Exportar CSV">
+                        <i class="fas fa-download"></i> CSV
+                    </button>
+                </div>
+            </div>
+            <div id="mon-incidentes" style="margin-bottom:16px;"></div>
+            <div class="glass-panel">
+                <div class="glass-panel-header">
+                    <h3><i class="fas fa-heartbeat"></i> Equipamentos Monitorados</h3>
+                    <span style="font-size:11px;color:var(--text-muted);" id="mon-atualizado-em">-</span>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table class="data-table" id="monTable">
+                        <thead>
+                            <tr>
+                                <th>Nome / IP</th>
+                                <th>Setor</th>
+                                <th>Estado</th>
+                                <th>Latencia</th>
+                                <th>Falhas</th>
+                                <th>CPU</th>
+                                <th>GPU</th>
+                                <th>RAM</th>
+                                <th>Disco</th>
+                                <th>Alertas</th>
+                                <th>Fonte</th>
+                                <th>Acoes</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="glass-panel" style="margin-top:16px;">
+                <div class="glass-panel-header">
+                    <h3><i class="fas fa-exclamation-triangle"></i> Alertas Ativos</h3>
+                </div>
+                <div id="mon-alertas-list" style="padding:12px;">
+                    <p style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px;">Nenhum alerta ativo</p>
+                </div>
+            </div>
+            <div class="glass-panel" style="margin-top:16px;">
+                <div class="glass-panel-header">
+                    <h3><i class="fas fa-bell"></i> Notificacoes Zabbix (Webhook)</h3>
+                    <button onclick="monLimparAlertasZabbix()" class="btn btn-ghost btn-sm" title="Limpar notificacoes">
+                        <i class="fas fa-trash"></i> Limpar
+                    </button>
+                </div>
+                <div id="mon-zabbix-alertas" style="padding:12px;">
+                    <p style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px;">Nenhuma notificacao recebida</p>
+                </div>
+            </div>
+            <div class="glass-panel" style="margin-top:16px;">
+                <div class="glass-panel-header">
+                    <h3><i class="fas fa-server"></i> Hosts Zabbix</h3>
+                    <button onclick="monSyncZabbix()" class="btn btn-ghost btn-sm" title="Sincronizar inventario com Zabbix">
+                        <i class="fas fa-rotate"></i> Sincronizar
+                    </button>
+                </div>
+                <div id="mon-zabbix-hosts" style="padding:12px;">
+                    <p style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px;">Carregando...</p>
+                </div>
+            </div>
+            <div class="glass-panel" style="margin-top:16px;">
+                <div class="glass-panel-header">
+                    <h3><i class="fas fa-hard-drive"></i> Armazenamento</h3>
+                    <div style="display:flex;gap:8px;">
+                        <button onclick="monVerHistorico()" class="btn btn-ghost btn-sm" title="Ver historico de um host">
+                            <i class="fas fa-chart-line"></i> Historico
+                        </button>
+                        <button onclick="monAtualizarArmazenamento()" class="btn btn-ghost btn-sm" title="Atualizar dados de armazenamento">
+                            <i class="fas fa-rotate"></i> Atualizar
+                        </button>
+                    </div>
+                </div>
+                <div id="mon-armazenamento" style="padding:16px;">
+                    <p style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px;">Carregando...</p>
+                </div>
+            </div>
+            <div class="glass-panel" style="margin-top:16px;">
+                <div class="glass-panel-header">
+                    <h3><i class="fas fa-ban"></i> Indicadores Indisponiveis</h3>
+                </div>
+                <div id="mon-indisponiveis" style="padding:16px;font-size:12px;color:var(--text-muted);line-height:2;"></div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ==================== MODAL DETAIL/EDIT ==================== -->
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modal-title"><i class="fas fa-desktop"></i> Detalhes</h3>
+                <button onclick="closeModal()" class="modal-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+            <div class="modal-footer" id="modal-footer"></div>
+        </div>
+    </div>
+
+    <!-- ==================== MODAL GRAFICO (KPI) ==================== -->
+    <div id="mon-chart-overlay" class="modal-overlay">
+        <div class="modal" id="mon-chart-modal" style="max-width:900px;width:95vw;">
+            <div class="modal-header">
+                <h3 id="mon-chart-title"><i class="fas fa-chart-line"></i> Grafico</h3>
+                <div style="display:flex;gap:6px;">
+                    <button onclick="monExpandirGrafico()" class="btn btn-ghost btn-sm" title="Expandir/recolher"><i class="fas fa-expand"></i> Expandir</button>
+                    <button onclick="monAbrirGraficoNovaAba()" class="btn btn-ghost btn-sm" title="Abrir em nova aba"><i class="fas fa-external-link-alt"></i> Nova aba</button>
+                    <button onclick="monFecharGrafico()" class="modal-close"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+            <div class="modal-body" id="mon-chart-body" style="padding:16px;"></div>
+            <div class="modal-footer" id="mon-chart-footer"></div>
+        </div>
+    </div>
+    <div id="confirm-overlay" class="modal-overlay">
+        <div class="modal" style="max-width:400px;">
+            <div class="modal-body" style="padding:28px;text-align:center;">
+                <div class="modal-confirm-icon"><i class="fas fa-trash-alt"></i></div>
+                <p class="modal-confirm-title">Confirmar Exclusao</p>
+                <p class="modal-confirm-text" id="confirm-text">Tem certeza que deseja excluir?</p>
+            </div>
+            <div class="modal-footer" style="justify-content:center;">
+                <button id="confirm-yes-btn" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i> Excluir</button>
+                <button onclick="closeConfirm()" class="btn btn-ghost btn-sm">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== LIGHTBOX ==================== -->
+    <div id="lightbox-overlay" class="lightbox-overlay" onclick="closeLightbox()">
+        <button class="lightbox-close" onclick="closeLightbox()"><i class="fas fa-times"></i></button>
+        <img id="lightbox-img" src="" alt="Foto ampliada">
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="js/app.js?v=3800-realtime"></script>
+<script src="js/monitor.js?v=5800-realtime"></script>
+</body>
+</html>

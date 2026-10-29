@@ -1,0 +1,51 @@
+# =============================================================================
+# Configuracao do Zabbix Agent 2 para Windows
+# Copie este arquivo para C:\Program Files\Zabbix Agent 2\zabbix_agent2.conf
+# Ajuste os valores conforme o ambiente.
+# =============================================================================
+
+# --- Identificacao ---
+# HOSTNAME deve corresponder ao host cadastrado no Zabbix (ou use hostname do SO)
+Hostname=PC-AJUSTAR
+
+# --- Comunicacao com o servidor ---
+# IP ou nome do Zabbix Server (ou Proxy)
+Server=192.168.0.94
+
+# Modo ativo: o agente conecta ao servidor e envia metricas (recomendado)
+ServerActive=192.168.0.94
+
+# --- Portas ---
+# Porta para verificacoes passivas (desabilite se usar apenas modo ativo)
+ListenPort=10050
+# ListenIP=0.0.0.0
+
+# --- Seguranca ---
+# TLS PSK (recomendado para producao)
+# TLSConnect=psk
+# TLSAccept=psk
+# TLSPSKIdentity=PSK-PC-AJUSTAR
+# TLSPSKFile=C:\Program Files\Zabbix Agent 2\zabbix_agent2.psk
+
+# --- Performance ---
+# Buffer mandado de dados (modo ativo)
+BufferSize=4M
+# Max. sessoes simultaneas
+StartAgents=3
+# Timeout para comandos
+Timeout=3
+# Frequencia de coleta do agente
+RefreshActiveChecks=120
+
+# --- Logs ---
+LogFile=C:\Program Files\Zabbix Agent 2\zabbix_agent2.log
+# LogLevel: 0=erro, 1=aviso, 2=info (padrao), 3=debug, 4=debug detalhado
+LogLevel=2
+# LogFilesize=0
+
+# --- Restricoes de seguranca ---
+# NAO habilite system.run[] ou UserParameter generico
+# NAO permita execucao remota de comandos
+
+# --- Include de configuracoes extras ---
+# Include=C:\Program Files\Zabbix Agent 2\zabbix_agent2.d\*.conf

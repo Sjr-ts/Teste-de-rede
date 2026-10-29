@@ -1,0 +1,30 @@
+# ===================== DEPENDENCIAS =====================
+node_modules/
+
+# ===================== INSTALADORES / BINARIOS PESADOS =====================
+# Baixar direto do site do Zabbix (17 MB)
+zabbix-deploy/*.msi
+
+# ===================== SEGREDOS / CREDENCIAIS =====================
+# Chave PSK do agente Zabbix (NAO versionar)
+zabbix-deploy/psk.txt
+*.psk
+.env
+.env.*
+
+# ===================== LOGS / RUNTIME =====================
+server.log
+server.err.log
+server_output.txt
+log.txt
+*.log
+
+# ===================== BACKUPS EDITORAIS =====================
+*.bak
+*.orig
+*.tmp
+
+# ===================== SISTEMA =====================
+Thumbs.db
+desktop.ini
+.DS_Store

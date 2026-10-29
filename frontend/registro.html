@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro - Inventario de TI</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23080c18'/%3E%3Ctext x='16' y='22' text-anchor='middle' fill='%2300e5c7' font-size='14' font-weight='bold' font-family='Arial'%3ETI%3C/text%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #080c18;
+            min-height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+            overflow: hidden; position: relative;
+        }
+
+        .orb { position: fixed; border-radius: 50%; filter: blur(100px); pointer-events: none; animation: orbFloat 20s ease-in-out infinite; }
+        .orb-1 { width: 550px; height: 550px; background: radial-gradient(circle, rgba(0,40,120,0.8) 0%, transparent 70%); top: -180px; left: -120px; animation-duration: 22s; }
+        .orb-2 { width: 420px; height: 420px; background: radial-gradient(circle, rgba(140,40,220,0.5) 0%, transparent 70%); bottom: -140px; right: -100px; animation-duration: 18s; animation-delay: -5s; }
+        .orb-3 { width: 300px; height: 300px; background: radial-gradient(circle, rgba(0,200,100,0.3) 0%, transparent 70%); top: 40%; left: 55%; animation-duration: 25s; animation-delay: -10s; }
+
+        @keyframes orbFloat {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            25% { transform: translate(40px, -30px) scale(1.05); }
+            50% { transform: translate(-20px, 40px) scale(0.95); }
+            75% { transform: translate(30px, 20px) scale(1.02); }
+        }
+
+        .grid-overlay { position: fixed; inset: 0; background-image: linear-gradient(rgba(0,229,199,0.015) 1px, transparent 1px), linear-gradient(90deg, rgba(0,229,199,0.015) 1px, transparent 1px); background-size: 60px 60px; pointer-events: none; z-index: 0; }
+
+        .login-container { width: 100%; max-width: 440px; padding: 20px; z-index: 10; position: relative; }
+
+        .login-card {
+            background: rgba(10, 16, 32, 0.75);
+            backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+            border: 1px solid rgba(0,229,199,0.1);
+            border-radius: 24px; padding: 40px 36px;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.6), 0 0 80px rgba(0,229,199,0.03);
+            animation: modalIn 0.5s cubic-bezier(0.4,0,0.2,1);
+        }
+
+        @keyframes modalIn { from { opacity: 0; transform: translateY(20px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+        .logo-section { text-align: center; margin-bottom: 28px; }
+        .logo-img { width: 120px; height: auto; margin-bottom: 12px; filter: drop-shadow(0 0 20px rgba(0,229,199,0.2)); animation: logoGlow 3s ease-in-out infinite; }
+        @keyframes logoGlow { 0%, 100% { filter: drop-shadow(0 0 15px rgba(0,229,199,0.15)); } 50% { filter: drop-shadow(0 0 30px rgba(0,229,199,0.35)); } }
+
+        .login-header { text-align: center; margin-bottom: 24px; }
+        .login-header h1 { font-size: 20px; font-weight: 800; color: #e0e6f0; letter-spacing: 1px; }
+        .login-header p { font-size: 12px; color: #00e5c7; margin-top: 6px; letter-spacing: 1px; text-transform: uppercase; }
+
+        .login-form { display: flex; flex-direction: column; gap: 14px; }
+        .form-group { display: flex; flex-direction: column; }
+        .form-group label { font-size: 12px; font-weight: 500; color: #5a6a8a; margin-bottom: 6px; }
+        .form-group input { width: 100%; padding: 12px 14px; background: rgba(6, 10, 20, 0.7); border: 1px solid rgba(0,229,199,0.06); border-radius: 12px; font-size: 13px; color: #e0e6f0; font-family: 'Inter', sans-serif; transition: all 0.25s ease; outline: none; }
+        .form-group input::placeholder { color: #2a3a5a; }
+        .form-group input:hover { border-color: rgba(0,229,199,0.12); background: rgba(6, 10, 20, 0.85); }
+        .form-group input:focus { border-color: rgba(0,229,199,0.3); background: rgba(6, 10, 20, 0.9); box-shadow: 0 0 0 3px rgba(0,229,199,0.06); }
+
+        .error-message { background: rgba(255,71,87,0.08); border: 1px solid rgba(255,71,87,0.2); border-radius: 10px; padding: 10px 14px; font-size: 12px; color: #fca5a5; text-align: center; }
+        .success-message { background: rgba(0,200,100,0.08); border: 1px solid rgba(0,200,100,0.2); border-radius: 10px; padding: 10px 14px; font-size: 12px; color: #34d399; text-align: center; }
+
+        .btn-register {
+            width: 100%; padding: 14px;
+            background: linear-gradient(135deg, #00e5c7, #00b89e);
+            color: #080c18; border: none; border-radius: 14px;
+            font-size: 14px; font-weight: 700; font-family: 'Inter', sans-serif;
+            cursor: pointer; transition: all 0.3s ease;
+            box-shadow: 0 4px 20px rgba(0,229,199,0.2);
+            letter-spacing: 0.5px; margin-top: 8px;
+        }
+        .btn-register:hover { box-shadow: 0 6px 25px rgba(0,229,199,0.35); transform: translateY(-2px); }
+        .btn-register:disabled { opacity: 0.5; cursor: not-allowed; transform: none!important; }
+
+        .login-footer { text-align: center; margin-top: 20px; }
+        .login-footer a { color: #5a6a8a; font-size: 13px; font-weight: 600; text-decoration: none; transition: color 0.2s; }
+        .login-footer a:hover { color: #00e5c7; }
+
+        @media(max-width:480px) { .login-container { padding: 12px; } .login-card { padding: 28px 18px; border-radius: 20px; } .logo-img { width: 100px; } .login-header h1 { font-size: 16px; } }
+        .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(8,12,24,0.3); border-top-color: #080c18; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+    <div class="grid-overlay"></div>
+
+    <div class="login-container">
+        <div class="login-card">
+            <div class="logo-section">
+                <img src="assets/logo.png" alt="BA Eletrica" class="logo-img" onerror="this.style.display='none'">
+            </div>
+            <div class="login-header">
+                <h1>Criar Conta</h1>
+                <p>Preencha seus dados para se cadastrar</p>
+            </div>
+            <form id="registroForm" class="login-form">
+                <div class="form-group">
+                    <label for="nomeCompleto">Nome Completo</label>
+                    <input type="text" id="nomeCompleto" placeholder="Seu nome completo" required>
+                </div>
+                <div class="form-group">
+                    <label for="username">Usuário</label>
+                    <input type="text" id="username" placeholder="Escolha um usuário" required minlength="3">
+                </div>
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" placeholder="seu@email.com">
+                </div>
+                <div class="form-group">
+                    <label for="senha">Senha</label>
+                    <input type="password" id="senha" placeholder="Minimo 6 caracteres" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="senha2">Confirmar Senha</label>
+                    <input type="password" id="senha2" placeholder="Repita a senha" required>
+                </div>
+                <div id="regError" class="error-message" style="display:none"></div>
+                <div id="regSuccess" class="success-message" style="display:none"></div>
+                <button type="submit" class="btn-register" id="btnReg">
+                    <i class="fas fa-user-plus"></i> Cadastrar
+                </button>
+            </form>
+            <div class="login-footer">
+                <a href="login.html"><i class="fas fa-arrow-left"></i> Ja tenho conta</a>
+            </div>
+        </div>
+    </div>
+    <script>
+        document.getElementById('registroForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('btnReg');
+            const errDiv = document.getElementById('regError');
+            const succDiv = document.getElementById('regSuccess');
+            const senha = document.getElementById('senha').value;
+            const senha2 = document.getElementById('senha2').value;
+            if (senha !== senha2) { errDiv.textContent = 'Senhas nao conferem'; errDiv.style.display = 'block'; return; }
+            btn.disabled = true; btn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;"></span> Cadastrando...';
+            errDiv.style.display = 'none'; succDiv.style.display = 'none';
+            try {
+                const nomeCompleto = document.getElementById('nomeCompleto').value.trim();
+                const username = document.getElementById('username').value.trim();
+                const email = document.getElementById('email').value.trim();
+                const senhaFinal = document.getElementById('senha').value;
+
+                if (nomeCompleto.length < 3) { errDiv.textContent = 'Nome completo deve ter no minimo 3 caracteres'; errDiv.style.display = 'block'; btn.disabled = false; btn.innerHTML = '<i class="fas fa-user-plus"></i> Cadastrar'; return; }
+                if (username.length < 3) { errDiv.textContent = 'Usuario deve ter no minimo 3 caracteres'; errDiv.style.display = 'block'; btn.disabled = false; btn.innerHTML = '<i class="fas fa-user-plus"></i> Cadastrar'; return; }
+                if (senhaFinal.length < 6) { errDiv.textContent = 'Senha deve ter no minimo 6 caracteres'; errDiv.style.display = 'block'; btn.disabled = false; btn.innerHTML = '<i class="fas fa-user-plus"></i> Cadastrar'; return; }
+                if (senhaFinal !== document.getElementById('senha2').value) { errDiv.textContent = 'As senhas nao conferem'; errDiv.style.display = 'block'; btn.disabled = false; btn.innerHTML = '<i class="fas fa-user-plus"></i> Cadastrar'; return; }
+
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cadastrando...';
+
+                setTimeout(() => {
+                    succDiv.textContent = 'Conta criada com sucesso! Redirecionando...';
+                    succDiv.style.display = 'block';
+                    btn.innerHTML = '<i class="fas fa-check"></i> Cadastrado!';
+                    btn.style.background = 'linear-gradient(135deg, #34d399, #059669)';
+                    setTimeout(() => window.location.href = 'login.html', 2000);
+                }, 500);
+            } catch (err) {
+                errDiv.textContent = err.message;
+                errDiv.style.display = 'block';
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-user-plus"></i> Cadastrar';
+            }
+        });
+    </script>
+</body>
+</html>

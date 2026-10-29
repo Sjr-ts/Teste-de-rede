@@ -1,0 +1,16 @@
+{
+  "url": "http://192.168.0.186:8081/api_jsonrpc.php",
+  "usuario": "Admin",
+  "senha": "zabbix",
+  "apiToken": "",
+  "usaPSK": false,
+  "gruposPadrao": ["Inventario TI"],
+  "templatesPadrao": ["Template Windows by Zabbix agent"],
+  "notas": {
+    "url": "URL da API JSON-RPC do Zabbix. Padrao Docker: http://192.168.0.186:8081/api_jsonrpc.php",
+    "usuario": "Conta de API criada no Zabbix com permissoes minimas (leitura)",
+    "senha": "Nao committar em repositorio publico",
+    "apiToken": "Alternativa ao usuario/senha (Zabbix 6.4+). Se preenchido, tem prioridade.",
+    "templatesPadrao": "Templates oficiais do Zabbix para Windows via agente"
+  }
+}

@@ -1,0 +1,33 @@
+[
+ {
+  "id": "ALR-1793104321271-ju1i",
+  "categoria": "CONECTIVIDADE",
+  "gravidade": "MEDIA",
+  "host": "192.168.0.216",
+  "titulo": "Perda de pacotes na comunicacao",
+  "evidencias": [
+   "Perda de 10% em 10 medicoes",
+   "Falhas intermitentes: 1",
+   "Nao confundir com ICMP limitado pelo firewall do host"
+  ],
+  "confianca": "MODERADA",
+  "recomendacao": "Correlacionar com erros de interface no switch e verificar se outros hosts do mesmo segmento perdem pacotes.",
+  "estado": "RESOLVIDO",
+  "inicio": "2026-10-27T12:32:01.271Z",
+  "ultimaOcorrencia": "2026-10-27T12:32:01.271Z",
+  "ocorrencias": 1,
+  "historico": [
+   {
+    "quando": "2026-10-27T12:32:01.271Z",
+    "evento": "ABERTO",
+    "detalhe": "Perda de pacotes na comunicacao"
+   },
+   {
+    "quando": "2026-10-27T12:32:59.820Z",
+    "evento": "RESOLVIDO",
+    "detalhe": "Condicao normalizada apos novas medicoes"
+   }
+  ],
+  "resolvidoEm": "2026-10-27T12:32:59.820Z"
+ }
+]

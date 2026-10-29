@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventario de TI - Login</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23080c18'/%3E%3Ctext x='16' y='22' text-anchor='middle' fill='%2300e5c7' font-size='14' font-weight='bold' font-family='Arial'%3ETI%3C/text%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #080c18;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .orb {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(100px);
+            pointer-events: none;
+            animation: orbFloat 20s ease-in-out infinite;
+        }
+
+        .orb-1 {
+            width: 550px; height: 550px;
+            background: radial-gradient(circle, rgba(0,40,120,0.8) 0%, transparent 70%);
+            top: -180px; left: -120px;
+            animation-duration: 22s;
+        }
+
+        .orb-2 {
+            width: 420px; height: 420px;
+            background: radial-gradient(circle, rgba(140,40,220,0.5) 0%, transparent 70%);
+            bottom: -140px; right: -100px;
+            animation-duration: 18s;
+            animation-delay: -5s;
+        }
+
+        .orb-3 {
+            width: 300px; height: 300px;
+            background: radial-gradient(circle, rgba(0,200,100,0.3) 0%, transparent 70%);
+            top: 40%; left: 55%;
+            animation-duration: 25s;
+            animation-delay: -10s;
+        }
+
+        .orb-4 {
+            width: 250px; height: 250px;
+            background: radial-gradient(circle, rgba(255,215,0,0.25) 0%, transparent 70%);
+            top: 20%; right: 20%;
+            animation-duration: 20s;
+            animation-delay: -3s;
+        }
+
+        @keyframes orbFloat {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            25% { transform: translate(40px, -30px) scale(1.05); }
+            50% { transform: translate(-20px, 40px) scale(0.95); }
+            75% { transform: translate(30px, 20px) scale(1.02); }
+        }
+
+        .grid-overlay {
+            position: fixed; inset: 0;
+            background-image:
+                linear-gradient(rgba(0,229,199,0.015) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,229,199,0.015) 1px, transparent 1px);
+            background-size: 60px 60px;
+            pointer-events: none; z-index: 0;
+        }
+
+        .login-wrapper {
+            position: relative; z-index: 10;
+            width: 100%; max-width: 440px; padding: 20px;
+        }
+
+        .login-card {
+            background: rgba(10, 16, 32, 0.75);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border: 1px solid rgba(0,229,199,0.1);
+            border-radius: 24px;
+            padding: 48px 40px;
+            box-shadow:
+                0 25px 60px rgba(0,0,0,0.6),
+                0 0 80px rgba(0,229,199,0.03),
+                inset 0 1px 0 rgba(0,229,199,0.05);
+            animation: cardFadeIn 0.8s ease-out;
+        }
+
+        @keyframes cardFadeIn {
+            from { opacity: 0; transform: translateY(20px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .logo-section {
+            text-align: center; margin-bottom: 36px;
+        }
+
+        .logo-img {
+            width: 140px;
+            height: auto;
+            margin-bottom: 16px;
+            filter: drop-shadow(0 0 20px rgba(0,229,199,0.2));
+            animation: logoGlow 3s ease-in-out infinite;
+        }
+
+        @keyframes logoGlow {
+            0%, 100% { filter: drop-shadow(0 0 15px rgba(0,229,199,0.15)); }
+            50% { filter: drop-shadow(0 0 30px rgba(0,229,199,0.35)); }
+        }
+
+        .logo-title {
+            font-size: 22px; font-weight: 800;
+            background: linear-gradient(135deg, #00e5c7, #00b89e, #00e5c7);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: 3px; text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .logo-subtitle {
+            font-size: 12px; color: #5a6a8a;
+            font-weight: 400; letter-spacing: 1.5px;
+            text-transform: uppercase;
+        }
+
+        .form-group {
+            margin-bottom: 20px; position: relative;
+        }
+
+        .form-label {
+            display: block; font-size: 12px; font-weight: 500;
+            color: #5a6a8a; margin-bottom: 8px;
+            letter-spacing: 0.3px;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-wrapper i {
+            position: absolute; left: 16px; top: 50%;
+            transform: translateY(-50%);
+            color: #3a4a6a; font-size: 16px;
+            transition: color 0.3s ease; z-index: 2;
+        }
+
+        .input-wrapper input {
+            width: 100%; padding: 14px 16px 14px 48px;
+            background: rgba(6, 10, 20, 0.7);
+            border: 1px solid rgba(0,229,199,0.06);
+            border-radius: 12px; color: #e0e6f0;
+            font-size: 15px; font-family: 'Inter', sans-serif;
+            transition: all 0.3s ease; outline: none;
+        }
+
+        .input-wrapper input::placeholder { color: #2a3a5a; }
+
+        .input-wrapper input:focus {
+            border-color: rgba(0,229,199,0.3);
+            box-shadow: 0 0 0 3px rgba(0,229,199,0.06), 0 0 20px rgba(0,229,199,0.03);
+            background: rgba(6, 10, 20, 0.9);
+        }
+
+        .input-wrapper input:focus + i,
+        .input-wrapper:has(input:focus) i {
+            color: #00e5c7;
+        }
+
+        .password-toggle {
+            position: absolute; right: 16px; top: 50%;
+            transform: translateY(-50%);
+            background: none; border: none;
+            color: #3a4a6a; cursor: pointer;
+            font-size: 16px; padding: 4px; z-index: 2;
+            transition: color 0.3s ease;
+        }
+
+        .password-toggle:hover { color: #8a9aba; }
+
+        .error-message {
+            display: none;
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 10px; padding: 12px 16px;
+            margin-bottom: 20px; font-size: 13px;
+            color: #fca5a5; align-items: center;
+            gap: 10px; animation: shakeIn 0.4s ease-out;
+        }
+
+        .error-message.show { display: flex; }
+        .error-message i { font-size: 16px; color: #ef4444; flex-shrink: 0; }
+
+        @keyframes shakeIn {
+            0% { transform: translateX(-10px); opacity: 0; }
+            25% { transform: translateX(8px); }
+            50% { transform: translateX(-5px); }
+            75% { transform: translateX(3px); }
+            100% { transform: translateX(0); opacity: 1; }
+        }
+
+        .btn-login {
+            width: 100%; padding: 18px;
+            background: linear-gradient(
+                160deg,
+                #006b5e 0%,
+                #009e8a 12%,
+                #00e5c7 24%,
+                #40ffdd 32%,
+                #00e5c7 40%,
+                #00b89e 52%,
+                #006b5e 60%,
+                #004a40 68%,
+                #00b89e 76%,
+                #00e5c7 84%,
+                #40ffdd 90%,
+                #00b89e 96%,
+                #006b5e 100%
+            );
+            background-size: 400% 400%;
+            color: #080c18; border: none; border-radius: 14px;
+            font-size: 16px; font-weight: 800;
+            font-family: 'Inter', sans-serif; cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.25,0.46,0.45,0.94);
+            position: relative; overflow: hidden;
+            letter-spacing: 1.5px; text-transform: uppercase;
+            box-shadow:
+                0 4px 20px rgba(0,184,158,0.35),
+                0 2px 8px rgba(0,229,199,0.25),
+                inset 0 1px 0 rgba(64,255,221,0.5),
+                inset 0 -2px 4px rgba(0,74,64,0.3),
+                inset 0 2px 4px rgba(64,255,221,0.15);
+            border-top: 1px solid rgba(64,255,221,0.4);
+            border-bottom: 1px solid rgba(0,74,64,0.35);
+            animation: metallicTeal 4s ease-in-out infinite;
+            text-shadow: 0 1px 0 rgba(64,255,221,0.3), 0 -1px 0 rgba(0,74,64,0.25);
+        }
+
+        @keyframes metallicTeal {
+            0% { background-position: 0% 0%; }
+            25% { background-position: 100% 50%; }
+            50% { background-position: 50% 100%; }
+            75% { background-position: 0% 50%; }
+            100% { background-position: 0% 0%; }
+        }
+
+        .btn-login::before {
+            content: ''; position: absolute; top: -100%; left: -75%;
+            width: 50%; height: 300%;
+            background: linear-gradient(
+                105deg,
+                transparent 20%,
+                rgba(64,255,221,0.0) 30%,
+                rgba(64,255,221,0.45) 38%,
+                rgba(255,255,255,0.7) 42%,
+                rgba(64,255,221,0.45) 46%,
+                rgba(64,255,221,0.0) 54%,
+                transparent 65%
+            );
+            transform: rotate(25deg);
+            transition: left 0.8s cubic-bezier(0.25,0.46,0.45,0.94);
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        .btn-login::after {
+            content: ''; position: absolute; inset: 0;
+            border-radius: 14px;
+            background: linear-gradient(
+                180deg,
+                rgba(255,255,255,0.25) 0%,
+                rgba(255,255,255,0.05) 40%,
+                transparent 50%,
+                rgba(0,0,0,0.05) 60%,
+                rgba(0,0,0,0.12) 100%
+            );
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .btn-login:hover::before {
+            left: 130%;
+        }
+
+        .btn-login:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow:
+                0 8px 40px rgba(0,184,158,0.45),
+                0 4px 16px rgba(0,229,199,0.35),
+                inset 0 1px 0 rgba(64,255,221,0.6),
+                inset 0 -2px 4px rgba(0,74,64,0.3),
+                inset 0 2px 4px rgba(64,255,221,0.2),
+                0 0 30px rgba(0,229,199,0.12);
+            border-top-color: rgba(64,255,221,0.6);
+            border-bottom-color: rgba(0,74,64,0.45);
+        }
+
+        .btn-login:active {
+            transform: translateY(-1px) scale(0.99);
+            box-shadow:
+                0 2px 12px rgba(0,184,158,0.3),
+                inset 0 2px 6px rgba(0,0,0,0.15);
+        }
+
+        .btn-login span {
+            position: relative; z-index: 1;
+            display: inline-flex; align-items: center; gap: 8px;
+        }
+
+        .btn-login:disabled { opacity: 0.6; cursor: not-allowed; transform: none; animation: none; }
+        .btn-login:disabled:hover { transform: none; box-shadow: none; }
+        .btn-login:disabled::before { display: none; }
+
+        .spinner {
+            display: none; width: 18px; height: 18px;
+            border: 2px solid rgba(10,14,26,0.3);
+            border-top-color: #0a0e1a; border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+
+        .btn-login.loading .spinner { display: inline-block; }
+        .btn-login.loading .btn-text { display: none; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .login-footer {
+            text-align: center; margin-top: 28px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(0,229,199,0.05);
+        }
+
+        .login-footer a {
+            color: #5a6a8a; font-size: 13px; font-weight: 500;
+            text-decoration: none; transition: color 0.2s;
+        }
+
+        .login-footer a:hover { color: #00e5c7; }
+
+        @media (max-width: 480px) {
+            .login-card { padding: 36px 24px; }
+            .logo-img { width: 110px; }
+            .logo-title { font-size: 18px; }
+            .orb-1 { width: 300px; height: 300px; }
+            .orb-2 { width: 250px; height: 250px; }
+            .orb-3 { width: 200px; height: 200px; }
+        }
+
+        @keyframes pageLoad {
+            from { opacity: 0; } to { opacity: 1; }
+        }
+        body { animation: pageLoad 0.5s ease-out; }
+    </style>
+</head>
+<body>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+    <div class="orb orb-4"></div>
+    <div class="grid-overlay"></div>
+
+    <div class="login-wrapper">
+        <div class="login-card">
+            <div class="logo-section">
+                <img src="assets/logo.png" alt="BA Eletrica" class="logo-img" onerror="this.style.display='none'">
+                <h1 class="logo-title">Inventario TI</h1>
+                <p class="logo-subtitle">Controle de Equipamentos</p>
+            </div>
+
+            <div class="error-message" id="errorMessage">
+                <i class="fas fa-circle-exclamation"></i>
+                <span id="errorText">Credenciais invalidas. Tente novamente.</span>
+            </div>
+
+            <form id="loginForm" autocomplete="off">
+                <div class="form-group">
+                    <label class="form-label" for="username">Usuário</label>
+                    <div class="input-wrapper">
+                        <i class="fas fa-user"></i>
+                        <input type="text" id="username" name="username" placeholder="Digite seu usuário" required autocomplete="username" autofocus>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="senha">Senha</label>
+                    <div class="input-wrapper">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="senha" name="senha" placeholder="Digite sua senha" required autocomplete="current-password">
+                        <button type="button" class="password-toggle" id="passwordToggle" aria-label="Mostrar senha">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="form-row" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+                    <label class="remember-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:#5a6a8a;">
+                        <input type="checkbox" id="rememberMe" class="remember-checkbox" style="width:16px;height:16px;accent-color:#00e5c7;cursor:pointer;">
+                        Lembrar login
+                    </label>
+                </div>
+
+                <button type="submit" class="btn-login" id="loginBtn">
+                    <span>
+                        <span class="btn-text">Entrar</span>
+                        <div class="spinner"></div>
+                        <i class="fas fa-arrow-right btn-text"></i>
+                    </span>
+                </button>
+            </form>
+
+            <div class="login-footer">
+                <a href="registro.html"><i class="fas fa-user-plus"></i> Criar conta</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        if (localStorage.getItem('authToken')) { window.location.href = 'index.html'; }
+        const loginForm = document.getElementById('loginForm');
+        const usernameInput = document.getElementById('username');
+        const senhaInput = document.getElementById('senha');
+        const loginBtn = document.getElementById('loginBtn');
+        const errorMessage = document.getElementById('errorMessage');
+        const errorText = document.getElementById('errorText');
+        const passwordToggle = document.getElementById('passwordToggle');
+        const rememberMe = document.getElementById('rememberMe');
+
+        var savedUser = localStorage.getItem('rememberedUser');
+        if (savedUser) { usernameInput.value = savedUser; rememberMe.checked = true; senhaInput.focus(); }
+
+        passwordToggle.addEventListener('click', () => {
+            const isPassword = senhaInput.type === 'password';
+            senhaInput.type = isPassword ? 'text' : 'password';
+            passwordToggle.innerHTML = isPassword
+                ? '<i class="fas fa-eye-slash"></i>'
+                : '<i class="fas fa-eye"></i>';
+        });
+
+        [usernameInput, senhaInput].forEach(input => {
+            input.addEventListener('focus', () => errorMessage.classList.remove('show'));
+        });
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = usernameInput.value.trim();
+            const senha = senhaInput.value;
+            if (!username || !senha) { showError('Preencha todos os campos.'); return; }
+            setLoading(true);
+            const MOCK_CREDS = {
+                admin: { senha: 'admin123', perfil: 'ADMIN', nome: 'Administrador' },
+                tecnico: { senha: '123456', perfil: 'TECNICO', nome: 'Tecnico de TI' },
+                usuario: { senha: '123456', perfil: 'USUARIO', nome: 'Usuario Comum' },
+                'joao.silva': { senha: '123456', perfil: 'USUARIO', nome: 'Joao Silva' },
+                'maria.santos': { senha: '123456', perfil: 'USUARIO', nome: 'Maria Santos' },
+                'pedro.costa': { senha: '123456', perfil: 'TECNICO', nome: 'Pedro Costa' },
+                'ana.oliveira': { senha: '123456', perfil: 'USUARIO', nome: 'Ana Oliveira' },
+                'carlos.pereira': { senha: '123456', perfil: 'TECNICO', nome: 'Carlos Pereira' },
+                'lucia.ferreira': { senha: '123456', perfil: 'USUARIO', nome: 'Lucia Ferreira' }
+            };
+            setTimeout(() => {
+                const cred = MOCK_CREDS[username];
+                if (!cred || cred.senha !== senha) {
+                    showError('Credenciais invalidas.');
+                    setLoading(false);
+                    return;
+                }
+                localStorage.setItem('authToken', 'mock-token-' + username + '-' + Date.now());
+                localStorage.setItem('userName', cred.nome);
+                localStorage.setItem('userPerfil', cred.perfil);
+                if (rememberMe.checked) { localStorage.setItem('rememberedUser', username); }
+                else { localStorage.removeItem('rememberedUser'); }
+                loginBtn.innerHTML = '<span><i class="fas fa-check"></i> <span class="btn-text">Sucesso!</span></span>';
+                setTimeout(function() { window.location.href = 'index.html'; }, 600);
+            }, 400);
+        });
+
+        function showError(msg) {
+            errorText.textContent = msg;
+            errorMessage.classList.add('show');
+            senhaInput.value = '';
+            senhaInput.focus();
+        }
+
+        function setLoading(loading) {
+            if (loading) { loginBtn.classList.add('loading'); loginBtn.disabled = true; }
+            else { loginBtn.classList.remove('loading'); loginBtn.disabled = false; }
+        }
+    </script>
+</body>
+</html>

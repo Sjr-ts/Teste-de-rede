@@ -1,0 +1,50 @@
+{
+  "coletor": {
+    "intervaloSegundos": 60,
+    "timeoutMs": 2000,
+    "tentativasPorCiclo": 3,
+    "concorrenciaMaxima": 10,
+    "pausaEntreHostsMs": 200,
+    "retencaoMedicoesDias": 30,
+    "retencaoAggregadosDias": 365
+  },
+  "limites": {
+    "latenciaMediaMs": 80,
+    "latenciaP95Ms": 200,
+    "perdaPacotesPct": 10,
+    "falhasConsecutivasParaAlerta": 3,
+    "ciclosIndisponivelParaRecuperado": 1,
+    "minimoAmostrasParaP95": 20,
+    "quedasFrequentesNaJanela": 30
+  },
+  "alertas": {
+    "gravidades": [
+      "INFO",
+      "BAIXA",
+      "MEDIA",
+      "ALTA",
+      "CRITICA"
+    ],
+    "silenciarRepetidosMinutos": 15,
+    "autoResolverAposCiclosNormais": 3
+  },
+  "zabbix": {
+    "habilitado": true,
+    "url": "http://192.168.0.186:8081",
+    "api": "http://192.168.0.186:8081/api_jsonrpc.php",
+    "usuario": "Admin",
+    "senha": "zabbix",
+    "grupoHosts": "Inventario TI",
+    "templateAgentless": "Template ICMP Ping",
+    "sincronizarHosts": true,
+    "enviarHistorico": false
+  },
+  "servicos": [],
+  "notas": {
+    "cpuRam": "INDISPONIVEL - sem agente nos PCs, sem WMI remoto autorizado. Nao inventar valores.",
+    "reinicioConfirmado": "INDISPONIVEL - requer eventos do Windows (WEF/agent). Sinal indireto via ciclos de ping apenas.",
+    "switchPort": "INDISPONIVEL neste ambiente de teste - requer SNMP habilitado nos switches com credenciais autorizadas.",
+    "wifi": "INDISPONIVEL - requer controlador Wi-Fi com API.",
+    "dhcpDns": "INDISPONIVEL - requer acesso aos servidores DHCP/DNS."
+  }
+}
