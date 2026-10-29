@@ -794,18 +794,22 @@ function monRenderTabela(p) {
         const alertas = l.alertasAtivos > 0 ?
             '<span class="badge badge-cancelada">' + l.alertasAtivos + '</span>' :
             '<span style="color:var(--text-muted);">—</span>';
-        const cpuCell = l.cpu && l.cpu !== 'INDISPONIVEL'
-            ? '<span style="color:var(--cyan);font-weight:600;">' + esc(l.cpu) + '</span><br><span style="font-size:9px;color:var(--green);">LOCAL</span>'
-            : '<span style="color:var(--text-muted);font-size:10px;" title="Sem agente Windows instalado neste PC remoto">INDISP.</span>';
-        const gpuCell = l.gpu && l.gpu !== 'INDISPONIVEL' && l.gpu !== 'INDISP.'
-            ? '<span style="color:var(--cyan);font-weight:600;">' + esc(l.gpu) + '</span><br><span style="font-size:9px;color:var(--green);">LOCAL</span>'
-            : '<span style="color:var(--text-muted);font-size:10px;" title="Sem agente Windows instalado neste PC remoto">INDISP.</span>';
-        const ramCell = l.ram && l.ram !== 'INDISPONIVEL'
-            ? '<span style="color:var(--cyan);font-weight:600;">' + esc(l.ram) + '</span><br><span style="font-size:9px;color:var(--green);">LOCAL</span>'
-            : '<span style="color:var(--text-muted);font-size:10px;" title="Sem agente Windows instalado neste PC remoto">INDISP.</span>';
-        const discoCell = l.disco && l.disco !== 'INDISPONIVEL'
-            ? '<span style="color:var(--cyan);font-weight:600;">' + esc(l.disco) + '</span><br><span style="font-size:9px;color:var(--green);">LOCAL</span>'
-            : '<span style="color:var(--text-muted);font-size:10px;" title="Sem agente Windows instalado neste PC remoto">INDISP.</span>';
+        // Detecta se o valor vem do Zabbix (string contendo "(Zabbix)") ou e local
+        function _fonteMetrica(val) {
+            if (!val || val === 'INDISPONIVEL' || val === 'INDISP.') return null;
+            return String(val).indexOf('(Zabbix)') >= 0 ? 'ZABBIX' : 'LOCAL';
+        }
+        function _cellMetrica(val, titulo) {
+            const fonte = _fonteMetrica(val);
+            if (!fonte) return '<span style="color:var(--text-muted);font-size:10px;" title="Sem agente instalado neste PC remoto">' + esc(titulo || 'INDISP.') + '</span>';
+            const corFonte = fonte === 'ZABBIX' ? 'var(--purple)' : 'var(--green)';
+            const texto = String(val).replace(/\s*\(Zabbix\)\s*/g, '').trim();
+            return '<span style="color:var(--cyan);font-weight:600;">' + esc(texto) + '</span><br><span style="font-size:9px;color:' + corFonte + ';">' + fonte + '</span>';
+        }
+        const cpuCell = _cellMetrica(l.cpu, 'INDISP.');
+        const gpuCell = _cellMetrica(l.gpu, 'INDISP.');
+        const ramCell = _cellMetrica(l.ram, 'INDISP.');
+        const discoCell = _cellMetrica(l.disco, 'INDISP.');
         return '<tr>' +
             '<td><b style="color:var(--text-primary);">' + esc(l.nome || '-') + '</b><br><span style="font-size:11px;color:var(--text-muted);font-family:monospace;">' + esc(l.ip) + '</span></td>' +
             '<td style="font-size:11px;">' + esc(l.setor || '-') + '</td>' +
