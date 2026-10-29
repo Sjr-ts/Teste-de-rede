@@ -106,6 +106,7 @@ async function enriquecerPainelComZabbix(painel) {
                 const mz = mzMap[linha.ip];
                 if (mz) {
                     if (mz.cpu != null) { linha.cpu = mz.cpu + '% (Zabbix)'; linha._zabbixCpu = mz.cpu; }
+                    if (mz.gpu != null) { linha.gpu = mz.gpu + '% (Zabbix)'; linha._zabbixGpu = mz.gpu; }
                     if (mz.ram && mz.ram.usadoPct != null) { linha.ram = mz.ram.usadoPct + '% (' + (mz.ram.disponivelPct || '?') + '% livre) (Zabbix)'; linha._zabbixRam = mz.ram; }
                     if (mz.disco && mz.disco.length) { linha.disco = mz.disco.map(d => (100 - (d.livrePct || 0)).toFixed(1) + '% usado').join(' | ') + ' (Zabbix)'; linha._zabbixDisco = mz.disco; }
                     if (mz.uptime != null) { const dias = Math.floor(mz.uptime / 86400); const horas = Math.floor((mz.uptime % 86400) / 3600); linha.uptime = dias + 'd ' + horas + 'h (Zabbix)'; linha._zabbixUptime = mz.uptime; }
@@ -389,6 +390,7 @@ app.get('/api/monitor/painel', async (req, res) => {
                             const mz = mzMap[linha.ip];
                             if (mz) {
                                 if (mz.cpu != null) { linha.cpu = mz.cpu + '% (Zabbix)'; linha._zabbixCpu = mz.cpu; }
+                                if (mz.gpu != null) { linha.gpu = mz.gpu + '% (Zabbix)'; linha._zabbixGpu = mz.gpu; }
                                 if (mz.ram && mz.ram.usadoPct != null) { linha.ram = mz.ram.usadoPct + '% (' + (mz.ram.disponivelPct || '?') + '% livre) (Zabbix)'; linha._zabbixRam = mz.ram; }
                                 if (mz.disco && mz.disco.length) { linha.disco = mz.disco.map(d => (100 - (d.livrePct || 0)).toFixed(1) + '% usado').join(' | ') + ' (Zabbix)'; linha._zabbixDisco = mz.disco; }
                                 if (mz.uptime != null) { const dias = Math.floor(mz.uptime / 86400); const horas = Math.floor((mz.uptime % 86400) / 3600); linha.uptime = dias + 'd ' + horas + 'h (Zabbix)'; linha._zabbixUptime = mz.uptime; }

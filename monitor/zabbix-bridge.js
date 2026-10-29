@@ -780,10 +780,12 @@ async function dadosCompletosZabbix() {
             filter: {}
         });
 
-        // Filtra apenas itens relevantes (CPU, RAM, disco, uptime, ICMP)
+        // Filtra apenas itens relevantes (CPU, RAM, disco, uptime, ICMP, GPU)
         const keysRelevantes = ['system.cpu.util', 'vm.memory.size', 'vm.memory.util', 'vfs.fs.size', 'vfs.fs.dependent.size', 'system.uptime', 'icmpping', 'icmppingsec', 'icmppingloss', 'agent.ping'];
         const itensFiltrados = itens.filter(it => {
             const k = (it.key_ || '').toLowerCase();
+            const n = (it.name || '').toLowerCase();
+            if (k.includes('gpu') || n.includes('gpu')) return true;  // GPU (perf_counter ou item customizado)
             return keysRelevantes.some(kr => k.includes(kr));
         });
 
@@ -806,6 +808,7 @@ async function dadosCompletosZabbix() {
                 ram: null,
                 disco: [],
                 uptime: null,
+                gpu: null,
                 disponivel: null,
                 latenciaMs: null,
                 perdaPct: null
@@ -833,6 +836,9 @@ async function dadosCompletosZabbix() {
                 else if (key === 'system.uptime') {
                     if (!isNaN(numVal)) metricas.uptime = Math.round(numVal);
                 }
+                else if (key.includes('gpu')) {
+                    if (!isNaN(numVal)) metricas.gpu = Math.round(numVal * 10) / 10;
+                }
                 else if (key === 'icmpping' || key === 'agent.ping') {
                     metricas.disponivel = (val === '1' || val === '1.000000') ? true : (val === '0' || val === '0.000000' ? false : (val === 'agent.ping' ? true : null));
                 }
@@ -853,6 +859,7 @@ async function dadosCompletosZabbix() {
                 ram: metricas.ram,
                 disco: metricas.disco,
                 uptime: metricas.uptime,
+                gpu: metricas.gpu,
                 disponivel: metricas.disponivel,
                 latenciaMs: metricas.latenciaMs,
                 perdaPct: metricas.perdaPct,
