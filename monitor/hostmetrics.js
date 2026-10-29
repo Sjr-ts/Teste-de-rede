@@ -5,7 +5,7 @@
  * Nao inventa valores: se nao conseguir medir, retorna indisponivel.
  */
 const os = require('os');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 
 
 function cpuPorNucleo() {
@@ -30,7 +30,8 @@ function cpuPorNucleo() {
 function cpuUsoPct() {
     return new Promise((resolve) => {
         // Amostragem de 1 segundo: captura a media real do intervalo (compativel com Task Manager).
-        // Single quotes evitam conflito com o wrapper de aspas duplas do cmd.exe.
+        // IMPORTANTE: usamos execFile (sem shell) para que o caractere '%' de '% Processor Time'
+        // nao seja interpretado/expandido pelo cmd.exe (bug anterior: comando falhava e caia no fallback).
         const script = [
             "$pc = New-Object System.Diagnostics.PerformanceCounter('Processor', '% Processor Time', '_Total');",
             "$pc.NextValue() | Out-Null;",
@@ -38,7 +39,7 @@ function cpuUsoPct() {
             "$v = $pc.NextValue();",
             "Write-Output $v;"
         ].join(' ');
-        exec('powershell -NoProfile -Command "' + script + '"', { timeout: 8000, windowsHide: true }, (err, stdout) => {
+        execFile('powershell', ['-NoProfile', '-Command', script], { timeout: 8000, windowsHide: true }, (err, stdout) => {
             if (err) { resolve(cpuUsoPctFallback()); return; }
             const raw = (stdout || '').trim().replace(',', '.');
             const val = parseFloat(raw);

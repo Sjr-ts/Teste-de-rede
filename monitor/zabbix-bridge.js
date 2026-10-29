@@ -187,6 +187,67 @@ async function listarHosts(filtro) {
     return authCall('host.get', params);
 }
 
+/**
+ * Enriquece a lista de hosts com a disponibilidade REAL.
+ * Para hosts cuja interface esta '0' (unknown — tipico de agentes ativos e hosts ICMP-only),
+ * consulta os itens icmpping / agent.ping / zabbix[host,active_agent,available] e
+ * sobrescreve interfaces[0].available com '1' (disponivel) ou '2' (indisponivel).
+ * Usado pelo endpoint /api/zabbix/hosts para que o frontend nao mostre "Aguardando"
+ * para hosts que estao respondendo.
+ */
+async function enriquecerDisponibilidade(hosts) {
+    if (!Array.isArray(hosts) || !hosts.length) return hosts;
+    // Hosts que precisam de enriquecimento (interface available != '1' e != '2')
+    const aEnriquecer = hosts.filter(h => {
+        const iface = h.interfaces && h.interfaces[0];
+        return iface && (iface.available === '0' || iface.available === null || iface.available === undefined);
+    });
+    if (!aEnriquecer.length) return hosts;
+
+    let itensPorHost = {};
+    try {
+        const allItems = await authCall('item.get', {
+            output: ['itemid', 'hostid', 'key_', 'lastvalue', 'state', 'status'],
+            filter: { key_: ['icmpping', 'agent.ping', 'zabbix[host,active_agent,available]'] }
+        });
+        for (const it of (allItems || [])) {
+            if (!itensPorHost[it.hostid]) itensPorHost[it.hostid] = {};
+            const key = it.key_;
+            if (key === 'zabbix[host,active_agent,available]' || key === 'agent.ping') {
+                if (!itensPorHost[it.hostid].agent) itensPorHost[it.hostid].agent = it;
+            } else if (key === 'icmpping') {
+                if (!itensPorHost[it.hostid].icmp) itensPorHost[it.hostid].icmp = it;
+            }
+        }
+    } catch (e) { return hosts; }
+
+    for (const h of hosts) {
+        const iface = h.interfaces && h.interfaces[0];
+        if (!iface || (iface.available !== '0' && iface.available !== null && iface.available !== undefined)) continue;
+        const info = itensPorHost[h.hostid];
+        if (!info) continue;
+        let avail = null;
+        // Agente ativo primeiro
+        const ag = info.agent;
+        if (ag && ag.status === '0' && ag.state === '0' && ag.lastvalue != null && ag.lastvalue !== '') {
+            const v = ag.lastvalue;
+            if (v === '1' || v === '1.000000') avail = '1';
+            else if (v === '0' || v === '0.000000') avail = '2';
+        }
+        // ICMP
+        if (!avail) {
+            const ic = info.icmp;
+            if (ic && ic.status === '0' && ic.state === '0' && ic.lastvalue != null && ic.lastvalue !== '') {
+                const v = ic.lastvalue;
+                if (v === '1' || v === '1.000000') avail = '1';
+                else if (v === '0' || v === '0.000000') avail = '2';
+            }
+        }
+        if (avail) iface.available = avail;
+    }
+    return hosts;
+}
+
 /** Busca host por IP ou nome. */
 async function buscarHostPorIp(ip) {
     const hosts = await authCall('host.get', {
@@ -369,13 +430,63 @@ async function resumoMonitoramento() {
         const hostsAtivos = hosts.filter(h => h.status === '0').length; // '0' = monitored
         const hostsInativos = totalHosts - hostsAtivos;
         
-        // Conta hosts disponiveis vs indisponiveis
+        // Conta hosts disponiveis vs indisponiveis.
+        // Mapeamento correto da API Zabbix: '1'=available, '2'=unavailable, '0'=unknown (ainda nao determinado).
+        // BUG anterior: tratava '0' (unknown) como indisponivel e ignorava '2' (unavailable real).
+        // Para hosts sem agente passivo (interface available=0/unknown), a disponibilidade real vem de:
+        //   - icmpping (hosts ICMP-only)
+        //   - agent.ping (hosts com Zabbix Agent ativo)
+        //   - zabbix[host,active_agent,available] (hosts com agente ativo)
+        let itemPorHost = {};
+        try {
+            const allItems = await authCall('item.get', {
+                output: ['itemid', 'hostid', 'key_', 'lastvalue', 'state', 'status'],
+                filter: { key_: ['icmpping', 'agent.ping', 'zabbix[host,active_agent,available]'] }
+            });
+            for (const it of (allItems || [])) {
+                if (!itemPorHost[it.hostid]) itemPorHost[it.hostid] = {};
+                // Prioridade: agent.ping/active_agent > icmpping
+                const key = it.key_;
+                if (key === 'zabbix[host,active_agent,available]' || key === 'agent.ping') {
+                    itemPorHost[it.hostid].agent = it;
+                } else if (key === 'icmpping') {
+                    if (!itemPorHost[it.hostid].icmp) itemPorHost[it.hostid].icmp = it;
+                }
+            }
+        } catch (e) { /* segue sem fallback */ }
+        // Funcao para determinar disponibilidade a partir dos itens
+        function disponibilidadePorItens(hostid) {
+            const info = itemPorHost[hostid];
+            if (!info) return null;
+            // Tenta agent primeiro
+            const ag = info.agent;
+            if (ag && ag.status === '0' && ag.state === '0' && ag.lastvalue != null && ag.lastvalue !== '') {
+                const v = ag.lastvalue;
+                if (v === '1' || v === '1.000000') return '1';
+                if (v === '0' || v === '0.000000') return '2';
+            }
+            // ICMP
+            const ic = info.icmp;
+            if (ic && ic.status === '0' && ic.state === '0' && ic.lastvalue != null && ic.lastvalue !== '') {
+                const v = ic.lastvalue;
+                if (v === '1' || v === '1.000000') return '1';
+                if (v === '0' || v === '0.000000') return '2';
+            }
+            return null;
+        }
         let disponiveis = 0, indisponiveis = 0, desconhecidos = 0;
         for (const h of hosts) {
             if (h.interfaces && h.interfaces.length) {
                 const iface = h.interfaces[0];
-                if (iface.available === '1') disponiveis++;
-                else if (iface.available === '0') indisponiveis++;
+                let avail = iface.available;
+                // Fallback para hosts sem agente passivo (interface available=0/unknown):
+                // usa agent.ping / icmpping para determinar disponibilidade real
+                if (avail === '0' || avail === null || avail === undefined) {
+                    const fb = disponibilidadePorItens(h.hostid);
+                    if (fb) avail = fb;
+                }
+                if (avail === '1') disponiveis++;
+                else if (avail === '2') indisponiveis++;
                 else desconhecidos++;
             } else {
                 desconhecidos++;
@@ -461,7 +572,28 @@ async function monitoramentoHost(ip) {
                 hostid: host.hostid,
                 hostname: host.host,
                 nome: host.name,
-                disponivel: host.interfaces && host.interfaces[0] ? host.interfaces[0].available === '1' : null,
+                disponivel: (function() {
+                    const iface = host.interfaces && host.interfaces[0];
+                    if (!iface) return null;
+                    if (iface.available === '1') return true;
+                    if (iface.available === '2') return false;
+                    // Fallback para hosts sem agente passivo (available=0 unknown):
+                    // 1) agente ativo: zabbix[host,active_agent,available] ou agent.ping
+                    const vAgent = valoresMap && (valoresMap['zabbix[host,active_agent,available]'] || valoresMap['agent.ping']);
+                    if (vAgent && vAgent.valor != null) {
+                        const v = vAgent.valor && (vAgent.valor.valor != null ? vAgent.valor.valor : vAgent.valor);
+                        if (v === '1' || v === '1.000000' || v === true) return true;
+                        if (v === '0' || v === '0.000000' || v === false) return false;
+                    }
+                    // 2) ICMP
+                    const ic = (metricas && metricas.disponibilidade && metricas.disponibilidade.valor);
+                    if (ic && (ic.valor != null)) {
+                        const v = ic.valor && (ic.valor.valor != null ? ic.valor.valor : ic.valor);
+                        if (v === '1' || v === '1.000000' || v === true) return true;
+                        if (v === '0' || v === '0.000000' || v === false) return false;
+                    }
+                    return null;
+                })(),
                 erroInterface: host.interfaces && host.interfaces[0] ? host.interfaces[0].error : null
             },
             metricas: {
@@ -745,6 +877,7 @@ module.exports = {
     apiCall,
     testarConexao,
     listarHosts,
+    enriquecerDisponibilidade,
     buscarHostPorIp,
     listarProblemas,
     historicoItem,

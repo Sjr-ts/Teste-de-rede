@@ -597,7 +597,12 @@ app.get('/api/zabbix/hosts', async (req, res) => {
     try {
         const zb = require('./monitor/zabbix-bridge');
         const r = await zb.listarHosts();
-        res.json(r);
+        // Enriquece a disponibilidade real: para hosts sem agente passivo
+        // (interface available=0/unknown), usa icmpping/agent.ping para
+        // determinar se esta disponivel. Evita mostrar "Aguardando" para
+        // hosts que estao respondendo (bug reportado pelo usuario).
+        const enriquecidos = await zb.enriquecerDisponibilidade(r);
+        res.json(enriquecidos);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
