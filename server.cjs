@@ -48,7 +48,7 @@ app.get('/api/monitor/stream', (req, res) => {
 // Cache separado para dados e metricas (timestamps independentes) para evitar
 // que a expiracao de um invalide o outro.
 let _zbCache = { dados: null, dadosTs: 0, metricas: null, metricasTs: 0 };
-const ZB_CACHE_MS = 300000; // 5 min: reutiliza ultimo dado valido por mais tempo
+const ZB_CACHE_MS = 15000; // 15s: reutiliza ultimo dado valido
 
 async function enriquecerPainelComZabbix(painel) {
     if (!painel || !Array.isArray(painel.linhas)) return painel;

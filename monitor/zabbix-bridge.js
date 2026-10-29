@@ -767,7 +767,7 @@ async function dadosMonitoramentoZabbix() {
 /** Cache de metricas Zabbix (TTL 60s) */
 let _cacheMetricas = null;
 let _cacheMetricasTs = 0;
-const CACHE_TTL_MS = 60000;
+const CACHE_TTL_MS = 10000;
 
 /**
  * Busca metricas completas (CPU, RAM, disco, uptime, ICMP) de TODOS os hosts Zabbix.
