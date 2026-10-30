@@ -225,11 +225,12 @@ function monRenderZabbixStatus(z) {
         return;
     }
     if (!z || z.erro) {
-        el.innerHTML = '<div class="glass-panel" style="border-left:3px solid var(--yellow);margin-bottom:0;">' +
+        el.innerHTML = '<div class="glass-panel" style="border-left:3px solid var(--red);margin-bottom:0;">' +
             '<div style="padding:14px 18px;display:flex;align-items:center;gap:12px;">' +
-            '<i class="fas fa-plug-circle-xmark" style="color:var(--yellow);font-size:18px;"></i>' +
-            '<div><b style="font-size:13px;color:var(--text-primary);">Zabbix: ' + (z && z.erro ? 'desconectado' : 'nao configurado') + '</b>' +
-            '<p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">' + (z && z.erro ? z.erro : 'Configure monitor/zabbix-config.json e reinicie o servidor.') + '</p></div>' +
+            '<i class="fas fa-plug-circle-xmark" style="color:var(--red);font-size:18px;"></i>' +
+            '<div><b style="font-size:13px;color:var(--text-primary);">Zabbix: desconectado</b>' +
+            '<p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">' + (z && z.erro ? z.erro : 'Configure monitor/zabbix-config.json e reinicie o servidor.') + '</p>' +
+            '<p style="font-size:10px;color:var(--text-muted);margin-top:4px;"><i class="fas fa-info-circle"></i> Para restaurar: inicie Docker Desktop e rode <code>docker compose -f docker-compose.zabbix.yml up -d</code></p></div>' +
             '</div></div>';
         return;
     }
@@ -805,27 +806,53 @@ function monRenderTabela(p) {
         const alertas = l.alertasAtivos > 0 ?
             '<span class="badge badge-cancelada">' + l.alertasAtivos + '</span>' :
             '<span style="color:var(--text-muted);">—</span>';
-        // Detecta se o valor vem do Zabbix (string contendo "(Zabbix)") ou e local
+
+        // Detecta se o valor vem do Zabbix, cache antigo, ou local
         function _fonteMetrica(val) {
             if (!val || val === 'INDISPONIVEL' || val === 'INDISP.') return null;
-            return String(val).indexOf('(Zabbix)') >= 0 ? 'ZABBIX' : 'LOCAL';
+            const s = String(val);
+            if (s.indexOf('(Zabbix)') >= 0) return 'ZABBIX';
+            if (s.indexOf('ZABBIX_DADOS_ANTIGOS') >= 0) return 'ZABBIX_CACHE';
+            return 'LOCAL';
         }
         function _cellMetrica(val, titulo) {
             const fonte = _fonteMetrica(val);
-            if (!fonte) return '<span style="color:var(--text-muted);font-size:10px;" title="Sem agente instalado neste PC remoto">' + esc(titulo || 'INDISP.') + '</span>';
-            const corFonte = fonte === 'ZABBIX' ? 'var(--purple)' : 'var(--green)';
-            const texto = String(val).replace(/\s*\(Zabbix\)\s*/g, '').trim();
-            return '<span style="color:var(--cyan);font-weight:600;">' + esc(texto) + '</span><br><span style="font-size:9px;color:' + corFonte + ';">' + fonte + '</span>';
+            if (!fonte) {
+                const tituloEsc = esc(titulo || 'Indisp.');
+                if (zbx.indisponivelZb) {
+                    return '<span style="color:var(--red);font-size:10px;" title="Zabbix indisponível — sem dados do agente">' + tituloEsc + '</span>';
+                }
+                if (l.estado === 'SEM_DADOS' || l.stale) {
+                    return '<span style="color:var(--text-muted);font-size:10px;" title="Dados expirados — sem coleta recente">' + tituloEsc + '</span>';
+                }
+                return '<span style="color:var(--text-muted);font-size:10px;" title="Sem agente instalado neste PC remoto">' + tituloEsc + '</span>';
+            }
+            const corFonte = fonte === 'ZABBIX' ? 'var(--purple)' : (fonte === 'ZABBIX_CACHE' ? 'var(--orange)' : 'var(--green)');
+            const texto = String(val).replace(/\s*\(Zabbix\)\s*/g, '').replace(/\s*ZABBIX_DADOS_ANTIGOS\s*/g, '').trim();
+            const fonteLabel = fonte === 'ZABBIX_CACHE' ? 'ZABBIX (cache antigo)' : fonte;
+            return '<span style="color:var(--cyan);font-weight:600;">' + esc(texto) + '</span><br><span style="font-size:9px;color:' + corFonte + ';">' + fonteLabel + '</span>';
         }
-        const cpuCell = _cellMetrica(l.cpu, 'INDISP.');
-        const gpuCell = _cellMetrica(l.gpu, 'INDISP.');
-        const ramCell = _cellMetrica(l.ram, 'INDISP.');
-        const discoCell = _cellMetrica(l.disco, 'INDISP.');
+        const cpuCell = _cellMetrica(l.cpu, 'Indisp.');
+        const gpuCell = _cellMetrica(l.gpu, 'Indisp.');
+        const ramCell = _cellMetrica(l.ram, 'Indisp.');
+        const discoCell = _cellMetrica(l.disco, 'Indisp.');
+
+        // Indicador de idade dos dados
+        let idadeInfo = '';
+        const agoraTs = Date.now();
+        const ultimoTs = l.ultimoHorario ? new Date(l.ultimoHorario).getTime() : 0;
+        const segundosDesdeUltima = ultimoTs ? Math.round((agoraTs - ultimoTs) / 1000) : null;
+        if (segundosDesdeUltima != null && segundosDesdeUltima > 60) {
+            idadeInfo = '<span style="font-size:9px;color:var(--orange);" title="Última coleta há ' + segundosDesdeUltima + 's">⚠ ' + segundosDesdeUltima + 's</span>';
+        } else if (segundosDesdeUltima != null) {
+            idadeInfo = '<span style="font-size:9px;color:var(--green);" title="Última coleta há ' + segundosDesdeUltima + 's">✓ ' + segundosDesdeUltima + 's</span>';
+        }
+
         return '<tr>' +
             '<td><b style="color:var(--text-primary);">' + esc(l.nome || '-') + '</b><br><span style="font-size:11px;color:var(--text-muted);font-family:monospace;">' + esc(l.ip) + '</span></td>' +
             '<td style="font-size:11px;">' + esc(l.setor || '-') + '</td>' +
             '<td>' + estadoBadge + '</td>' +
-            '<td>' + lat + '</td>' +
+            '<td>' + lat + idadeInfo + '</td>' +
             '<td>' + falhas + '</td>' +
             '<td>' + cpuCell + '</td>' +
             '<td>' + gpuCell + '</td>' +

@@ -165,13 +165,24 @@ async function enriquecerPainelComZabbix(painel) {
                     const z = linha.zabbix || {};
                     if (z.indisponivelZb) continue;
 
-                    if (mz.cpu != null) { linha.cpu = mz.cpu + '% (Zabbix)'; linha._zabbixCpu = mz.cpu; }
-                    if (mz.gpu != null) { linha.gpu = mz.gpu + '% (Zabbix)'; linha._zabbixGpu = mz.gpu; }
-                    if (mz.ram && mz.ram.usadoPct != null) { linha.ram = mz.ram.usadoPct + '% (' + (mz.ram.disponivelPct || '?') + '% livre) (Zabbix)'; linha._zabbixRam = mz.ram; }
-                    if (mz.disco && mz.disco.length) { linha.disco = mz.disco.map(d => (100 - (d.livrePct || 0)).toFixed(1) + '% usado').join(' | ') + ' (Zabbix)'; linha._zabbixDisco = mz.disco; }
-                    if (mz.uptime != null) { const dias = Math.floor(mz.uptime / 86400); const horas = Math.floor((mz.uptime % 86400) / 3600); linha.uptime = dias + 'd ' + horas + 'h (Zabbix)'; linha._zabbixUptime = mz.uptime; }
-                    if (!(linha.fonte || '').includes('ZABBIX')) linha.fonte = (linha.fonte || '') + (linha.fonte ? ' + ' : '') + 'ZABBIX';
-                    linha._zabbixAtualizadoEm = now;
+                    // Validar idade dos dados do Zabbix (se muito antigos, nao aplicar)
+                    let metricaFresca = true;
+                    const idadeMaximaMs = 300000; // 5 minutos
+                    const lastclock = mz._lastclock || mz.lastclock;
+                    if (lastclock && (now - parseInt(lastclock) * 1000) > idadeMaximaMs) {
+                        metricaFresca = false;
+                        if (!(linha.fonte || '').includes('ZABBIX_DADOS_ANTIGOS')) linha.fonte = (linha.fonte || '') + ' ZABBIX_DADOS_ANTIGOS';
+                    }
+
+                    if (metricaFresca) {
+                        if (mz.cpu != null) { linha.cpu = mz.cpu + '% (Zabbix)'; linha._zabbixCpu = mz.cpu; }
+                        if (mz.gpu != null) { linha.gpu = mz.gpu + '% (Zabbix)'; linha._zabbixGpu = mz.gpu; }
+                        if (mz.ram && mz.ram.usadoPct != null) { linha.ram = mz.ram.usadoPct + '% (' + (mz.ram.disponivelPct || '?') + '% livre) (Zabbix)'; linha._zabbixRam = mz.ram; }
+                        if (mz.disco && mz.disco.length) { linha.disco = mz.disco.map(d => (100 - (d.livrePct || 0)).toFixed(1) + '% usado').join(' | ') + ' (Zabbix)'; linha._zabbixDisco = mz.disco; }
+                        if (mz.uptime != null) { const dias = Math.floor(mz.uptime / 86400); const horas = Math.floor((mz.uptime % 86400) / 3600); linha.uptime = dias + 'd ' + horas + 'h (Zabbix)'; linha._zabbixUptime = mz.uptime; }
+                        if (!(linha.fonte || '').includes('ZABBIX')) linha.fonte = (linha.fonte || '') + (linha.fonte ? ' + ' : '') + 'ZABBIX';
+                        linha._zabbixAtualizadoEm = now;
+                    }
                 }
             }
         }
@@ -421,47 +432,8 @@ app.get('/api/logs', (req, res) => {
 app.get('/api/monitor/painel', async (req, res) => {
     try {
         const painel = monitor.obterPainel();
-        try {
-            const zb = require('./monitor/zabbix-bridge');
-            const cfg = zb.loadConfig ? zb.loadConfig() : null;
-            if (cfg && cfg.url) {
-                const dadosZb = await zb.dadosMonitoramentoZabbix();
-                if (Array.isArray(dadosZb) && dadosZb.length) {
-                    const zbMap = {};
-                    for (const z of dadosZb) { if (!zbMap[z.ip] || zbMap[z.ip].disponivel === null) zbMap[z.ip] = z; }
-                    for (const linha of (painel.linhas || [])) {
-                        const z = zbMap[linha.ip];
-                        if (z) {
-                            linha.zabbix = { disponivel: z.disponivel, latenciaMs: z.latenciaMs, perdaPct: z.perdaPct, available: z.available, error: z.error };
-                            const localFresco = linha.ultimoHorario && (Date.now() - new Date(linha.ultimoHorario).getTime()) < 120000;
-                            if (!localFresco) {
-                                if (z.disponivel === true) linha.estado = 'ACESSIVEL';
-                                else if (z.disponivel === false) linha.estado = 'SEM_RESPOSTA';
-                                if (z.latenciaMs != null) linha.latenciaMediaMs = z.latenciaMs;
-                            }
-                        }
-                    }
-                }
-                try {
-                    const metricasZb = await zb.dadosCompletosZabbix();
-                    if (Array.isArray(metricasZb) && metricasZb.length) {
-                        const mzMap = {};
-                        for (const m of metricasZb) { if (m.ip) mzMap[m.ip] = m; }
-                        for (const linha of (painel.linhas || [])) {
-                            const mz = mzMap[linha.ip];
-                            if (mz) {
-                                if (mz.cpu != null) { linha.cpu = mz.cpu + '% (Zabbix)'; linha._zabbixCpu = mz.cpu; }
-                                if (mz.gpu != null) { linha.gpu = mz.gpu + '% (Zabbix)'; linha._zabbixGpu = mz.gpu; }
-                                if (mz.ram && mz.ram.usadoPct != null) { linha.ram = mz.ram.usadoPct + '% (' + (mz.ram.disponivelPct || '?') + '% livre) (Zabbix)'; linha._zabbixRam = mz.ram; }
-                                if (mz.disco && mz.disco.length) { linha.disco = mz.disco.map(d => (100 - (d.livrePct || 0)).toFixed(1) + '% usado').join(' | ') + ' (Zabbix)'; linha._zabbixDisco = mz.disco; }
-                                if (mz.uptime != null) { const dias = Math.floor(mz.uptime / 86400); const horas = Math.floor((mz.uptime % 86400) / 3600); linha.uptime = dias + 'd ' + horas + 'h (Zabbix)'; linha._zabbixUptime = mz.uptime; }
-                                linha.fonte = (linha.fonte || '') + (linha.fonte ? ' + ' : '') + 'ZABBIX';
-                            }
-                        }
-                    }
-                } catch (e2) {}
-            }
-        } catch (e) {}
+        // Usa o MESMO enriquecimento do SSE para garantir consistencia absoluta
+        try { painel = await enriquecerPainelComZabbix(painel); } catch (e) {}
         res.json(painel);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -580,6 +552,7 @@ app.post('/api/monitor/alertas', (req, res) => {
 // Registra callback para emitir SSE apos cada ciclo
 let _alertasConhecidos = new Set();
 try { store.lerAlertas().forEach(a => _alertasConhecidos.add(a.id)); } catch (e) {}
+let _zbStatusAnterior = null; // rastreia se Zabbix estava online/offline
 monitor.aoFinalizarCiclo(async function(painel) {
     // Inclui metricas mock de todos os hosts mock
     const mockIps = (painel.linhas || [])
@@ -603,6 +576,35 @@ monitor.aoFinalizarCiclo(async function(painel) {
             _alertasConhecidos.add(a.id);
             a.fonte = a.fonte || 'COLETOR';
             sseBroadcast('alerta', a);
+        }
+    } catch (e) {}
+
+    // Alerta proativo quando Zabbix fica online/offline
+    try {
+        const zbOnline = !!(_zbUltimaChamadaOK && _zbCache.dados && Array.isArray(_zbCache.dados) && _zbCache.dados.length);
+        if (_zbStatusAnterior !== zbOnline) {
+            _zbStatusAnterior = zbOnline;
+            const alerta = {
+                id: 'ZB-STATUS-' + Date.now(),
+                categoria: zbOnline ? 'INFRA' : 'INFRA',
+                gravidade: zbOnline ? 'INFO' : 'ALTA',
+                host: 'SERVIDOR',
+                titulo: zbOnline ? 'Zabbix reconectado' : 'Zabbix desconectado',
+                evidencias: [
+                    zbOnline
+                        ? 'API do Zabbix respondeu com sucesso (porta 8081)'
+                        : 'Falha ao conectar na API do Zabbix (ECONNREFUSED 192.168.0.186:8081). Verifique se o Docker Desktop está rodando.'
+                ],
+                confianca: 'CONFIRMADO',
+                recomendacao: zbOnline
+                    ? 'Monitoramento via Zabbix restaurado.'
+                    : 'Iniciar Docker Desktop e rodar: docker compose -f docker-compose.zabbix.yml up -d',
+                estado: 'ABERTO',
+                ocorrencias: 1,
+                criadoEm: new Date().toISOString(),
+                fonte: 'ZABBIX_STATUS'
+            };
+            sseBroadcast('alerta', alerta);
         }
     } catch (e) {}
 });
