@@ -1310,6 +1310,31 @@ async function renderNotifPanel() {
     } catch (e) {}
     try { localStorage.setItem('notifSeen', String(Date.now())); } catch (e) {}
     updateNotifBadge();
+
+    // ---- NOTIFICACOES DE FALHAS DE MONITORAMENTO (novo) ----
+    try {
+        // Se houver falhas recentes conhecidas via SSE (monitoramento), adiciona notificação
+        if (window._monAlertasZabbix && window._monAlertasZabbix.length > 0) {
+            var ultimoAlerta = window._monAlertasZabbix[0];
+            if (ultimoAlerta && ultimoAlerta.trigger) {
+                items.push({ i: 'fa-triangle-exclamation', c: ultimoAlerta.status === 'PROBLEM' ? 'red' : 'green', t: (ultimoAlerta.status === 'PROBLEM' ? 'PROBLEMA: ' : 'RESOLVIDO: ') + ultimoAlerta.trigger + ' @ ' + (ultimoAlerta.host || '?'), s: ultimoAlerta.severidade || 'N/A', k: 'falha-monitor' });
+                alertasCount++;
+            }
+        }
+    } catch (e) {}
+
+    // Notificacao de falhas recentes do historico (se o usuario abriu historico de 192.168.0.108)
+    try {
+        if (typeof _monDados !== 'undefined' && _monDados && _monDados.linhas) {
+            var falhasHost = _monDados.linhas.filter(function(l){ return l.falhasConsecutivas > 2 || l.estado === 'SEM_RESPOSTA'; });
+            if (falhasHost.length > 0) {
+                var nomeHost = falhasHost[0].nome || falhasHost[0].ip;
+                items.unshift({ i: 'fa-network-wired', c: 'red', t: 'Falha de conectividade: ' + nomeHost + ' (IP ' + falhasHost[0].ip + ')', s: falhasHost[0].falhasConsecutivas + ' falhas consecutivas', k: 'falha-net' });
+                alertasCount++;
+            }
+        }
+    } catch (e) {}
+
     var lbl = document.getElementById('notifCountLabel');
     if (lbl) lbl.textContent = unread > 99 ? '99+' : String(unread);
     if (items.length === 0) {
@@ -1325,6 +1350,14 @@ async function renderNotifPanel() {
     listEl.innerHTML = html;
 }
 
+function showFailureNotification(title, body) {
+    try {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            new Notification(title, { body: body, icon: 'assets/logo.png', tag: 'falha-monitor-' + Date.now() });
+        }
+    } catch (e) {}
+    if (typeof showToast === 'function') showToast(title + ': ' + body, 'error');
+}
 function updateNotifBadge() {
     var badge = document.getElementById('notifBadge');
     if (!badge) return;

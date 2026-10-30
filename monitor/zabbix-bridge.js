@@ -724,17 +724,29 @@ async function dadosMonitoramentoZabbix() {
         let disponivel = null, latencia = null, perda = null;
         try {
             const itens = await listarItens(h.hostid);
+            // Verifica ICMP (agente passivo) OU agent.ping / zabbix[host,active_agent,available] (agente ativo)
             const icmpItens = itens.filter(it => it.key_ === 'icmpping' || it.key_ === 'icmppingsec' || it.key_ === 'icmppingloss');
-            const itemids = icmpItens.map(it => it.itemid);
+            const agentItens = itens.filter(it => it.key_ === 'agent.ping' || it.key_ === 'zabbix[host,active_agent,available]');
+            const itemids = [...icmpItens, ...agentItens].map(it => it.itemid);
             const keyMap = {};
-            for (const it of icmpItens) keyMap[it.itemid] = it.key_;
+            for (const it of [...icmpItens, ...agentItens]) keyMap[it.itemid] = it.key_;
             if (itemids.length) {
                 const vals = await ultimosValores(itemids);
                 for (const v of vals) {
                     const key = keyMap[v.itemid];
+                    // ICMP passivo
                     if (key === 'icmpping') disponivel = v.lastvalue === '1' ? true : (v.lastvalue === '0' ? false : null);
                     if (key === 'icmppingsec') latencia = parseFloat(v.lastvalue);
                     if (key === 'icmppingloss') perda = parseFloat(v.lastvalue);
+                    // Agente ativo: agent.ping = 1 disponível, zabbix[host,active_agent,available] = 1 disponível
+                    if (key === 'agent.ping') {
+                        if (v.lastvalue === '1' || v.lastvalue === '1.000000') disponivel = true;
+                        else if (v.lastvalue === '0' || v.lastvalue === '0.000000') disponivel = false;
+                    }
+                    if (key === 'zabbix[host,active_agent,available]') {
+                        if (v.lastvalue === '1' || v.lastvalue === '1.000000') disponivel = true;
+                        else if (v.lastvalue === '0' || v.lastvalue === '0.000000') disponivel = false;
+                    }
                 }
             }
         } catch (e) {}
@@ -886,7 +898,8 @@ async function dadosCompletosZabbix() {
         return resultado;
     } catch (e) {
         console.error('[zabbix-bridge] dadosCompletosZabbix error:', e.message);
-        return _cacheMetricas || [];
+        if (_cacheMetricas && (now - _cacheMetricasTs) < CACHE_TTL_MS) return _cacheMetricas;
+        return [];
     }
 }
 module.exports = {

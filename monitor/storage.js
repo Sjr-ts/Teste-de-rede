@@ -269,6 +269,125 @@ function historicoHost(ip, dias = 7) {
     return serie;
 }
 
+/**
+ * Catalogo de tipos de falha conhecidos pelo pinger.
+ * Traduz o codigo tecnico (ex: tempo_esgotado) em linguagem humana,
+ * com causa provavel e recomendacao de acao para a equipe de TI.
+ */
+const CATALOGO_FALHAS = {
+    tempo_esgotado: {
+        nome: 'Tempo esgotado (sem resposta ICMP)',
+        causa: 'O host nao respondeu dentro do timeout. PC desligado, em suspensao/hibernacao, cabo desconectado, firewall bloqueando ICMP ou rede congestionada.',
+        recomendacao: 'Verificar se o PC esta ligado (pedir ao usuario ou usar Wake-on-LAN). Se ligado, checar cabo/porta do switch e regra de firewall (ICMP).'
+    },
+    destino_inacessivel: {
+        nome: 'Destino inacessivel',
+        causa: 'O gateway/rede respondeu que nao ha rota ate o host. Geralmente cabo desconectado no destino, placa de rede desativada ou IP fora da sub-rede.',
+        recomendacao: 'Verificar fisicamente cabo e LED da placa de rede do destino. Confirmar se o IP configurado corresponde a mesma sub-rede (192.168.0.x).'
+    },
+    host_nao_encontrado: {
+        nome: 'Host nao encontrado',
+        causa: 'Resolucao de nome falhou ou IP nao existe mais na rede (equipamento desligado a longo prazo ou IP alterado).',
+        recomendacao: 'Confirmar se o IP do cadastro esta correto no inventario. Verificar tabela ARP do gateway.'
+    },
+    sem_resposta: {
+        nome: 'Sem resposta',
+        causa: 'Nenhuma das tentativas de ping obteve resposta e o SO nao indicou causa especifica.',
+        recomendacao: 'Repetir a verificacao. Se persistir, testar ping de outra maquina do mesmo segmento para isolar o problema.'
+    },
+    timeout_do_processo: {
+        nome: 'Tempo limite do processo de ping',
+        causa: 'O processo de ping demorou mais que o permitido e foi finalizado. Indicativo de rede muito lenta ou host sobrecarregado.',
+        recomendacao: 'Verificar carga da rede no horario da falha e consumo do host (via Zabbix quando disponivel).'
+    },
+    timeout: {
+        nome: 'Timeout de conexao TCP',
+        causa: 'A porta TCP configurada nao respondeu dentro do tempo limite. Servico parado ou firewall bloqueando a porta.',
+        recomendacao: 'Confirmar se o servico esta rodando no host e se a porta esta aberta no firewall.'
+    }
+};
+
+function descreverFalha(erro) {
+    return CATALOGO_FALHAS[erro] || {
+        nome: erro ? String(erro) : 'Falha desconhecida',
+        causa: 'Tipo de erro nao catalogado pelo coletor.',
+        recomendacao: 'Analisar manualmente o registro bruto da medicao.'
+    };
+}
+
+/**
+ * Analisa as falhas de um host nos ultimos N dias a partir dos arquivos raw.
+ * Retorna registros individuais + agrupamento por tipo de erro com
+ * descricao humana, causa provavel, recomendacao e janela temporal.
+ */
+function falhasHost(ip, dias = 7, limiteRegistros = 200) {
+    const agora = new Date();
+    const registros = [];
+    for (let i = 0; i < dias; i++) {
+        const d = new Date(agora.getTime() - i * 86400000);
+        const dia = d.toISOString().slice(0, 10);
+        const arquivo = path.join(RAW_DIR, dia + '.jsonl');
+        if (!fs.existsSync(arquivo)) continue;
+        try {
+            const linhas = fs.readFileSync(arquivo, 'utf8').split('\n').filter(Boolean);
+            for (const l of linhas) {
+                let r;
+                try { r = JSON.parse(l); } catch (e) { continue; }
+                if (r.host !== ip) continue;
+                if (r.ok !== false) continue;
+                registros.push({
+                    dia,
+                    timestamp: r.timestamp,
+                    erro: r.erro || 'sem_resposta',
+                    perdaPct: r.perdaPct,
+                    enviado: r.enviado,
+                    recebido: r.recebido,
+                    metodo: r.metodo,
+                    nome: r.nome,
+                    setor: r.setor
+                });
+            }
+        } catch (e) {}
+    }
+    registros.sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
+
+    // Agrupa por tipo de erro
+    const grupos = {};
+    for (const f of registros) {
+        if (!grupos[f.erro]) {
+            const desc = descreverFalha(f.erro);
+            grupos[f.erro] = {
+                erro: f.erro,
+                nome: desc.nome,
+                causa: desc.causa,
+                recomendacao: desc.recomendacao,
+                total: 0,
+                primeiro: f.timestamp,
+                ultimo: f.timestamp,
+                dias: {},
+                exemplos: []
+            };
+        }
+        const g = grupos[f.erro];
+        g.total++;
+        if (f.timestamp < g.primeiro) g.primeiro = f.timestamp;
+        if (f.timestamp > g.ultimo) g.ultimo = f.timestamp;
+        g.dias[f.dia] = (g.dias[f.dia] || 0) + 1;
+        if (g.exemplos.length < 10) {
+            g.exemplos.push({ timestamp: f.timestamp, perdaPct: f.perdaPct, enviado: f.enviado, recebido: f.recebido, metodo: f.metodo });
+        }
+    }
+
+    return {
+        host: ip,
+        diasAnalisados: dias,
+        totalFalhas: registros.length,
+        registros: registros.slice(0, limiteRegistros),
+        porTipo: Object.values(grupos).sort((a, b) => b.total - a.total),
+        geradoEm: new Date().toISOString()
+    };
+}
+
 /** Le as ultimas N medicoes brutas de um host (do arquivo raw de hoje). */
 function ultimasMedicoes(host, limite = 50) {
     const arquivo = rawFile();
@@ -303,6 +422,9 @@ module.exports = {
     estatisticasArmazenamento,
     historicoHost,
     ultimasMedicoes,
+    falhasHost,
+    descreverFalha,
+    CATALOGO_FALHAS,
     DATA_DIR,
     RAW_DIR,
     AGG_DIR

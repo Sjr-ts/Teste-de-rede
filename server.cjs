@@ -50,6 +50,11 @@ app.get('/api/monitor/stream', (req, res) => {
 let _zbCache = { dados: null, dadosTs: 0, metricas: null, metricasTs: 0 };
 const ZB_CACHE_MS = 15000; // 15s: reutiliza ultimo dado valido
 
+// Rastreia quando cada IP teve dados frescos do Zabbix (para nao aplicar cache expirado em hosts offline)
+let _zbHostFresh = {}; // { ip: timestamp }
+// Rastreia se a ultima chamada ao Zabbix API foi bem-sucedida
+let _zbUltimaChamadaOK = false;
+
 async function enriquecerPainelComZabbix(painel) {
     if (!painel || !Array.isArray(painel.linhas)) return painel;
     try {
@@ -57,13 +62,33 @@ async function enriquecerPainelComZabbix(painel) {
         const cfg = zb.loadConfig ? zb.loadConfig() : null;
         if (!cfg || !cfg.url) return painel;
 
+        const now = Date.now();
+
         // 1) Disponibilidade / latencia / perda
         let dadosZb = null;
         try {
             const fresh = await zb.dadosMonitoramentoZabbix();
-            if (Array.isArray(fresh) && fresh.length) { dadosZb = fresh; _zbCache.dados = fresh; _zbCache.dadosTs = Date.now(); }
-        } catch (e) {}
-        if (!dadosZb && _zbCache.dados) dadosZb = _zbCache.dados; // fallback permanente (sem TTL)
+            if (Array.isArray(fresh) && fresh.length) {
+                dadosZb = fresh;
+                _zbCache.dados = fresh;
+                _zbCache.dadosTs = now;
+                _zbUltimaChamadaOK = true;
+                // Marca todos os IPs com dados frescos
+                for (const z of fresh) {
+                    if (z.ip) _zbHostFresh[z.ip] = now;
+                }
+            } else {
+                _zbUltimaChamadaOK = false;
+            }
+        } catch (e) {
+            _zbUltimaChamadaOK = false;
+        }
+
+        // Se nao houve dados frescos, verifica se o cache nao expirou
+        // Se a ultima chamada falhou, nao usamos cache de disponibilidade (forca reavaliacao)
+        if (!dadosZb && _zbCache.dados && (now - _zbCache.dadosTs) < ZB_CACHE_MS && _zbUltimaChamadaOK) {
+            dadosZb = _zbCache.dados; // fallback apenas se dentro do TTL (ex: 15s)
+        }
 
         if (Array.isArray(dadosZb) && dadosZb.length) {
             const zbMap = {};
@@ -71,22 +96,42 @@ async function enriquecerPainelComZabbix(painel) {
             for (const linha of painel.linhas) {
                 const z = zbMap[linha.ip];
                 if (z) {
+                    const indisponivelZb = (z.disponivel === false) || (z.available === '2') || (z.available === '0' && z.error) || (z.disponivel === null && z.available === '0');
                     linha.zabbix = {
                         disponivel: z.disponivel,
                         latenciaMs: z.latenciaMs,
                         perdaPct: z.perdaPct,
                         available: z.available,
-                        error: z.error
+                        error: z.error,
+                        indisponivelZb: indisponivelZb,
+                        atualizadoEm: now
                     };
-                    const localFresco = linha.ultimoHorario && (Date.now() - new Date(linha.ultimoHorario).getTime()) < 120000;
-                    if (!localFresco) {
-                        if (z.disponivel === true) {
+                    const localFresco = linha.ultimoHorario && (now - new Date(linha.ultimoHorario).getTime()) < 120000;
+                    if (!localFresco || indisponivelZb) {
+                        if (indisponivelZb) {
+                            if (linha.estado === 'ACESSIVEL') linha.estado = 'SEM_RESPOSTA';
+                        } else if (z.disponivel === true) {
                             if (linha.estado !== 'ACESSIVEL') linha.estado = 'ACESSIVEL';
                         } else if (z.disponivel === false) {
                             if (linha.estado === 'ACESSIVEL') linha.estado = 'SEM_RESPOSTA';
                         }
                         if (z.latenciaMs != null) linha.latenciaMediaMs = z.latenciaMs;
                     }
+                } else {
+                    // Host nao esta mais no Zabbix ou nao retornou dados
+                    const temDadosFrescos = _zbHostFresh[linha.ip] && (now - _zbHostFresh[linha.ip]) < ZB_CACHE_MS;
+                    if (!temDadosFrescos && linha.estado === 'ACESSIVEL') {
+                        linha.estado = 'SEM_DADOS';
+                    }
+                }
+            }
+        } else {
+            // Sem dados do Zabbix de todo: invalida hosts que estavam acessiveis sem dados frescos
+            for (const linha of painel.linhas) {
+                const temDadosFrescos = _zbHostFresh[linha.ip] && (now - _zbHostFresh[linha.ip]) < ZB_CACHE_MS;
+                if (!temDadosFrescos && linha.estado === 'ACESSIVEL') {
+                    linha.estado = 'SEM_DADOS';
+                    linha.zabbix = { indisponivelZb: true, error: 'Zabbix sem resposta', atualizadoEm: now };
                 }
             }
         }
@@ -95,9 +140,20 @@ async function enriquecerPainelComZabbix(painel) {
         let metricasZb = null;
         try {
             const freshM = await zb.dadosCompletosZabbix();
-            if (Array.isArray(freshM) && freshM.length) { metricasZb = freshM; _zbCache.metricas = freshM; _zbCache.metricasTs = Date.now(); }
-        } catch (e) {}
-        if (!metricasZb && _zbCache.metricas) metricasZb = _zbCache.metricas; // fallback permanente (sem TTL)
+            if (Array.isArray(freshM) && freshM.length) {
+                metricasZb = freshM;
+                _zbCache.metricas = freshM;
+                _zbCache.metricasTs = now;
+                _zbUltimaChamadaOK = true;
+            } else {
+                _zbUltimaChamadaOK = false;
+            }
+        } catch (e) {
+            _zbUltimaChamadaOK = false;
+        }
+        if (!metricasZb && _zbCache.metricas && (now - _zbCache.metricasTs) < ZB_CACHE_MS && _zbUltimaChamadaOK) {
+            metricasZb = _zbCache.metricas; // fallback apenas se dentro do TTL (ex: 15s)
+        }
 
         if (Array.isArray(metricasZb) && metricasZb.length) {
             const mzMap = {};
@@ -105,12 +161,17 @@ async function enriquecerPainelComZabbix(painel) {
             for (const linha of painel.linhas) {
                 const mz = mzMap[linha.ip];
                 if (mz) {
+                    // Se o host esta indisponível no Zabbix, nao aplicar metricas do cache
+                    const z = linha.zabbix || {};
+                    if (z.indisponivelZb) continue;
+
                     if (mz.cpu != null) { linha.cpu = mz.cpu + '% (Zabbix)'; linha._zabbixCpu = mz.cpu; }
                     if (mz.gpu != null) { linha.gpu = mz.gpu + '% (Zabbix)'; linha._zabbixGpu = mz.gpu; }
                     if (mz.ram && mz.ram.usadoPct != null) { linha.ram = mz.ram.usadoPct + '% (' + (mz.ram.disponivelPct || '?') + '% livre) (Zabbix)'; linha._zabbixRam = mz.ram; }
                     if (mz.disco && mz.disco.length) { linha.disco = mz.disco.map(d => (100 - (d.livrePct || 0)).toFixed(1) + '% usado').join(' | ') + ' (Zabbix)'; linha._zabbixDisco = mz.disco; }
                     if (mz.uptime != null) { const dias = Math.floor(mz.uptime / 86400); const horas = Math.floor((mz.uptime % 86400) / 3600); linha.uptime = dias + 'd ' + horas + 'h (Zabbix)'; linha._zabbixUptime = mz.uptime; }
                     if (!(linha.fonte || '').includes('ZABBIX')) linha.fonte = (linha.fonte || '') + (linha.fonte ? ' + ' : '') + 'ZABBIX';
+                    linha._zabbixAtualizadoEm = now;
                 }
             }
         }
@@ -517,7 +578,9 @@ app.post('/api/monitor/alertas', (req, res) => {
 });
 
 // Registra callback para emitir SSE apos cada ciclo
-monitor.aoFinalizarCiclo(function(painel) {
+let _alertasConhecidos = new Set();
+try { store.lerAlertas().forEach(a => _alertasConhecidos.add(a.id)); } catch (e) {}
+monitor.aoFinalizarCiclo(async function(painel) {
     // Inclui metricas mock de todos os hosts mock
     const mockIps = (painel.linhas || [])
         .filter(l => l.ip === '192.168.0.220')
@@ -528,7 +591,20 @@ monitor.aoFinalizarCiclo(function(painel) {
         if (m) mockData[ip] = m;
     }
     painel.mockMetricas = mockData;
+    // Usa o MESMO enriquecimento da API para evitar piscar INDISP. no SSE
+    try { painel = await enriquecerPainelComZabbix(painel); } catch (e) {}
     sseBroadcast('painel', painel);
+
+    // Notifica clientes SSE sobre alertas novos (falhas diagnosticadas)
+    try {
+        const alertas = store.lerAlertas().filter(a => a.estado === 'ABERTO' || a.estado === 'ACK');
+        for (const a of alertas) {
+            if (_alertasConhecidos.has(a.id)) continue;
+            _alertasConhecidos.add(a.id);
+            a.fonte = a.fonte || 'COLETOR';
+            sseBroadcast('alerta', a);
+        }
+    } catch (e) {}
 });
 
 // ---- Zabbix ----
@@ -676,10 +752,23 @@ app.get('/api/monitor/historico', (req, res) => {
         if (host) {
             const serie = store.historicoHost(host, dias);
             const ultimas = store.ultimasMedicoes(host, 100);
-            res.json({ host: host, dias: dias, serie: serie, ultimasMedicoes: ultimas });
+            // Analise detalhada das falhas (por tipo de erro, com causa e recomendacao)
+            let falhasDetalhadas = null;
+            try { falhasDetalhadas = store.falhasHost(host, dias, 100); } catch (e) {}
+            res.json({ host: host, dias: dias, serie: serie, ultimasMedicoes: ultimas, falhasDetalhadas: falhasDetalhadas });
         } else {
             res.json({ error: 'Parametro host e necessario' });
         }
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Analise detalhada de falhas de um host (agrupada por tipo de erro)
+app.get('/api/monitor/falhas', (req, res) => {
+    try {
+        const host = req.query.host;
+        const dias = parseInt(req.query.dias) || 30;
+        if (!host) return res.status(400).json({ error: 'Parametro host e necessario' });
+        res.json(store.falhasHost(host, dias, 300));
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

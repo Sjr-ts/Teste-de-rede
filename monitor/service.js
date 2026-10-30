@@ -566,7 +566,8 @@ function obterPainel() {
             instaveis,
             semDados: Math.max(0, semDados),
             alertasAbertos: alertas.length,
-            incidentesSetor: incidentesCache.length
+            incidentesSetor: incidentesCache.length,
+            coletadoEm: new Date().toISOString()
         },
         linhas,
         alertas: alertas.slice(0, 100),

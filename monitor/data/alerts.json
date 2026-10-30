@@ -29,5 +29,41 @@
    }
   ],
   "resolvidoEm": "2026-10-27T12:32:59.820Z"
+ },
+ {
+  "id": "ALR-1793361784136-2498",
+  "categoria": "CONECTIVIDADE",
+  "gravidade": "MEDIA",
+  "host": "192.168.0.108",
+  "titulo": "Equipamento sem resposta a verificacoes de rede",
+  "evidencias": [
+   "Perda de 20% em 30 medicoes",
+   "Falhas intermitentes: 6",
+   "Nao confundir com ICMP limitado pelo firewall do host"
+  ],
+  "confianca": "MODERADA",
+  "recomendacao": "Verificar fisicamente o cabo, a porta do switch e o estado do equipamento. ICMP bloqueado tambem causa este sintoma.",
+  "estado": "RESOLVIDO",
+  "inicio": "2026-10-30T12:03:04.136Z",
+  "ultimaOcorrencia": "2026-10-30T12:18:38.107Z",
+  "ocorrencias": 2,
+  "historico": [
+   {
+    "quando": "2026-10-30T12:03:04.136Z",
+    "evento": "ABERTO",
+    "detalhe": "Equipamento sem resposta a verificacoes de rede"
+   },
+   {
+    "quando": "2026-10-30T12:18:38.107Z",
+    "evento": "ATUALIZADO",
+    "detalhe": "Perda de pacotes na comunicacao"
+   },
+   {
+    "quando": "2026-10-30T12:21:58.593Z",
+    "evento": "RESOLVIDO",
+    "detalhe": "Condicao normalizada apos novas medicoes"
+   }
+  ],
+  "resolvidoEm": "2026-10-30T12:21:58.593Z"
  }
 ]

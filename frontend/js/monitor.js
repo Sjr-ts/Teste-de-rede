@@ -49,6 +49,16 @@ function monConectarSSE() {
             try {
                 _monDados = JSON.parse(e.data);
                 _monArmKPIs = null;
+                // Notifica se houver falhas consecutivas (para informar o usuario)
+                try {
+                    var falhas = (_monDados && _monDados.linhas || []).filter(function(l){ return (l.falhasConsecutivas || 0) > 2 || l.estado === 'SEM_RESPOSTA'; });
+                    if (falhas.length > 0) {
+                        var nome = falhas[0].nome || falhas[0].ip;
+                        if (typeof showFailureNotification === 'function') {
+                            showFailureNotification('Falha detectada: ' + nome, falhas[0].falhasConsecutivas + ' falhas consecutivas — verifique o cabos/rede e veja detalhes no historico.');
+                        }
+                    }
+                } catch (n) {}
                 monRenderKPIs(_monDados);
                 monRenderFiltroSetores(_monDados);
                 monRenderTabela(_monDados);
@@ -405,9 +415,9 @@ function monCartesianChart(dados, opts) {
 
     const cor = opts.cor || '#2962FF';
     const corFundo = opts.corFundo || 'rgba(0,0,0,0.25)';
-    const w = opts.largura || 560;
-    const h = opts.altura || 260;
-    const padL = 48, padR = 16, padT = 28, padB = 36;
+    const w = opts.largura || 1000;
+    const h = opts.altura || 300;
+    const padL = 52, padR = 18, padT = 32, padB = 40;
     const plotW = w - padL - padR;
     const plotH = h - padT - padB;
 
@@ -479,7 +489,8 @@ function monCartesianChart(dados, opts) {
     const titulo = opts.titulo ? '<text x="' + padL + '" y="16" fill="rgba(255,255,255,0.7)" font-size="11" font-weight="600">' + esc(opts.titulo) + '</text>' : '';
     const legendaValor = '<text x="' + (w - padR) + '" y="16" text-anchor="end" fill="' + cor + '" font-size="13" font-weight="700">' + fmtY(ultimo.v) + (opts.unidade || '') + '</text>';
 
-    return '<svg width="' + w + '" height="' + h + '" style="display:block;background:' + corFundo + ';border-radius:8px;max-width:100%;">' +
+    // SVG responsivo: viewBox + width 100% escala o grafico em qualquer container/aba
+    return '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block;background:' + corFundo + ';border-radius:8px;max-width:100%;height:auto;min-height:' + Math.min(h, 260) + 'px;">' +
         titulo + legendaValor +
         gridH + gridV + lblY + lblX +
         '<polygon points="' + area + '" fill="' + cor + '" opacity="0.10"/>' +
@@ -827,8 +838,9 @@ function monRenderTabela(p) {
     }).join('');
 
     const stamp = document.getElementById('mon-atualizado-em');
-    if (stamp && p.servico && p.servico.ultimaExecucao) {
-        stamp.textContent = 'Ultima coleta: ' + new Date(p.servico.ultimaExecucao.quando).toLocaleString('pt-BR');
+    if (stamp) {
+        const quando = p.resumo && p.resumo.coletadoEm ? p.resumo.coletadoEm : (p.servico && p.servico.ultimaExecucao ? p.servico.ultimaExecucao.quando : null);
+        stamp.textContent = 'Ultima coleta: ' + (quando ? new Date(quando).toLocaleString('pt-BR') : '—');
     }
 }
 
@@ -1170,7 +1182,7 @@ function monHistoricoHtml(dados) {
     if (!dados || (!dados.serie || !dados.serie.length)) {
         return '<p style="color:var(--text-muted);text-align:center;padding:20px;">Sem dados historicos para este host.</p>';
     }
-    let html = '<h4 style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin:0 0 10px;">Historico de ' + esc(dados.host) + ' (' + dados.dias + ' dias)</h4>';
+    let html = '<h4 style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin:0 0 10px;">Historico de ' + esc((dados && dados.host) || '?') + ' (' + (dados && dados.dias ? dados.dias + ' dias' : '?') + ')</h4>';
 
     // Tabela resumo
     html += '<table class="data-table" style="font-size:11px;"><thead><tr><th>Dia</th><th>Medicoes</th><th>Sucessos</th><th>Falhas</th><th>Perda</th><th>Lat Media</th><th>Lat Min</th><th>Lat Max</th><th>P95</th></tr></thead><tbody>';
@@ -1231,8 +1243,8 @@ function monHistoricoHtml(dados) {
         const perdas = dados.ultimasMedicoes.map(function(m) {
             return { t: m.timestamp ? new Date(m.timestamp).getTime() : 0, v: m.perdaPct, ok: m.ok };
         }).filter(function(p) { return p.t > 0; });
-        const latHtml = monCartesianChart(lats, { titulo: 'Latencia (ms)', unidade: 'ms', cor: '#2962FF', altura: 220, formatarY: function(v){return Math.round(v);} });
-        const perdaHtml = monCartesianChart(perdas, { titulo: 'Perda (%)', unidade: '%', cor: '#FF6D00', altura: 200, minForcado: 0, maxForcado: Math.max(10, ...perdas.map(p=>p.v||0)), formatarY: function(v){return Math.round(v);} });
+        const latHtml = monCartesianChart(lats, { titulo: 'Latencia (ms)', unidade: 'ms', cor: '#2962FF', altura: 320, largura: 1100, formatarY: function(v){return Math.round(v);} });
+        const perdaHtml = monCartesianChart(perdas, { titulo: 'Perda (%)', unidade: '%', cor: '#FF6D00', altura: 300, largura: 1100, minForcado: 0, maxForcado: Math.max(10, ...perdas.map(p=>p.v||0)), formatarY: function(v){return Math.round(v);} });
         _monKpiCharts['hist-lat'] = { titulo: 'Latencia (ms)', html: latHtml };
         _monKpiCharts['hist-perda'] = { titulo: 'Perda (%)', html: perdaHtml };
         html += '<h4 style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin:16px 0 8px;">Latencia ao Longo do Tempo</h4>';
@@ -1241,6 +1253,32 @@ function monHistoricoHtml(dados) {
         html += '<h4 style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin:16px 0 8px;">Perda de Pacotes ao Longo do Tempo</h4>';
         html += '<div style="display:flex;gap:6px;justify-content:flex-end;margin-bottom:4px;"><button class="btn btn-ghost btn-sm" onclick="monAbrirGrafico(\'Perda (%)\', _monKpiCharts[\'hist-perda\'].html)"><i class="fas fa-expand"></i> Expandir</button><button class="btn btn-ghost btn-sm" onclick="monAbrirGraficoNovaAba(\'Perda (%)\', _monKpiCharts[\'hist-perda\'].html)"><i class="fas fa-external-link-alt"></i> Nova aba</button></div>';
         html += perdaHtml;
+    }
+
+    // ---- DETALHES DAS FALHAS (o que foi, por que, como agir) ----
+    if (dados && dados.falhasDetalhadas && dados.falhasDetalhadas.porTipo && dados.falhasDetalhadas.porTipo.length) {
+        html += '<h4 style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin:20px 0 8px;letter-spacing:0.5px;"><i class="fas fa-bug" style="color:var(--red);margin-right:6px;"></i>Analise das Falhas — ' + (dados.falhasDetalhadas.totalFalhas || 0) + ' ocorrencia(s) em ' + (dados.falhasDetalhadas.porTipo ? dados.falhasDetalhadas.porTipo.length : 0) + ' tipo(s) de erro</h4>';
+        for (var fi = 0; fi < (dados.falhasDetalhadas.porTipo || []).length; fi++) {
+            var f = dados.falhasDetalhadas.porTipo[fi];
+            html += '<div style="padding:12px;background:rgba(255,60,60,0.06);border:1px solid rgba(255,60,60,0.15);border-radius:10px;margin-bottom:10px;">';
+            html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">';
+            html += '<span style="font-size:10px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.5px;">' + (f.erro ? String(f.erro).replace(/</g, '&lt;') : '?') + '</span>';
+            html += '<span style="font-size:10px;color:var(--text-muted);margin-left:auto;">' + (f.total || 0) + ' ocorrencia(s)' + (f.primeiro ? ' | Primeiro: ' + new Date(f.primeiro).toLocaleString('pt-BR') : '') + (f.ultimo ? ' | Ultimo: ' + new Date(f.ultimo).toLocaleString('pt-BR') : '') + '</span>';
+            html += '</div>';
+            html += '<div style="font-size:12px;color:var(--text-primary);font-weight:600;margin-bottom:2px;"><i class="fas fa-bullseye" style="color:var(--yellow);margin-right:6px;font-size:10px;"></i>' + (f.nome ? String(f.nome).replace(/</g, '&lt;') : (f.erro ? String(f.erro) : 'Erro desconhecido')) + '</div>';
+            html += '<p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;line-height:1.6;"><b style="color:var(--cyan);font-size:10px;">CAUSA PROVAVEL:</b> ' + (f.causa ? String(f.causa).replace(/</g, '&lt;') : 'Nao disponivel no catalogo.') + '</p>';
+            html += '<p style="font-size:11px;color:var(--green);margin:2px 0 0;line-height:1.6;"><b style="color:var(--cyan);font-size:10px;">RECOMENDACAO:</b> ' + (f.recomendacao ? String(f.recomendacao).replace(/</g, '&lt;') : 'Analisar manualmente.') + '</p>';
+            if (f.exemplos && f.exemplos.length) {
+                html += '<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.06);">';
+                html += '<span style="font-size:9px;color:var(--text-muted);text-transform:uppercase;">Ultimos registros brutos:</span>';
+                for (var exi = 0; exi < f.exemplos.length && exi < 3; exi++) {
+                    var ex = f.exemplos[exi];
+                    html += '<div style="font-size:9px;color:var(--text-secondary);margin-top:2px;font-family:monospace;">' + (ex.timestamp ? new Date(ex.timestamp).toLocaleTimeString('pt-BR') : '?') + ' | perda ' + (ex.perdaPct != null ? ex.perdaPct + '%' : '?') + ' | enviado=' + (ex.enviado || 0) + ' recebido=' + (ex.recebido || 0) + ' | erro=' + (ex.erro ? String(ex.erro) : '?') + '</div>';
+                }
+                html += '</div>';
+            }
+            html += '</div>';
+        }
     }
 
     return html;
