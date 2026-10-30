@@ -547,7 +547,8 @@ function obterPainel() {
             ram: ml && ml.memoria ? ml.memoria.usoPct + '% (' + ml.memoria.usadoGb + '/' + ml.memoria.totalGb + ' GB)' : 'INDISPONIVEL',
             disco: ml && ml.disco && ml.disco.discos ? ml.disco.discos.map(d => d.letra + ' ' + d.usoPct + '%').join(' | ') : 'INDISPONIVEL',
             uptime: ml && ml.uptime ? ml.uptime.uptimeHumano : null,
-            reinicioConfirmado: ml && ml.uptime ? (ml.uptime.reiniciadoDesdeUltimaColeta ? 'SIM' : 'NAO (desde inicio do monitoramento)') : 'INDISPONIVEL'
+            reinicioConfirmado: ml && ml.uptime ? (ml.uptime.reiniciadoDesdeUltimaColeta ? 'SIM' : 'NAO (desde inicio do monitoramento)') : 'INDISPONIVEL',
+            _localMetricasTs: ml ? ml.quando : null
         };
     });
 
