@@ -175,14 +175,16 @@ async function testarConexao() {
     }
 }
 
-/** Lista todos os hosts do Zabbix. */
+/** Lista todos os hosts do Zabbix (por padrao apenas monitorados, status=0). */
 async function listarHosts(filtro) {
     const params = {
         output: ['hostid', 'host', 'name', 'status'],
         selectInterfaces: ['interfaceid', 'ip', 'type', 'available', 'error'],
         selectParentTemplates: ['name'],
         selectTags: 'extend',
-        filter: filtro || {}
+        // Sem filtro explicito: retorna apenas hosts monitorados (status=0).
+        // Hosts desabilitados somem de todas as visoes (painel, resumo, listas).
+        filter: filtro || { status: '0' }
     };
     return authCall('host.get', params);
 }
@@ -207,10 +209,14 @@ async function enriquecerDisponibilidade(hosts) {
     let itensPorHost = {};
     try {
         const allItems = await authCall('item.get', {
-            output: ['itemid', 'hostid', 'key_', 'lastvalue', 'state', 'status'],
+            output: ['itemid', 'hostid', 'key_', 'lastvalue', 'lastclock', 'state', 'status'],
             filter: { key_: ['icmpping', 'agent.ping', 'zabbix[host,active_agent,available]'] }
         });
+        const agora = Date.now();
         for (const it of (allItems || [])) {
+            // Ignora itens sem dados frescos (5 min) — lastvalue antigo nao e disponibilidade
+            const lc = parseInt(it.lastclock, 10);
+            if (!isNaN(lc) && (agora - lc * 1000) > 300000) continue;
             if (!itensPorHost[it.hostid]) itensPorHost[it.hostid] = {};
             const key = it.key_;
             if (key === 'zabbix[host,active_agent,available]' || key === 'agent.ping') {
@@ -232,7 +238,9 @@ async function enriquecerDisponibilidade(hosts) {
         if (ag && ag.status === '0' && ag.state === '0' && ag.lastvalue != null && ag.lastvalue !== '') {
             const v = ag.lastvalue;
             if (v === '1' || v === '1.000000') avail = '1';
-            else if (v === '0' || v === '0.000000') avail = '2';
+            else if (ag.key_ === 'agent.ping' && (v === '0' || v === '0.000000')) avail = '2';
+            else if (ag.key_ === 'zabbix[host,active_agent,available]' && (v === '2' || v === '2.000000')) avail = '2';
+            // active_agent value 0 = desconhecido -> ignora
         }
         // ICMP
         if (!avail) {
@@ -519,10 +527,14 @@ async function resumoMonitoramento() {
         let itemPorHost = {};
         try {
             const allItems = await authCall('item.get', {
-                output: ['itemid', 'hostid', 'key_', 'lastvalue', 'state', 'status'],
+                output: ['itemid', 'hostid', 'key_', 'lastvalue', 'lastclock', 'state', 'status'],
                 filter: { key_: ['icmpping', 'agent.ping', 'zabbix[host,active_agent,available]'] }
             });
+            const agora = Date.now();
             for (const it of (allItems || [])) {
+                // Ignora itens sem dados frescos (5 min)
+                const lc = parseInt(it.lastclock, 10);
+                if (!isNaN(lc) && (agora - lc * 1000) > 300000) continue;
                 if (!itemPorHost[it.hostid]) itemPorHost[it.hostid] = {};
                 // Prioridade: agent.ping/active_agent > icmpping
                 const key = it.key_;
@@ -542,7 +554,9 @@ async function resumoMonitoramento() {
             if (ag && ag.status === '0' && ag.state === '0' && ag.lastvalue != null && ag.lastvalue !== '') {
                 const v = ag.lastvalue;
                 if (v === '1' || v === '1.000000') return '1';
-                if (v === '0' || v === '0.000000') return '2';
+                if (ag.key_ === 'agent.ping' && (v === '0' || v === '0.000000')) return '2';
+                if (ag.key_ === 'zabbix[host,active_agent,available]' && (v === '2' || v === '2.000000')) return '2';
+                // active_agent value 0 = desconhecido -> ignora
             }
             // ICMP
             const ic = info.icmp;
@@ -804,21 +818,26 @@ async function dadosMonitoramentoZabbix() {
             const keyMap = {};
             for (const it of [...icmpItens, ...agentItens]) keyMap[it.itemid] = it.key_;
             if (itemids.length) {
+                const agora = Date.now();
                 const vals = await ultimosValores(itemids);
                 for (const v of vals) {
+                    // Ignora itens sem dados frescos (5 min) — lastvalue antigo nao e disponibilidade
+                    const lc = parseInt(v.lastclock, 10);
+                    if (!isNaN(lc) && (agora - lc * 1000) > 300000) continue;
                     const key = keyMap[v.itemid];
                     // ICMP passivo
                     if (key === 'icmpping') disponivel = v.lastvalue === '1' ? true : (v.lastvalue === '0' ? false : null);
                     if (key === 'icmppingsec') latencia = parseFloat(v.lastvalue);
                     if (key === 'icmppingloss') perda = parseFloat(v.lastvalue);
-                    // Agente ativo: agent.ping = 1 disponível, zabbix[host,active_agent,available] = 1 disponível
+                    // Agente ativo: agent.ping = 1 disponivel; active_agent,available = 2 indisponivel / 1 disponivel / 0 desconhecido
                     if (key === 'agent.ping') {
                         if (v.lastvalue === '1' || v.lastvalue === '1.000000') disponivel = true;
                         else if (v.lastvalue === '0' || v.lastvalue === '0.000000') disponivel = false;
                     }
                     if (key === 'zabbix[host,active_agent,available]') {
                         if (v.lastvalue === '1' || v.lastvalue === '1.000000') disponivel = true;
-                        else if (v.lastvalue === '0' || v.lastvalue === '0.000000') disponivel = false;
+                        else if (v.lastvalue === '2' || v.lastvalue === '2.000000') disponivel = false;
+                        // '0' = desconhecido -> ignora
                     }
                 }
             }
@@ -916,6 +935,11 @@ async function dadosCompletosZabbix() {
                 const key = (it.key_ || '').toLowerCase();
                 const val = it.lastvalue;
                 const numVal = parseFloat(val);
+                // Rastreia o lastclock mais recente entre os itens realmente usados
+                if (it.lastclock) {
+                    const lc = parseInt(it.lastclock, 10);
+                    if (!isNaN(lc)) metricas._lastclock = Math.max(metricas._lastclock || 0, lc);
+                }
 
                 if (key === 'system.cpu.util' || key.includes('system.cpu.util')) {
                     if (!isNaN(numVal)) metricas.cpu = Math.round(numVal * 10) / 10;
@@ -961,6 +985,7 @@ async function dadosCompletosZabbix() {
                 disponivel: metricas.disponivel,
                 latenciaMs: metricas.latenciaMs,
                 perdaPct: metricas.perdaPct,
+                _lastclock: metricas._lastclock || null,
                 available: h.interfaces && h.interfaces[0] ? h.interfaces[0].available : null,
                 error: h.interfaces && h.interfaces[0] ? h.interfaces[0].error : null
             });

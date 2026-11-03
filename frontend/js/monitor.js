@@ -16,6 +16,8 @@ let _monRamHist = [];
 let _monFiltroEstado = '';
 let _monFiltroSetor = '';
 let _monBusca = '';
+let _monLocalIp = '127.0.0.1'; // IP de "este PC" — resolvido em /api/monitor/local
+function monLocalIp() { return _monLocalIp; }
 let _monEventSource = null;
 let _monAlertasZabbix = [];
 let _monKpiCharts = {};
@@ -87,11 +89,11 @@ function monAtualizarCpuNaTabela(cpu, ts) {
     if (!tabela) return;
     const tbody = tabela.querySelector('tbody');
     if (!tbody) return;
-    // Procura a linha do MEU-PC (192.168.0.186)
+    // Procura a linha de ESTE PC (IP resolvido dinamicamente)
     const linhas = tbody.querySelectorAll('tr');
     for (const tr of linhas) {
         const ipCell = tr.querySelector('td:first-child');
-        if (ipCell && ipCell.textContent.includes('192.168.0.186')) {
+        if (ipCell && ipCell.textContent.includes(_monLocalIp)) {
             // Encontra a coluna CPU (indice 5)
             const tds = tr.querySelectorAll('td');
             if (tds.length >= 6) {
@@ -115,7 +117,7 @@ function monAtualizarGpuNaTabela(gpu, nome, ts) {
     const linhas = tbody.querySelectorAll('tr');
     for (const tr of linhas) {
         const ipCell = tr.querySelector('td:first-child');
-        if (ipCell && ipCell.textContent.includes('192.168.0.186')) {
+        if (ipCell && ipCell.textContent.includes(_monLocalIp)) {
             const tds = tr.querySelectorAll('td');
             if (tds.length >= 7) {
                 const gpuCell = tds[6];
@@ -178,6 +180,7 @@ let _monDirty = false;
 let _monProblemas = [];
 let _monProblemasInfo = null;
 let _monProblemasTs = 0;
+let _monMostrarSilenciados = false;
 let _monFalhaNotifTs = {};
 let _monArmKPIsTs = 0;
 
@@ -230,10 +233,10 @@ function monRenderDashboardWidget() {
     if (!_monProblemasInfo) { monRenderZabbixProblemas(); }
     if (probEl) {
         const info = _monProblemasInfo;
-        const n = info && typeof info.total === 'number' ? info.total : null;
+        const n = info ? (typeof info.naoSuprimidos === 'number' ? info.naoSuprimidos : (typeof info.total === 'number' ? info.total : null)) : null;
         probEl.textContent = n == null ? '—' : String(n);
         probEl.style.color = (n || 0) > 0 ? 'var(--yellow)' : 'var(--green)';
-        probEl.title = (info && info.criticos ? info.criticos + ' critico(s)' : 'sem criticos');
+        probEl.title = (info && info.criticosNaoSuprimidos ? info.criticosNaoSuprimidos + ' critico(s)' : 'sem criticos');
     }
     if (ultEl) ultEl.textContent = 'Ultima coleta: ' + (r.coletadoEm ? new Date(r.coletadoEm).toLocaleString('pt-BR') : '—');
 }
@@ -241,6 +244,15 @@ function monRenderDashboardWidget() {
 // Escapa valor para embutir em handler inline JS entre aspas simples
 function monJsAttr(s) {
     return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/</g, '\\x3C').replace(/>/g, '\\x3E');
+}
+
+// Base do Zabbix Web — sempre dinamica pelo hostname de onde o usuario abriu o app
+// (funciona em localhost, 10.0.0.169, 192.168.0.x — sem IP fixo no codigo)
+function monZabbixBase() {
+    return 'http://' + window.location.hostname + ':8081';
+}
+function monZabbixUrl(hostid) {
+    return monZabbixBase() + '/zabbix.php?action=problem.view&hostids[]=' + encodeURIComponent(hostid || '');
 }
 
 // ==================== PROBLEMAS ZABBIX (painel integrado) ====================
@@ -262,6 +274,22 @@ function monConselhoFalha(trigger) {
             contornoHtml: '<ol style="margin:6px 0 0 18px;"><li>Abra <code>services.msc</code> no host e verifique o servico: tente iniciar manualmente e confira dependencias e o tipo de inicializacao.</li><li>Reinstale/atualize o Google Chrome (ou Edge) — isso recria os servicos GoogleUpdater automaticamente.</li><li>Verifique se o antivirus, GPO ou o AppLocker bloquearam a inicializacao do servico; adicione excecao se necessario.</li><li>Se o servico estiver obsoleto para este host, remova-o com <code>sc.exe delete GoogleUpdaterService157.0.8089.0</code> (como Administrador) ou desabilite a checagem ajustando o trigger no Zabbix.</li><li>Se reincidir, abra chamados/O.S. e investigue com o Visualizador de Eventos (Aplicativo e Sistema) a falha na inicializacao.</li></ol>',
             contornoTexto: '1) services.msc: iniciar o servico e verificar dependencias; 2) Reinstalar o Google Chrome para recriar o servico; 3) Verificar antivirus/GPO/AppLocker; 4) Se obsoleto, remover com sc.exe delete <servico> (admin); 5) Revisar Visualizador de Eventos e abrir O.S. se reincidir.',
             notifica: 'Servico GoogleUpdater parado. Inicie em services.msc ou reinstale o Chrome; se for obsoleto, remova o servico.'
+        };
+    }
+    if (t.indexOf('active checks are not available') >= 0) {
+        return {
+            causa: 'O agente Zabbix (modo ativo) nao consegue reportar dados ao servidor. Tipico de PC desligado, sem rede, ou agente parado no host remoto.',
+            contornoHtml: '<ol style="margin:6px 0 0 18px;"><li>Confirme se o PC esta ligado e na rede (ping/endereco IP, porta do switch).</li><li>Verifique se o servico "Zabbix Agent 2" (ou "Zabbix Agent") esta rodando no host (services.msc) e se o config aponta para o servidor correto (Hostname e ServerActive).</li><li>Verifique o firewall do host remoto e/ou do Zabbix server (porta 10051/TCP de saida).</li><li>Se a rede foi migrada/alterou faixa, ajuste o parametro ServerActive/Hostname do agente e reinicie o servico.</li></ol>',
+            contornoTexto: '1) PC ligado e na rede; 2) Servico Zabbix Agent rodando + Hostname/ServerActive corretos (services.msc); 3) Firewall liberando 10051/TCP; 4) Apos migracao de rede, ajustar ServerActive e reiniciar o agente.',
+            notifica: 'Agente Zabbix sem dados. Verificar energia/rede/agente no host remoto.'
+        };
+    }
+    if (t.indexOf('more than 100 items') >= 0 || t.indexOf('missing data') >= 0) {
+        return {
+            causa: 'Mais de 100 itens do Zabbix pararam de receber dados ha mais de 10 minutos — tipicamente causado por host(s) sem contato (rede/agente), afetando a coleta em massa.',
+            contornoHtml: '<ol style="margin:6px 0 0 18px;"><li>Identifique os hosts afetados no problem view do Zabbix e verifique conectividade/agente deles.</li><li>Confirme se houve migracao/mudanca de rede do servidor de monitoramento (faixa de IP).</li><li>Verifique os agentes e reinicie-os se necessario; acompanhe este alerta ate normalizar (some quando os dados voltarem).</li></ol>',
+            contornoTexto: '1) Ver no Zabbix quais hosts pararam; 2) Checar rede/agente deles; 3) Reiniciar agente se necessario; o alerta normaliza quando os dados voltarem.',
+            notifica: 'Coleta Zabbix com muitos itens sem dados (host sem contato). Ver hosts afetados.'
         };
     }
     if (t.indexOf('is not running') >= 0 && t.indexOf('windows') >= 0) {
@@ -336,29 +364,46 @@ async function monRenderZabbixProblemas(forcar) {
     monRenderDashboardWidget();
 }
 
+function monToggleSilenciados() {
+    _monMostrarSilenciados = !_monMostrarSilenciados;
+    const el = document.getElementById('mon-zabbix-problemas');
+    if (el) monRenderProblemasLista(el);
+}
+
 function monRenderProblemasLista(el) {
     const info = _monProblemasInfo || {};
+    const todos = _monProblemas || [];
+    const suprimidos = todos.filter(function (p) { return p.suppressed; }).length;
+    const visiveis = _monMostrarSilenciados ? todos : todos.filter(function (p) { return !p.suppressed; });
+    // Atualiza contador/botao de silenciados
+    const cnt = document.getElementById('mon-silenciados-count');
+    if (cnt) cnt.textContent = String(suprimidos);
+    const btn = document.getElementById('mon-toggle-silenciados');
+    if (btn) {
+        btn.style.opacity = suprimidos > 0 ? '1' : '0.55';
+        btn.innerHTML = (_monMostrarSilenciados ? '<i class="fas fa-eye"></i> Ocultar silenciados: ' : '<i class="fas fa-eye-slash"></i> Silenciados: ') + '<span id="mon-silenciados-count">' + suprimidos + '</span>';
+    }
     const resumoEl = document.getElementById('mon-zabbix-problemas-resumo');
     if (resumoEl) {
         if (!info.conectado) resumoEl.innerHTML = '<span style="color:var(--red);"><i class="fas fa-plug-circle-xmark"></i> Zabbix desconectado</span>';
-        else resumoEl.innerHTML = '<b style="color:var(--text-primary);">' + (info.total || 0) + '</b> aberto(s) &middot; <b style="color:var(--red);">' + (info.criticos || 0) + '</b> critico(s) &middot; <b style="color:var(--yellow);">' + (info.naoReconhecidos || 0) + '</b> sem reconhecer';
+        else resumoEl.innerHTML = '<b style="color:var(--text-primary);">' + (info.naoSuprimidos != null ? info.naoSuprimidos : visiveis.length) + '</b> aberto(s) &middot; <b style="color:var(--red);">' + (info.criticosNaoSuprimidos || 0) + '</b> critico(s) &middot; <b style="color:var(--yellow);">' + (info.naoReconhecidos || 0) + '</b> sem reconhecer';
     }
     if (!info.conectado) {
         el.innerHTML = '<div style="padding:16px;"><p style="color:var(--red);font-size:13px;font-weight:600;"><i class="fas fa-plug-circle-xmark"></i> Nao foi possivel consultar o Zabbix.</p><p style="color:var(--text-muted);font-size:12px;margin-top:6px;">' + esc(info.erro || 'Erro desconhecido') + '</p><p style="color:var(--text-muted);font-size:11px;margin-top:8px;">Para restaurar: inicie o Docker Desktop e rode <code>docker compose -f docker-compose.zabbix.yml up -d</code>, depois clique em Atualizar.</p></div>';
         return;
     }
-    if (!_monProblemas.length) {
-        el.innerHTML = '<div style="padding:22px;text-align:center;"><i class="fas fa-circle-check" style="font-size:30px;color:var(--green);opacity:0.6;"></i><p style="margin:10px 0 0;color:var(--text-secondary);font-size:13px;">Nenhum problema aberto no Zabbix.</p><p style="color:var(--text-muted);font-size:11px;">Todos os triggers estao em estado OK.</p></div>';
+    if (!visiveis.length) {
+        el.innerHTML = '<div style="padding:22px;text-align:center;"><i class="fas fa-circle-check" style="font-size:30px;color:var(--green);opacity:0.6;"></i><p style="margin:10px 0 0;color:var(--text-secondary);font-size:13px;">Nenhum problema aberto no Zabbix.</p><p style="color:var(--text-muted);font-size:11px;">' + (suprimidos > 0 ? suprimidos + ' problema(s) silenciado(s) ocultados — use "Silenciados" abaixo para ver.' : 'Todos os triggers estao em estado OK.') + '</p></div>';
         return;
     }
-    el.innerHTML = _monProblemas.map(monProblemaItemHtml).join('');
+    el.innerHTML = visiveis.map(monProblemaItemHtml).join('');
 }
 
 function monProblemaItemHtml(p) {
     const sev = monSevInfo(p.severidade);
     const inicio = p.inicio ? new Date(p.inicio).toLocaleString('pt-BR') : '—';
     const conselho = monConselhoFalha(p.trigger);
-    const zabbixUrl = 'http://192.168.0.186:8081/zabbix.php?action=problem.view&hostids[]=' + encodeURIComponent(p.hostid || '');
+    const zabbixUrl = monZabbixUrl(p.hostid);
     const tags = (p.tags || []).slice(0, 6).map(function (t) {
         return '<span class="badge badge-inativo" style="margin-right:4px;font-size:9px;">' + esc(t.tag || '') + (t.value ? '=' + esc(t.value) : '') + '</span>';
     }).join('');
@@ -422,7 +467,7 @@ async function monAckProblema(eventid) {
 }
 
 function monAbrirZabbixHost(hostid) {
-    const url = 'http://192.168.0.186:8081/zabbix.php?action=problem.view&hostids[]=' + encodeURIComponent(hostid || '');
+    const url = monZabbixUrl(hostid);
     window.open(url, '_blank', 'noopener');
 }
 
@@ -469,7 +514,9 @@ async function monGerarRelatorioFalhas() {
         try { await monRenderZabbixProblemas(true); } catch (e) {}
     }
     const info = _monProblemasInfo || {};
-    const problemas = (_monProblemas || []).slice();
+    const totalSuprimidos = (_monProblemas || []).filter(function (p) { return p.suppressed; }).length;
+    // Relatorio cobre apenas incidentes ativos (nao silenciados)
+    let problemas = (_monProblemas || []).filter(function (p) { return !p.suppressed; }).slice();
     // Ordenar por severidade (desc) e depois por data (desc)
     const sevRank = { '5': 5, '4': 4, '3': 3, '2': 2, '1': 1, '0': 0 };
     problemas.sort(function (a, b) {
@@ -498,7 +545,7 @@ async function monGerarRelatorioFalhas() {
         const conselho = monConselhoFalha(p.trigger);
         const inicio = p.inicio ? new Date(p.inicio).toLocaleString('pt-BR') : '—';
         const tags = (p.tags || []).map(function (t) { return (t.tag || '') + (t.value ? '=' + t.value : ''); }).join(', ');
-        const zabbixUrl = 'http://192.168.0.186:8081/zabbix.php?action=problem.view&hostids[]=' + encodeURIComponent(p.hostid || '');
+        const zabbixUrl = monZabbixUrl(p.hostid);
         return '<section class="incident">' +
             '<div class="incident-head" style="border-left:6px solid ' + sev.cor + ';">' +
                 '<div class="incident-num">' + String(i + 1).padStart(2, '0') + '</div>' +
@@ -525,11 +572,12 @@ async function monGerarRelatorioFalhas() {
 
     const resumoExec = problemas.length === 0
         ? '<p>Nao ha problemas abertos registrados no Zabbix. O ambiente encontra-se operacional neste momento.</p>'
-        : '<ul><li><b>' + problemas.length + '</b> problema(s) aberto(s) no total, sendo <b>' + (info.criticos || 0) + '</b> de severidade alta/desastre.</li>' +
+        : '<ul><li><b>' + problemas.length + '</b> problema(s) aberto(s) no total, sendo <b>' + (info.criticosNaoSuprimidos != null ? info.criticosNaoSuprimidos : problemas.filter(function (p) { return p.severidade === '4' || p.severidade === '5'; }).length) + '</b> de severidade alta/desastre.</li>' +
           '<li><b>' + naoReconhecidos + '</b> problema(s) ainda nao reconhecido(s) pelos operadores.</li>' +
           '<li>Host mais afetado: <b>' + esc(hostTop) + '</b> (' + (hostsAfetados[hostTop] || 0) + ' problema(s)).</li>' +
           (maisAntigo ? '<li>Ocorrencia mais antiga: <b>' + esc(maisAntigo.trigger) + '</b> (desde ' + new Date(maisAntigo.inicio).toLocaleString('pt-BR') + ', ha ' + esc(maisAntigo.duracaoTexto || '') + ').</li>' : '') +
-          '</ul>';
+          '</ul>' +
+          (totalSuprimidos > 0 ? '<p style="margin-top:8px;font-size:11px;color:var(--mut);">(' + totalSuprimidos + ' problema(s) silenciado(s) no Zabbix omitido(s) deste relatorio.)</p>' : '');
 
     const doc = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">' +
         '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
@@ -586,7 +634,7 @@ async function monGerarRelatorioFalhas() {
                 '<div><small>Gerado em</small><span>' + esc(agora.toLocaleString('pt-BR')) + '</span></div>' +
                 '<div><small>Origem</small><span>Zabbix 7.0 &mdash; problem.view</span></div>' +
                 '<div><small>Total de incidentes</small><span>' + problemas.length + '</span></div>' +
-                '<div><small>Criticos (Alto/Desastre)</small><span>' + (info.criticos || 0) + '</span></div>' +
+                '<div><small>Criticos (Alto/Desastre)</small><span>' + (info.criticosNaoSuprimidos != null ? info.criticosNaoSuprimidos : problemas.filter(function (p) { return p.severidade === '4' || p.severidade === '5'; }).length) + '</span></div>' +
                 '<div><small>Nao reconhecidos</small><span>' + naoReconhecidos + '</span></div>' +
                 '<div><small>Host mais afetado</small><span>' + esc(hostTop) + '</span></div>' +
             '</div>' +
@@ -2202,8 +2250,7 @@ function monDetailItem(label, valor) {
 }
 
 function monVerZabbix(ip) {
-    const cfg = _monZabbix;
-    window.open('http://192.168.0.186:8081', '_blank');
+    window.open(monZabbixBase(), '_blank');
 }
 
 // ==================== EXPORT CSV ====================
@@ -2811,7 +2858,7 @@ function monAbrirRelatorioPC() {
             const alertas = s.alertas || [];
 
             // Dados dos ultimos 30 dias (historico do coletor)
-            return fetch('/api/monitor/historico?host=192.168.0.186&dias=30')
+            return fetch('/api/monitor/historico?host=' + encodeURIComponent(_monLocalIp) + '&dias=30')
                 .then(r => r.json())
                 .then(dados => {
                     // Gera grafico de latencia e perda a partir das ultimas medicoes brutas
@@ -2944,9 +2991,9 @@ function monAbrirRelatorioPC() {
     // Busca dados atuais via API (sistema + storage + Zabbix resumo)
     Promise.all([
         fetch('/api/monitor/sistema').then(r => r.json()).catch(() => null),
-        fetch('/api/monitor/historico?host=192.168.0.186&dias=30').then(r => r.json()).catch(() => null),
+        fetch('/api/monitor/historico?host=' + encodeURIComponent(_monLocalIp) + '&dias=30').then(r => r.json()).catch(() => null),
         fetch('/api/zabbix/resumo').then(r => r.json()).catch(() => null),
-        fetch('/api/zabbix/host/192.168.0.186').then(r => r.json()).catch(() => null)
+        fetch('/api/zabbix/host/' + encodeURIComponent(_monLocalIp)).then(r => r.json()).catch(() => null)
     ]).then(function([sistema, hist, resumo, host]) {
         // --- Dados do Coletor ---
         const cpu = (sistema && sistema.cpu) || {};
@@ -3020,7 +3067,7 @@ function monAbrirRelatorioPC() {
             '<button onclick="window.close()">Fechar</button>' +
             // Se��o 1: Identificacao
             '<section class="card"><h2>Identificacao</h2>' +
-            '<table class="tbl"><tr><td>Hostname</td><td>192.168.0.186</td></tr>' +
+            '<table class="tbl"><tr><td>Hostname</td><td>' + esc((sistema && sistema.hostname) || _monLocalIp) + '</td></tr>' +
             '<tr><td>IP Local</td><td>' + (rede ? rede.ip : '?') + '</td></tr>' +
             '<tr><td>MAC</td><td>' + (rede ? rede.mac : '?') + '</td></tr>' +
             '<tr><td>Plataforma</td><td>' + (info.plataforma || '?') + ' ' + (info.arquitetura || '') + '</td></tr>' +
@@ -3108,7 +3155,7 @@ function monAbrirRelatorioPC() {
     // Busca dados via API
     Promise.all([
         fetch('/api/monitor/sistema').then(r => r.json()).catch(() => null),
-        fetch('/api/monitor/historico?host=192.168.0.186&dias=30').then(r => r.json()).catch(() => null)
+        fetch('/api/monitor/historico?host=' + encodeURIComponent(_monLocalIp) + '&dias=30').then(r => r.json()).catch(() => null)
     ]).then(function(dados) {
         const s = dados[0] || {};
         const hist = dados[1] || {};
@@ -3233,7 +3280,7 @@ function monAbrirRelatorioPC() {
     // Busca dados via API
     Promise.all([
         fetch('/api/monitor/sistema').then(r => r.json()).catch(() => null),
-        fetch('/api/monitor/historico?host=192.168.0.186&dias=30').then(r => r.json()).catch(() => null)
+        fetch('/api/monitor/historico?host=' + encodeURIComponent(_monLocalIp) + '&dias=30').then(r => r.json()).catch(() => null)
     ]).then(function(dados) {
         const s = dados[0] || {};
         const hist = dados[1] || {};
@@ -3356,6 +3403,7 @@ function esc(s) {
 if (typeof document !== 'undefined' && document.addEventListener) {
     document.addEventListener('DOMContentLoaded', function () {
         try {
+            fetch('/api/monitor/local').then(function (r) { return r.json(); }).then(function (d) { if (d && d.ip) _monLocalIp = d.ip; }).catch(function () {});
             fetch('/api/monitor/painel').then(function (r) { return r.json(); }).then(function (d) {
                 if (d && d.resumo) { _monDados = d; monRenderDashboardWidget(); }
             }).catch(function () {});

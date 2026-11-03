@@ -1,4 +1,4 @@
-{
+﻿{
   "coletor": {
     "intervaloSegundos": 60,
     "timeoutMs": 2000,
@@ -30,10 +30,10 @@
   },
   "zabbix": {
     "habilitado": true,
-    "url": "http://192.168.0.186:8081",
-    "api": "http://192.168.0.186:8081/api_jsonrpc.php",
+    "url": "http://127.0.0.1:8081",
+    "api": "http://127.0.0.1:8081/api_jsonrpc.php",
     "usuario": "Admin",
-    "senha": "zabbix",
+    "senha": "TROQUE-ME",
     "grupoHosts": "Inventario TI",
     "templateAgentless": "Template ICMP Ping",
     "sincronizarHosts": true,

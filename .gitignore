@@ -28,3 +28,9 @@ log.txt
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# ===================== CONFIG LOCAL (credenciais Zabbix) =====================
+# Copie de monitor/*.example.json e preencha a senha localmente
+monitor/config.json
+monitor/zabbix-config.json
+*.bak-*

@@ -3608,10 +3608,10 @@ function showSystemInfo() {
             '<div class="stat-card" style="text-align:center;padding:16px;"><div class="stat-card-value" style="color:var(--green);font-size:20px;">' + dbStatus + '</div><div class="stat-card-label">Banco de Dados</div></div>' +
             '</div>' +
             '<div style="font-size:12px;color:var(--text-muted);">' +
-            '<p><b>Servidor:</b> Spring Boot 3.2.5 + Java 21</p>' +
-            '<p><b>Banco:</b> H2 Database (arquivo ./data/invent�rio_db)</p>' +
-            '<p><b>Porta:</b> 3030</p>' +
-            '<p><b>URL:</b> 192.168.0.186:3030</p>' +
+            '<p><b>Servidor:</b> Node.js + Express</p>' +
+            '<p><b>Banco:</b> JSON (data.json) + arquivos de monitoramento</p>' +
+            '<p><b>Porta:</b> 5903</p>' +
+            '<p><b>URL:</b> ' + escapeHtml(window.location.host) + '</p>' +
             '</div></div>',
             '<button onclick="closeModal()" class="btn btn-ghost btn-sm">Fechar</button>'
         );

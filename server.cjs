@@ -95,8 +95,15 @@ async function enriquecerPainelComZabbix(painel) {
             for (const z of dadosZb) { if (!zbMap[z.ip] || zbMap[z.ip].disponivel === null) zbMap[z.ip] = z; }
             for (const linha of painel.linhas) {
                 const z = zbMap[linha.ip];
+                const localFresco = linha.ultimoHorario && (now - new Date(linha.ultimoHorario).getTime()) < 120000;
+                const ehLocalFresco = !!linha.local && localFresco;
                 if (z) {
-                    const indisponivelZb = (z.disponivel === false) || (z.available === '2') || (z.available === '0' && z.error) || (z.disponivel === null && z.available === '0');
+                    // Host LOCAL: o coletor local e a fonte de verdade — o Zabbix
+                    // nunca rebaixa o estado nem a latencia do PC do servidor.
+                    const indisponivelZb = ehLocalFresco ? false :
+                        (z.disponivel === false) || (z.available === '2') ||
+                        (z.available === '0' && z.error) ||
+                        (z.disponivel === null && z.available === '0' && z.error);
                     linha.zabbix = {
                         disponivel: z.disponivel,
                         latenciaMs: z.latenciaMs,
@@ -106,7 +113,7 @@ async function enriquecerPainelComZabbix(painel) {
                         indisponivelZb: indisponivelZb,
                         atualizadoEm: now
                     };
-                    const localFresco = linha.ultimoHorario && (now - new Date(linha.ultimoHorario).getTime()) < 120000;
+                    if (ehLocalFresco) continue; // nao rebaixa estado local
                     if (!localFresco || indisponivelZb) {
                         if (indisponivelZb) {
                             if (linha.estado === 'ACESSIVEL') linha.estado = 'SEM_RESPOSTA';
@@ -119,6 +126,7 @@ async function enriquecerPainelComZabbix(painel) {
                     }
                 } else {
                     // Host nao esta mais no Zabbix ou nao retornou dados
+                    if (linha.local) continue; // host local: nunca marcar SEM_DADOS por causa do Zabbix
                     const temDadosFrescos = _zbHostFresh[linha.ip] && (now - _zbHostFresh[linha.ip]) < ZB_CACHE_MS;
                     if (!temDadosFrescos && linha.estado === 'ACESSIVEL') {
                         linha.estado = 'SEM_DADOS';
@@ -128,6 +136,7 @@ async function enriquecerPainelComZabbix(painel) {
         } else {
             // Sem dados do Zabbix de todo: invalida hosts que estavam acessiveis sem dados frescos
             for (const linha of painel.linhas) {
+                if (linha.local) continue; // host local nunca cai para SEM_DADOS por falha do Zabbix
                 const temDadosFrescos = _zbHostFresh[linha.ip] && (now - _zbHostFresh[linha.ip]) < ZB_CACHE_MS;
                 if (!temDadosFrescos && linha.estado === 'ACESSIVEL') {
                     linha.estado = 'SEM_DADOS';
@@ -164,12 +173,17 @@ async function enriquecerPainelComZabbix(painel) {
                     // Se o host esta indisponível no Zabbix, nao aplicar metricas do cache
                     const z = linha.zabbix || {};
                     if (z.indisponivelZb) continue;
+                    // Host LOCAL: metricas do coletor local sao canonicas — nunca sobrescrever com o Zabbix
+                    if (linha.local) continue;
 
-                    // Validar idade dos dados do Zabbix (se muito antigos, nao aplicar)
+                    // Validar idade dos dados do Zabbix (se muito antigos ou sem lastclock, nao aplicar)
                     let metricaFresca = true;
                     const idadeMaximaMs = 300000; // 5 minutos
                     const lastclock = mz._lastclock || mz.lastclock;
-                    if (lastclock && (now - parseInt(lastclock) * 1000) > idadeMaximaMs) {
+                    if (!lastclock) {
+                        // Sem confirmacao de frescor — nunca aplica (evita dados falsos/zeros)
+                        metricaFresca = false;
+                    } else if ((now - parseInt(lastclock) * 1000) > idadeMaximaMs) {
                         metricaFresca = false;
                         if (!(linha.fonte || '').includes('ZABBIX_DADOS_ANTIGOS')) linha.fonte = (linha.fonte || '') + ' ZABBIX_DADOS_ANTIGOS';
                     }
@@ -638,7 +652,7 @@ monitor.aoFinalizarCiclo(async function(painel) {
                 evidencias: [
                     zbOnline
                         ? 'API do Zabbix respondeu com sucesso (porta 8081)'
-                        : 'Falha ao conectar na API do Zabbix (ECONNREFUSED 192.168.0.186:8081). Verifique se o Docker Desktop está rodando.'
+                        : 'Falha ao conectar na API do Zabbix (http://127.0.0.1:8081). Verifique se o Docker Desktop esta rodando.'
                 ],
                 confianca: 'CONFIRMADO',
                 recomendacao: zbOnline
@@ -770,6 +784,9 @@ app.get('/api/zabbix/problemas', async (req, res) => {
             total: problemas.length,
             criticos: (porSeveridade['4'] || 0) + (porSeveridade['5'] || 0),
             naoReconhecidos: problemas.filter(p => !p.reconhecido).length,
+            naoSuprimidos: problemas.filter(p => !p.suppressed).length,
+            criticosNaoSuprimidos: problemas.filter(p => (p.severidade === '4' || p.severidade === '5') && !p.suppressed).length,
+            suprimidos: problemas.filter(p => p.suppressed).length,
             porSeveridade,
             problemas,
             atualizadoEm: new Date().toISOString()
@@ -894,6 +911,30 @@ app.post('/api/monitor/agregar-hoje', async (req, res) => {
 });
 
 // ---- Servico ----
+// ---- Identidade local (para o frontend saber qual host e "este PC") ----
+// Independente de rede: loopback/localhost sempre contam como local; senao
+// compara com os enderecos IPv4 desta maquina. Sem IP fixo no codigo.
+app.get('/api/monitor/local', (req, res) => {
+    try {
+        const os = require('os');
+        const LOCAIS = new Set(['127.0.0.1', '::1', '0.0.0.0', 'localhost']);
+        const locaisDestaMaquina = new Set(LOCAIS);
+        try {
+            for (const addrs of Object.values(os.networkInterfaces())) {
+                for (const a of (addrs || [])) {
+                    if ((a.family === 'IPv4' || a.family === 4) && a.address) locaisDestaMaquina.add(a.address);
+                }
+            }
+        } catch (e) {}
+        const alvos = (monitor.obterAlvos && monitor.obterAlvos()) || [];
+        const local = alvos.find(t => locaisDestaMaquina.has(String(t.ip || '').toLowerCase())) ||
+                      alvos.find(t => LOCAIS.has(String(t.ip || '').toLowerCase())) || alvos[0] || {};
+        res.json({ ip: local.ip || '127.0.0.1', nome: local.nome || 'MEU-PC', hostname: os.hostname() });
+    } catch (e) {
+        res.json({ ip: '127.0.0.1', nome: 'MEU-PC', hostname: require('os').hostname() });
+    }
+});
+
 app.get('/api/monitor/status', (req, res) => res.json({ rodando: monitor.isRodando() }));
 
 // ---- Static ----
@@ -901,7 +942,7 @@ app.use('/uploads', express.static('uploads'));
 app.use(express.static('frontend'));
 
 app.listen(PORT, () => {
-    console.log('Servidor rodando em http://192.168.0.186:' + PORT);
+    console.log('Servidor rodando em http://localhost:' + PORT + ' (acesso externo: http://<IP-desta-maquina>:' + PORT + ')');
     // Inicia o coletor em background (ciclos automaticos + SSE)
     try { monitor.iniciar(); } catch (e) { console.error('[server] falha ao iniciar monitor:', e.message); }
 

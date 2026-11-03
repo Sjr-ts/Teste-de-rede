@@ -65,5 +65,115 @@
    }
   ],
   "resolvidoEm": "2026-10-30T12:21:58.593Z"
+ },
+ {
+  "id": "ALR-1793718431204-tz0b",
+  "categoria": "CONECTIVIDADE",
+  "gravidade": "MEDIA",
+  "host": "192.168.0.186",
+  "titulo": "Equipamento sem resposta a verificacoes de rede",
+  "evidencias": [
+   "30 falhas consecutivas de ping",
+   "Gateway e demais equipamentos do setor respondendo normalmente",
+   "Nao e possivel confirmar se o PC esta desligado, com firewall bloqueando ICMP ou com problema de rede"
+  ],
+  "confianca": "MODERADA",
+  "recomendacao": "Verificar fisicamente o cabo, a porta do switch e o estado do equipamento. ICMP bloqueado tambem causa este sintoma.",
+  "estado": "ABERTO",
+  "inicio": "2026-11-03T15:07:11.204Z",
+  "ultimaOcorrencia": "2026-11-03T15:37:25.064Z",
+  "ocorrencias": 3,
+  "historico": [
+   {
+    "quando": "2026-11-03T15:07:11.204Z",
+    "evento": "ABERTO",
+    "detalhe": "Equipamento sem resposta a verificacoes de rede"
+   },
+   {
+    "quando": "2026-11-03T15:22:17.064Z",
+    "evento": "ATUALIZADO",
+    "detalhe": "Equipamento sem resposta a verificacoes de rede"
+   },
+   {
+    "quando": "2026-11-03T15:37:25.064Z",
+    "evento": "ATUALIZADO",
+    "detalhe": "Equipamento sem resposta a verificacoes de rede"
+   }
+  ]
+ },
+ {
+  "id": "ALR-1793718431204-ddaj",
+  "categoria": "CONECTIVIDADE",
+  "gravidade": "MEDIA",
+  "host": "192.168.0.108",
+  "titulo": "Equipamento sem resposta a verificacoes de rede",
+  "evidencias": [
+   "30 falhas consecutivas de ping",
+   "Gateway e demais equipamentos do setor respondendo normalmente",
+   "Nao e possivel confirmar se o PC esta desligado, com firewall bloqueando ICMP ou com problema de rede"
+  ],
+  "confianca": "MODERADA",
+  "recomendacao": "Verificar fisicamente o cabo, a porta do switch e o estado do equipamento. ICMP bloqueado tambem causa este sintoma.",
+  "estado": "ABERTO",
+  "inicio": "2026-11-03T15:07:11.204Z",
+  "ultimaOcorrencia": "2026-11-03T17:39:19.379Z",
+  "ocorrencias": 11,
+  "historico": [
+   {
+    "quando": "2026-11-03T15:07:11.204Z",
+    "evento": "ABERTO",
+    "detalhe": "Equipamento sem resposta a verificacoes de rede"
+   },
+   {
+    "quando": "2026-11-03T15:22:17.064Z",
+    "evento": "ATUALIZADO",
+    "detalhe": "Equipamento sem resposta a verificacoes de rede"
+   },
+   {
+    "quando": "2026-11-03T15:37:25.064Z",
+    "evento": "ATUALIZADO",
+    "detalhe": "Equipamento sem resposta a verificacoes de rede"
+   },
+   {
+    "quando": "2026-11-03T15:53:17.275Z",
+    "evento": "ATUALIZADO",
+    "detalhe": "Equipamento sem resposta a verificacoes de rede"
+   },
+   {
+    "quando": "2026-11-03T16:08:17.916Z",
+    "evento": "ATUALIZADO",
+    "detalhe": "Equipamento sem resposta a verificacoes de rede"
+   },
+   {
+    "quando": "2026-11-03T16:23:17.960Z",
+    "evento": "ATUALIZADO",
+    "detalhe": "Equipamento sem resposta a verificacoes de rede"
+   },
+   {
+    "quando": "2026-11-03T16:38:18.548Z",
+    "evento": "ATUALIZADO",
+    "detalhe": "Equipamento sem resposta a verificacoes de rede"
+   },
+   {
+    "quando": "2026-11-03T16:53:18.931Z",
+    "evento": "ATUALIZADO",
+    "detalhe": "Equipamento sem resposta a verificacoes de rede"
+   },
+   {
+    "quando": "2026-11-03T17:09:18.426Z",
+    "evento": "ATUALIZADO",
+    "detalhe": "Equipamento sem resposta a verificacoes de rede"
+   },
+   {
+    "quando": "2026-11-03T17:24:18.907Z",
+    "evento": "ATUALIZADO",
+    "detalhe": "Equipamento sem resposta a verificacoes de rede"
+   },
+   {
+    "quando": "2026-11-03T17:39:19.379Z",
+    "evento": "ATUALIZADO",
+    "detalhe": "Equipamento sem resposta a verificacoes de rede"
+   }
+  ]
  }
 ]
