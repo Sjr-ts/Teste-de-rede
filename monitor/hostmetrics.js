@@ -129,7 +129,7 @@ function disco() {
     });
 }
 
-/** GPU: tenta nvidia-smi (NVIDIA), depois Get-Counter (Windows GPU Engine). */
+/** GPU: tenta nvidia-smi (NVIDIA), depois Get-Counter (Windows GPU Engine) com amostragem. */
 function gpu() {
     return new Promise((resolve) => {
         // 1) nvidia-smi (NVIDIA)
@@ -142,9 +142,27 @@ function gpu() {
                 });
                 return resolve({ fonte: 'nvidia-smi', gpus });
             }
-            // 2) Get-Counter (funciona pra GPU dedicada ou integrada com contador)
-            const cmd = 'powershell -NoProfile -Command "$c = Get-Counter \'\\GPU Engine(*)\\Utilization Percentage\' -ErrorAction SilentlyContinue; if ($c) { $total = ($c.CounterSamples | Measure-Object -Property CookedValue -Sum).Sum; [math]::Round($total,1) } else { $null }"';
-            exec(cmd, { timeout: 8000, windowsHide: true }, (err2, out2) => {
+            // 2) Get-Counter com amostragem melhorada (3 amostras, media)
+            // Para GPU integrada (Intel Iris Xe), usa contador dedicado
+            const cmd = [
+                '$ErrorActionPreference = "SilentlyContinue"',
+                '$samples = @()',
+                'for ($i = 0; $i -lt 3; $i++) {',
+                '  $c = Get-Counter "\\GPU Engine(*)\\Utilization Percentage" -ErrorAction SilentlyContinue',
+                '  if ($c) {',
+                '    $total = ($c.CounterSamples | Where-Object { $_.CookedValue -gt 0 } | Measure-Object -Property CookedValue -Sum).Sum',
+                '    if ($total -gt 0) { $samples += [math]::Round($total, 1) }',
+                '  }',
+                '  if ($i -lt 2) { Start-Sleep -Milliseconds 300 }',
+                '}',
+                'if ($samples.Count -gt 0) {',
+                '  $avg = ($samples | Measure-Object -Average).Average',
+                '  Write-Output ([math]::Round($avg, 1))',
+                '} else {',
+                '  Write-Output "0"',
+                '}'
+            ].join('\n');
+            execFile('powershell', ['-NoProfile', '-Command', cmd], { timeout: 10000, windowsHide: true }, (err2, out2) => {
                 if (err2) return resolve({ indisponivel: 'Sem nvidia-smi e sem contador GPU (WMI/Performance Counter).' });
                 const val = parseFloat((out2 || '').trim());
                 if (isNaN(val)) return resolve({ indisponivel: 'Contador GPU sem dados (GPU ociosa ou driver sem contador).' });

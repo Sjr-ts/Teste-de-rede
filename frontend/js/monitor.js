@@ -22,6 +22,8 @@ let _monKpiCharts = {};
 let _monChartAtual = null;
 let _monChartExpandido = false;
 let _monCpuTempoReal = null; // valor atual da CPU em tempo real
+let _monGpuTempoReal = null; // valor atual da GPU em tempo real
+let _monGpuHist = []; // histórico de GPU para gráficos
 
 // ==================== INICIALIZACAO ====================
 function monInit() {
@@ -49,18 +51,32 @@ function monInit() {
     }, 3000);
 }
 
-// Busca CPU em tempo real (endpoint dedicado, 1s de amostra)
+// Busca CPU e GPU em tempo real (endpoints dedicados)
 async function monPollCpuTempoReal() {
     try {
-        const r = await fetch('/api/monitor/cpu-tempo-real');
-        if (!r.ok) return;
-        const d = await r.json();
-        if (d.cpu != null) {
-            _monCpuTempoReal = d.cpu;
-            // Atualiza a linha do MEU-PC na tabela (se existir)
-            monAtualizarCpuNaTabela(d.cpu, d.ts);
-            // Atualiza KPI de CPU se existir
-            monAtualizarKpiCpu(d.cpu, d.ts);
+        const [cpuRes, gpuRes] = await Promise.all([
+            fetch('/api/monitor/cpu-tempo-real').then(r => r.json()).catch(() => null),
+            fetch('/api/monitor/gpu-tempo-real').then(r => r.json()).catch(() => null)
+        ]);
+        
+        // CPU
+        if (cpuRes && cpuRes.cpu != null) {
+            _monCpuTempoReal = cpuRes.cpu;
+            // Adiciona ao histórico (mantém últimos 60 pontos)
+            _monCpuHist.push(cpuRes.cpu);
+            if (_monCpuHist.length > 60) _monCpuHist.shift();
+            monAtualizarCpuNaTabela(cpuRes.cpu, cpuRes.ts);
+            monAtualizarKpiCpu(cpuRes.cpu, cpuRes.ts);
+        }
+        
+        // GPU
+        if (gpuRes && gpuRes.gpu != null) {
+            _monGpuTempoReal = gpuRes.gpu;
+            // Adiciona ao histórico (mantém últimos 60 pontos)
+            _monGpuHist.push(gpuRes.gpu);
+            if (_monGpuHist.length > 60) _monGpuHist.shift();
+            monAtualizarGpuNaTabela(gpuRes.gpu, gpuRes.nome, gpuRes.ts);
+            monAtualizarKpiGpu(gpuRes.gpu, gpuRes.nome, gpuRes.ts);
         }
     } catch (e) {}
 }
@@ -90,20 +106,62 @@ function monAtualizarCpuNaTabela(cpu, ts) {
     }
 }
 
+// Atualiza a celula de GPU do MEU-PC na tabela
+function monAtualizarGpuNaTabela(gpu, nome, ts) {
+    const tabela = document.getElementById('monTable');
+    if (!tabela) return;
+    const tbody = tabela.querySelector('tbody');
+    if (!tbody) return;
+    const linhas = tbody.querySelectorAll('tr');
+    for (const tr of linhas) {
+        const ipCell = tr.querySelector('td:first-child');
+        if (ipCell && ipCell.textContent.includes('192.168.0.186')) {
+            const tds = tr.querySelectorAll('td');
+            if (tds.length >= 7) {
+                const gpuCell = tds[6];
+                const cor = gpu > 80 ? 'var(--red)' : gpu > 60 ? 'var(--yellow)' : 'var(--cyan)';
+                gpuCell.innerHTML = '<span style="color:' + cor + ';font-weight:600;">' + gpu.toFixed(1) + '%</span>' +
+                    '<br><span style="font-size:9px;color:var(--text-muted);">' + (nome || 'GPU') + '</span>' +
+                    '<br><span style="font-size:9px;color:var(--green);">TEMPO REAL</span>';
+            }
+            break;
+        }
+    }
+}
+
 // Atualiza KPI de CPU se existir
 function monAtualizarKpiCpu(cpu, ts) {
     const el = document.getElementById('mon-kpi-cpu-tempo-real');
     if (!el) {
-        // Adiciona o KPI de CPU tempo real se não existir
         const kpiGrid = document.getElementById('mon-kpis');
         if (kpiGrid) {
-            const cpuKpi = monKpiCard('fa-microchip', 'cyan', cpu.toFixed(1) + '%', 'CPU Tempo Real', 'Coleta a cada 3s', 'mon-kpi-cpu-tempo-real');
+            const cpuKpi = monKpiCard('fa-microchip', 'cyan', cpu.toFixed(1) + '%', 'CPU Tempo Real', 'Coleta a cada 3s', 'mon-kpi-cpu-tempo-real',
+                '<span style="font-size:10px;color:var(--green);"><i class="fas fa-circle" style="font-size:6px;"></i> AO VIVO</span>');
             kpiGrid.insertAdjacentHTML('afterbegin', cpuKpi);
         }
     } else {
-        // Atualiza valor
         const valorEl = el.querySelector('.kpi-value');
         if (valorEl) valorEl.textContent = cpu.toFixed(1) + '%';
+        const cor = cpu > 80 ? 'red' : cpu > 60 ? 'yellow' : 'cyan';
+        el.className = 'kpi-card kpi-card-' + cor;
+    }
+}
+
+// Atualiza KPI de GPU se existir
+function monAtualizarKpiGpu(gpu, nome, ts) {
+    const el = document.getElementById('mon-kpi-gpu-tempo-real');
+    if (!el) {
+        const kpiGrid = document.getElementById('mon-kpis');
+        if (kpiGrid) {
+            const gpuKpi = monKpiCard('fa-tv', 'purple', gpu.toFixed(1) + '%', 'GPU Tempo Real', nome || 'Coleta a cada 3s', 'mon-kpi-gpu-tempo-real',
+                '<span style="font-size:10px;color:var(--green);"><i class="fas fa-circle" style="font-size:6px;"></i> AO VIVO</span>');
+            kpiGrid.insertAdjacentHTML('afterbegin', gpuKpi);
+        }
+    } else {
+        const valorEl = el.querySelector('.kpi-value');
+        if (valorEl) valorEl.textContent = gpu.toFixed(1) + '%';
+        const cor = gpu > 80 ? 'red' : gpu > 60 ? 'yellow' : 'purple';
+        el.className = 'kpi-card kpi-card-' + cor;
     }
 }
 
@@ -748,7 +806,47 @@ function monRenderKpiDetail(key) {
         return '<div class="stat-detail-item"><div style="font-size:10px;color:var(--red);">✗ ' + fails.length + ' falha(s) — ' + label + '</div></div>';
     }
 
-    if (key === 'mon-kpi-total') {
+    if (key === 'mon-kpi-cpu-tempo-real') {
+        title = 'CPU em Tempo Real'; icon = 'fa-microchip'; color = 'cyan';
+        const cpuAtual = _monCpuTempoReal;
+        const cpuHist = _monCpuHist || [];
+        const cpuMedia = cpuHist.length > 0 ? (cpuHist.reduce((a, b) => a + b, 0) / cpuHist.length).toFixed(1) : '—';
+        const cpuMax = cpuHist.length > 0 ? Math.max(...cpuHist).toFixed(1) : '—';
+        const cpuMin = cpuHist.length > 0 ? Math.min(...cpuHist).toFixed(1) : '—';
+        itemsHtml =
+            '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--cyan-bg);color:var(--cyan);"><i class="fas fa-bolt"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">Valor Atual</div><div class="stat-detail-item-sub"><b style="font-size:18px;color:var(--cyan);">' + (cpuAtual != null ? cpuAtual.toFixed(1) + '%' : '—') + '</b></div></div></div>' +
+            '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--green-bg);color:var(--green);"><i class="fas fa-chart-line"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">Media (ultimos ' + cpuHist.length + ' pontos)</div><div class="stat-detail-item-sub">' + cpuMedia + '%</div></div></div>' +
+            '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--yellow-bg);color:var(--yellow);"><i class="fas fa-arrow-up"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">Maximo</div><div class="stat-detail-item-sub">' + cpuMax + '%</div></div></div>' +
+            '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--purple-bg);color:var(--purple);"><i class="fas fa-arrow-down"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">Minimo</div><div class="stat-detail-item-sub">' + cpuMin + '%</div></div></div>' +
+            '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--cyan-bg);color:var(--cyan);"><i class="fas fa-info-circle"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">Fonte</div><div class="stat-detail-item-sub">PerformanceCounter Windows (800ms amostra)</div></div></div>';
+    } else if (key === 'mon-kpi-gpu-tempo-real') {
+        title = 'GPU em Tempo Real'; icon = 'fa-tv'; color = 'purple';
+        const gpuAtual = _monGpuTempoReal;
+        const gpuHist = _monGpuHist || [];
+        const gpuMedia = gpuHist.length > 0 ? (gpuHist.reduce((a, b) => a + b, 0) / gpuHist.length).toFixed(1) : '—';
+        const gpuMax = gpuHist.length > 0 ? Math.max(...gpuHist).toFixed(1) : '—';
+        const gpuMin = gpuHist.length > 0 ? Math.min(...gpuHist).toFixed(1) : '—';
+        itemsHtml =
+            '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--purple-bg);color:var(--purple);"><i class="fas fa-bolt"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">Valor Atual</div><div class="stat-detail-item-sub"><b style="font-size:18px;color:var(--purple);">' + (gpuAtual != null ? gpuAtual.toFixed(1) + '%' : '—') + '</b></div></div></div>' +
+            '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--green-bg);color:var(--green);"><i class="fas fa-chart-line"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">Media (ultimos ' + gpuHist.length + ' pontos)</div><div class="stat-detail-item-sub">' + gpuMedia + '%</div></div></div>' +
+            '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--yellow-bg);color:var(--yellow);"><i class="fas fa-arrow-up"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">Maximo</div><div class="stat-detail-item-sub">' + gpuMax + '%</div></div></div>' +
+            '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--purple-bg);color:var(--purple);"><i class="fas fa-arrow-down"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">Minimo</div><div class="stat-detail-item-sub">' + gpuMin + '%</div></div></div>' +
+            '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--cyan-bg);color:var(--cyan);"><i class="fas fa-info-circle"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">Fonte</div><div class="stat-detail-item-sub">PerformanceCounter GPU Engine (3 amostras)</div></div></div>';
+    } else if (key === 'mon-kpi-disponibilidade') {
+        title = 'Disponibilidade da Rede'; icon = 'fa-chart-pie'; color = 'green';
+        const linhas = p.linhas || [];
+        const acessiveis = linhas.filter(l => l.estado === 'ACESSIVEL');
+        const semResposta = linhas.filter(l => l.estado === 'SEM_RESPOSTA');
+        const instaveis = linhas.filter(l => l.estado === 'INSTAVEL');
+        const semDados = linhas.filter(l => l.estado === 'SEM_DADOS');
+        const pct = p.resumo.totalAlvos > 0 ? Math.round((acessiveis.length / p.resumo.totalAlvos) * 100) : 0;
+        itemsHtml =
+            '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--green-bg);color:var(--green);"><i class="fas fa-percentage"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">Disponibilidade Geral</div><div class="stat-detail-item-sub"><b style="font-size:24px;color:var(--green);">' + pct + '%</b></div></div></div>' +
+            '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--green-bg);color:var(--green);"><i class="fas fa-circle-check"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">Acessiveis</div><div class="stat-detail-item-sub">' + acessiveis.length + ' de ' + p.resumo.totalAlvos + ' equipamentos</div></div></div>' +
+            '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--red-bg);color:var(--red);"><i class="fas fa-circle-xmark"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">Sem Resposta</div><div class="stat-detail-item-sub">' + semResposta.length + ' equipamentos</div></div></div>' +
+            '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--yellow-bg);color:var(--yellow);"><i class="fas fa-wave-square"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">Instaveis</div><div class="stat-detail-item-sub">' + instaveis.length + ' equipamentos</div></div></div>' +
+            '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--magenta-bg);color:var(--magenta);"><i class="fas fa-circle-question"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">Sem Dados</div><div class="stat-detail-item-sub">' + semDados.length + ' equipamentos</div></div></div>';
+    } else if (key === 'mon-kpi-total') {
         title = 'Todos os Equipamentos Monitorados'; icon = 'fa-desktop'; color = 'cyan';
         itemsHtml = p.linhas.map(l => '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--cyan-bg);color:var(--cyan);"><i class="fas fa-desktop"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">' + esc(l.nome || l.ip) + '</div><div class="stat-detail-item-sub">' + esc(l.ip) + ' | Setor: ' + esc(l.setor || '-') + ' | Estado: ' + monEstadoBadge(l.estado) + ' | Lat: ' + (l.latenciaMediaMs != null ? Math.round(l.latenciaMediaMs) + 'ms' : '—') + '</div><div class="stat-detail-item-badge">' + monEstadoBadge(l.estado) + '</div></div>').join('');
         itemsHtml += failureSummary(p.linhas, 'Total: ' + p.resumo.totalAlvos + ' equipamentos');
@@ -1638,6 +1736,21 @@ function monKpiChartBlock(key) {
         titulo = 'CPU do PC Local (%)';
         dados = _monCpuHist;
         opts = { cor: '#00d4ff', minForcado: 0, maxForcado: 100, altura: 200 };
+    } else if (key === 'mon-kpi-cpu-tempo-real') {
+        titulo = 'CPU em Tempo Real (%)';
+        dados = _monCpuHist;
+        opts = { cor: '#00e5c7', minForcado: 0, maxForcado: 100, altura: 200 };
+    } else if (key === 'mon-kpi-gpu-tempo-real') {
+        titulo = 'GPU em Tempo Real (%)';
+        dados = _monGpuHist || [];
+        opts = { cor: '#b24dff', minForcado: 0, maxForcado: 100, altura: 200 };
+    } else if (key === 'mon-kpi-disponibilidade') {
+        const linhas = (_monDados && _monDados.linhas) || [];
+        if (linhas.length) {
+            titulo = 'Disponibilidade por Host (%)';
+            dados = linhas.map(l => l.estado === 'ACESSIVEL' ? 100 : 0);
+            opts = { cor: '#00e676', minForcado: 0, maxForcado: 100, altura: 200 };
+        }
     } else if (['mon-kpi-total','mon-kpi-acessiveis','mon-kpi-semresposta','mon-kpi-instaveis','mon-kpi-semdados','mon-kpi-alertas','mon-kpi-incidentes'].indexOf(key) >= 0) {
         const linhas = (_monDados && _monDados.linhas) || [];
         if (linhas.length) {
@@ -1739,18 +1852,209 @@ function monAbrirGraficoNovaAba(titulo, htmlConteudo) {
     }
     const w = window.open('', '_blank');
     if (!w) { alert('Pop-up bloqueado. Permita pop-ups para este site.'); return; }
-    const doc = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">' +
-        '<title>' + esc(titulo) + '</title>' +
-        '<style>body{margin:0;padding:24px;background:#0f1117;color:#e6e6e6;font-family:Segoe UI,Arial,sans-serif;}' +
-        'h1{font-size:18px;margin:0 0 16px;color:#2962FF;} .wrap{max-width:1100px;margin:0 auto;} ' +
-        'button{background:#2962FF;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;margin-right:8px;} ' +
-        '.chart{background:rgba(255,255,255,0.03);border-radius:8px;padding:12px;margin-top:12px;overflow:auto;}</style></head><body>' +
-        '<div class="wrap"><h1>' + esc(titulo) + '</h1>' +
-        '<p style="color:#888;font-size:12px;">Inventario TI — Monitoramento | Gerado em ' + new Date().toLocaleString('pt-BR') + '</p>' +
-        '<button onclick="window.print()">Imprimir / Salvar PDF</button>' +
-        '<button onclick="window.close()">Fechar</button>' +
-        '<div class="chart">' + htmlConteudo + '</div>' +
-        '</div></body></html>';
+    
+    const agora = new Date().toLocaleString('pt-BR');
+    const doc = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${esc(titulo)} — Inventario TI</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #00e5c7;
+            --accent: #b24dff;
+            --bg-deep: #070b14;
+            --bg-base: #090e1a;
+            --bg-surface: #0d1526;
+            --bg-panel: rgba(13, 21, 38, 0.92);
+            --border: rgba(255, 255, 255, 0.07);
+            --text-primary: #e4e8f1;
+            --text-secondary: #8892a8;
+            --text-muted: #4e5a72;
+            --green: #00e676;
+            --yellow: #ffe600;
+            --red: #ff4757;
+            --cyan: #00e5c7;
+            --purple: #b24dff;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+        .bg-orbs {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 0; overflow: hidden;
+        }
+        .orb {
+            position: absolute; border-radius: 50%;
+            filter: blur(120px); opacity: 0.08;
+        }
+        .orb-1 {
+            width: 700px; height: 700px;
+            background: radial-gradient(circle, rgba(0,229,199,0.4) 0%, transparent 70%);
+            top: -250px; right: -200px;
+        }
+        .orb-2 {
+            width: 500px; height: 500px;
+            background: radial-gradient(circle, rgba(178,77,255,0.3) 0%, transparent 70%);
+            bottom: -150px; left: -100px;
+        }
+        .container {
+            position: relative; z-index: 1;
+            max-width: 1400px; margin: 0 auto;
+            padding: 32px;
+        }
+        .header {
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            margin-bottom: 32px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        .header-top {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 24px; flex-wrap: wrap; gap: 16px;
+        }
+        .logo {
+            display: flex; align-items: center; gap: 16px;
+        }
+        .logo-icon {
+            width: 56px; height: 56px; border-radius: 14px;
+            background: linear-gradient(135deg, rgba(0,229,199,0.15), rgba(178,77,255,0.1));
+            display: flex; align-items: center; justify-content: center;
+            border: 1px solid rgba(0,229,199,0.1);
+        }
+        .logo-icon i { font-size: 24px; color: var(--primary); }
+        .logo-text h1 {
+            font-size: 24px; font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text; letter-spacing: -0.5px;
+        }
+        .logo-text p {
+            font-size: 13px; color: var(--text-muted); font-weight: 500;
+        }
+        .actions {
+            display: flex; gap: 12px;
+        }
+        .btn {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 12px 24px; border-radius: 10px;
+            font-size: 13px; font-weight: 600;
+            cursor: pointer; transition: all 0.2s;
+            border: none; text-decoration: none;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark, #00b89e));
+            color: var(--bg-deep);
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,229,199,0.3); }
+        .btn-ghost {
+            background: rgba(255,255,255,0.05);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+        .btn-ghost:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); }
+        .meta {
+            display: flex; gap: 32px; flex-wrap: wrap;
+            padding-top: 24px; border-top: 1px solid var(--border);
+        }
+        .meta-item {
+            display: flex; flex-direction: column; gap: 4px;
+        }
+        .meta-label {
+            font-size: 11px; color: var(--text-muted);
+            text-transform: uppercase; letter-spacing: 1px; font-weight: 600;
+        }
+        .meta-value {
+            font-size: 15px; color: var(--text-primary); font-weight: 600;
+        }
+        .content {
+            background: var(--bg-panel);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        .chart-container {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            overflow: auto;
+        }
+        .footer {
+            margin-top: 32px; text-align: center;
+            font-size: 12px; color: var(--text-muted);
+            padding: 24px; border-top: 1px solid var(--border);
+        }
+        @media print {
+            body { background: #fff; color: #000; }
+            .bg-orbs, .actions { display: none; }
+            .header, .content { box-shadow: none; border: 1px solid #ddd; background: #fff; }
+            .logo-text h1 { -webkit-text-fill-color: #00897b; color: #00897b; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+    </div>
+    <div class="container">
+        <div class="header">
+            <div class="header-top">
+                <div class="logo">
+                    <div class="logo-icon"><i class="fas fa-chart-line"></i></div>
+                    <div class="logo-text">
+                        <h1>${esc(titulo)}</h1>
+                        <p>Inventario TI — Relatorio de Monitoramento</p>
+                    </div>
+                </div>
+                <div class="actions">
+                    <button class="btn btn-ghost" onclick="window.print()">
+                        <i class="fas fa-print"></i> Imprimir
+                    </button>
+                    <button class="btn btn-primary" onclick="window.close()">
+                        <i class="fas fa-times"></i> Fechar
+                    </button>
+                </div>
+            </div>
+            <div class="meta">
+                <div class="meta-item">
+                    <span class="meta-label">Gerado em</span>
+                    <span class="meta-value">${agora}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Sistema</span>
+                    <span class="meta-value">Inventario TI v3.0</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Tipo</span>
+                    <span class="meta-value">Relatorio de Metricas</span>
+                </div>
+            </div>
+        </div>
+        <div class="content">
+            <div class="chart-container">
+                ${htmlConteudo}
+            </div>
+        </div>
+        <div class="footer">
+            <p>Inventario TI — Sistema de Gestao de Equipamentos</p>
+            <p>Documento gerado automaticamente pelo sistema de monitoramento</p>
+        </div>
+    </div>
+</body>
+</html>`;
     w.document.write(doc);
     w.document.close();
 }

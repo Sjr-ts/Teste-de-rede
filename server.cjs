@@ -496,6 +496,27 @@ app.get('/api/monitor/cpu-tempo-real', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ==================== GPU EM TEMPO REAL ====================
+let _gpuRealtimeCache = { valor: null, nome: null, ts: 0 };
+app.get('/api/monitor/gpu-tempo-real', async (req, res) => {
+    try {
+        const agora = Date.now();
+        // Cache de 3s (GPU é mais pesada de coletar)
+        if (_gpuRealtimeCache.valor != null && (agora - _gpuRealtimeCache.ts) < 3000) {
+            return res.json({ gpu: _gpuRealtimeCache.valor, nome: _gpuRealtimeCache.nome, ts: _gpuRealtimeCache.ts, fonte: 'cache' });
+        }
+        const hostmetrics = require('./monitor/hostmetrics');
+        const m = await hostmetrics.coletar(null);
+        if (m && m.gpu && m.gpu.gpus && m.gpu.gpus.length) {
+            const g = m.gpu.gpus[0];
+            _gpuRealtimeCache = { valor: g.usoPct, nome: g.nome, ts: Date.now() };
+            res.json({ gpu: g.usoPct, nome: g.nome, ts: _gpuRealtimeCache.ts, fonte: 'realtime' });
+        } else {
+            res.json({ gpu: null, nome: null, ts: 0, fonte: 'unavailable', motivo: m && m.gpu ? m.gpu.indisponivel : 'Sem dados' });
+        }
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/monitor/host/:ip', (req, res) => {
     try { res.json(monitor.obterDetalheHost(decodeURIComponent(req.params.ip))); }
     catch (e) { res.status(500).json({ error: e.message }); }
