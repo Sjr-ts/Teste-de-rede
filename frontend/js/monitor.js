@@ -7,6 +7,7 @@
 
 // ==================== ESTADO ====================
 let _monTimer = null;
+let _monCpuTimer = null;
 let _monDados = null;
 let _monZabbix = null;
 let _monSistema = null;
@@ -20,6 +21,7 @@ let _monAlertasZabbix = [];
 let _monKpiCharts = {};
 let _monChartAtual = null;
 let _monChartExpandido = false;
+let _monCpuTempoReal = null; // valor atual da CPU em tempo real
 
 // ==================== INICIALIZACAO ====================
 function monInit() {
@@ -35,6 +37,74 @@ function monInit() {
             }
         }
     }, 30000);
+    // CPU em tempo real: poll a cada 3 segundos (apenas quando secao visivel)
+    if (_monCpuTimer) clearInterval(_monCpuTimer);
+    _monCpuTimer = setInterval(function() {
+        if (typeof document !== 'undefined' && !document.hidden) {
+            const secao = document.getElementById('monitoramento');
+            if (secao && !secao.classList.contains('hidden')) {
+                monPollCpuTempoReal();
+            }
+        }
+    }, 3000);
+}
+
+// Busca CPU em tempo real (endpoint dedicado, 1s de amostra)
+async function monPollCpuTempoReal() {
+    try {
+        const r = await fetch('/api/monitor/cpu-tempo-real');
+        if (!r.ok) return;
+        const d = await r.json();
+        if (d.cpu != null) {
+            _monCpuTempoReal = d.cpu;
+            // Atualiza a linha do MEU-PC na tabela (se existir)
+            monAtualizarCpuNaTabela(d.cpu, d.ts);
+            // Atualiza KPI de CPU se existir
+            monAtualizarKpiCpu(d.cpu, d.ts);
+        }
+    } catch (e) {}
+}
+
+// Atualiza a celula de CPU do MEU-PC na tabela
+function monAtualizarCpuNaTabela(cpu, ts) {
+    const tabela = document.getElementById('monTable');
+    if (!tabela) return;
+    const tbody = tabela.querySelector('tbody');
+    if (!tbody) return;
+    // Procura a linha do MEU-PC (192.168.0.186)
+    const linhas = tbody.querySelectorAll('tr');
+    for (const tr of linhas) {
+        const ipCell = tr.querySelector('td:first-child');
+        if (ipCell && ipCell.textContent.includes('192.168.0.186')) {
+            // Encontra a coluna CPU (indice 5)
+            const tds = tr.querySelectorAll('td');
+            if (tds.length >= 6) {
+                const cpuCell = tds[5];
+                const idade = ts ? Math.round((Date.now() - ts) / 1000) : null;
+                const idadeHtml = idade != null ? '<br><span style="font-size:9px;color:var(--green);">agora</span>' : '';
+                cpuCell.innerHTML = '<span style="color:var(--cyan);font-weight:600;">' + cpu.toFixed(1) + '%</span>' +
+                    '<br><span style="font-size:9px;color:var(--green);">TEMPO REAL</span>' + idadeHtml;
+            }
+            break;
+        }
+    }
+}
+
+// Atualiza KPI de CPU se existir
+function monAtualizarKpiCpu(cpu, ts) {
+    const el = document.getElementById('mon-kpi-cpu-tempo-real');
+    if (!el) {
+        // Adiciona o KPI de CPU tempo real se não existir
+        const kpiGrid = document.getElementById('mon-kpis');
+        if (kpiGrid) {
+            const cpuKpi = monKpiCard('fa-microchip', 'cyan', cpu.toFixed(1) + '%', 'CPU Tempo Real', 'Coleta a cada 3s', 'mon-kpi-cpu-tempo-real');
+            kpiGrid.insertAdjacentHTML('afterbegin', cpuKpi);
+        }
+    } else {
+        // Atualiza valor
+        const valorEl = el.querySelector('.kpi-value');
+        if (valorEl) valorEl.textContent = cpu.toFixed(1) + '%';
+    }
 }
 
 // Conecta ao stream SSE para atualizacao em tempo real
@@ -540,15 +610,47 @@ function monRenderKPIs(p) {
     const r = p.resumo;
     const servico = p.servico || {};
 
+    // Calcula porcentagem de disponibilidade
+    const pctDisponivel = r.totalAlvos > 0 ? Math.round((r.acessiveis / r.totalAlvos) * 100) : 0;
+    const pctIndisponivel = r.totalAlvos > 0 ? Math.round((r.semResposta / r.totalAlvos) * 100) : 0;
+
+    // CPU tempo real (se disponível)
+    const cpuReal = _monCpuTempoReal != null ? _monCpuTempoReal.toFixed(1) + '%' : '...';
+    const cpuCor = _monCpuTempoReal != null ? (_monCpuTempoReal > 80 ? 'red' : _monCpuTempoReal > 60 ? 'yellow' : 'green') : 'cyan';
+
     let html =
-        monKpiCard('fa-desktop', 'cyan', r.totalAlvos, 'Equipamentos', 'Total cadastrado com IP', 'mon-kpi-total') +
+        // CPU em tempo real (primeiro, mais importante)
+        monKpiCard('fa-microchip', cpuCor, cpuReal, 'CPU Tempo Real', 'Coleta a cada 3s', 'mon-kpi-cpu-tempo-real',
+            '<span style="font-size:10px;color:var(--green);"><i class="fas fa-circle" style="font-size:6px;"></i> AO VIVO</span>') +
+
+        // Disponibilidade (barra visual)
+        monKpiCard('fa-chart-pie', pctDisponivel >= 90 ? 'green' : pctDisponivel >= 70 ? 'yellow' : 'red',
+            pctDisponivel + '%', 'Disponibilidade', r.acessiveis + ' de ' + r.totalAlvos + ' respondendo', 'mon-kpi-disponibilidade',
+            '<div style="width:60px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;"><div style="width:' + pctDisponivel + '%;height:100%;background:var(--' + (pctDisponivel >= 90 ? 'green' : pctDisponivel >= 70 ? 'yellow' : 'red') + ');"></div></div>') +
+
+        // Total
+        monKpiCard('fa-desktop', 'cyan', r.totalAlvos, 'Equipamentos', 'Total com IP cadastrado', 'mon-kpi-total') +
+
+        // Acessiveis
         monKpiCard('fa-circle-check', 'green', r.acessiveis, 'Acessiveis', 'Respondendo agora', 'mon-kpi-acessiveis') +
-        monKpiCard('fa-circle-xmark', 'red', r.semResposta, 'Sem Resposta', 'Nao responderam', 'mon-kpi-semresposta') +
-        monKpiCard('fa-wave-square', 'yellow', r.instaveis, 'Instaveis', 'Oscilando', 'mon-kpi-instaveis') +
-        monKpiCard('fa-triangle-exclamation', 'orange', r.alertasAbertos, 'Alertas', 'Abertos', 'mon-kpi-alertas') +
-        monKpiCard('fa-share-nodes', 'purple', r.incidentesSetor, 'Incidentes Setor', 'Falha em massa', 'mon-kpi-incidentes') +
+
+        // Sem resposta
+        monKpiCard('fa-circle-xmark', 'red', r.semResposta, 'Sem Resposta', pctIndisponivel + '% do total', 'mon-kpi-semresposta') +
+
+        // Instaveis
+        monKpiCard('fa-wave-square', 'yellow', r.instaveis, 'Instaveis', 'Oscilando na rede', 'mon-kpi-instaveis') +
+
+        // Alertas
+        monKpiCard('fa-triangle-exclamation', r.alertasAbertos > 0 ? 'orange' : 'green', r.alertasAbertos, 'Alertas', r.alertasAbertos > 0 ? 'Requer atencao' : 'Tudo normal', 'mon-kpi-alertas') +
+
+        // Incidentes
+        monKpiCard('fa-share-nodes', 'purple', r.incidentesSetor, 'Incidentes', 'Falha em massa por setor', 'mon-kpi-incidentes') +
+
+        // Sem dados
         monKpiCard('fa-circle-question', 'magenta', r.semDados, 'Sem Dados', 'Ainda nao verificados', 'mon-kpi-semdados') +
-        monKpiCard('fa-clock', 'cyan', servico.rodando ? 'ON' : 'OFF', 'Coletor', servico.rodando ? 'Ativo' : 'Parado', 'mon-kpi-coletor');
+
+        // Coletor
+        monKpiCard('fa-clock', servico.rodando ? 'green' : 'red', servico.rodando ? 'ON' : 'OFF', 'Coletor', servico.rodando ? 'Ativo' : 'Parado', 'mon-kpi-coletor');
 
     el.innerHTML = html;
 
@@ -586,14 +688,15 @@ async function monRenderArmazenamentoKPIs() {
     } catch (e) {}
 }
 
-function monKpiCard(icon, cor, valor, label, sub, key) {
+function monKpiCard(icon, cor, valor, label, sub, key, extra) {
     return '<div class="kpi-card kpi-card-' + cor + '" onclick="monToggleKpiDetail(\'' + key + '\')" data-key="' + key + '">' +
         '<div class="kpi-header">' +
         '<div class="kpi-icon kpi-icon-' + cor + '"><i class="fas ' + icon + '"></i></div>' +
+        (extra ? '<div class="kpi-extra">' + extra + '</div>' : '') +
         '</div>' +
-        '<div class="kpi-value" style="font-size:28px;">' + valor + '</div>' +
+        '<div class="kpi-value" style="font-size:36px;">' + valor + '</div>' +
         '<div class="kpi-label">' + label + '</div>' +
-        '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">' + sub + '</div>' +
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">' + sub + '</div>' +
         '</div>';
 }
 

@@ -49,6 +49,26 @@ function cpuUsoPct() {
     });
 }
 
+/** Coleta APENAS a CPU (rapido, 1s de amostra) — para endpoint de tempo real. */
+function coletarCpuApenas() {
+    return new Promise((resolve) => {
+        const script = [
+            "$pc = New-Object System.Diagnostics.PerformanceCounter('Processor', '% Processor Time', '_Total');",
+            "$pc.NextValue() | Out-Null;",
+            "Start-Sleep -Milliseconds 800;",
+            "$v = $pc.NextValue();",
+            "Write-Output $v;"
+        ].join(' ');
+        execFile('powershell', ['-NoProfile', '-Command', script], { timeout: 5000, windowsHide: true }, (err, stdout) => {
+            if (err) { resolve(null); return; }
+            const raw = (stdout || '').trim().replace(',', '.');
+            const val = parseFloat(raw);
+            if (isNaN(val)) { resolve(null); return; }
+            resolve(Math.round(Math.min(100, Math.max(0, val)) * 10) / 10);
+        });
+    });
+}
+
 // Fallback usando os.cpus() (delta entre amostras)
 let _cpuAnterior = null;
 function cpuUsoPctFallback() {
@@ -208,4 +228,4 @@ async function coletar(estadoAnterior) {
     };
 }
 
-module.exports = { coletar, rede, infoBase, memoria };
+module.exports = { coletar, rede, infoBase, memoria, coletarCpuApenas };

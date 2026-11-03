@@ -473,6 +473,29 @@ app.get('/api/monitor/sistema', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ==================== CPU EM TEMPO REAL (polling rapido) ====================
+// Coleta CPU a cada chamada (1s de amostra) — o frontend pode pollar a cada 2-3s
+let _cpuRealtimeCache = { valor: null, ts: 0 };
+app.get('/api/monitor/cpu-tempo-real', async (req, res) => {
+    try {
+        const agora = Date.now();
+        // Se a cache tem menos de 1.5s, retorna cache (evita overload)
+        if (_cpuRealtimeCache.valor != null && (agora - _cpuRealtimeCache.ts) < 1500) {
+            return res.json({ cpu: _cpuRealtimeCache.valor, ts: _cpuRealtimeCache.ts, fonte: 'cache' });
+        }
+        const hostmetrics = require('./monitor/hostmetrics');
+        const cpu = await hostmetrics.coletarCpuApenas();
+        if (cpu != null) {
+            _cpuRealtimeCache = { valor: cpu, ts: Date.now() };
+            res.json({ cpu, ts: _cpuRealtimeCache.ts, fonte: 'realtime' });
+        } else {
+            // Fallback: retorna a última coleta completa
+            const m = monitor.obterMetricasLocais();
+            res.json({ cpu: m && m.cpu ? m.cpu.usoPct : null, ts: m ? new Date(m.quando).getTime() : 0, fonte: 'fallback' });
+        }
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/monitor/host/:ip', (req, res) => {
     try { res.json(monitor.obterDetalheHost(decodeURIComponent(req.params.ip))); }
     catch (e) { res.status(500).json({ error: e.message }); }
