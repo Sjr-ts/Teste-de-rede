@@ -165,6 +165,448 @@ function monAtualizarKpiGpu(gpu, nome, ts) {
     }
 }
 
+// Aplica innerHTML apenas quando o conteudo realmente mudou (evita reflow/flicker)
+function monSetHtmlSeMudou(el, html) {
+    if (el._lastHtml === html) return false;
+    el._lastHtml = html;
+    el.innerHTML = html;
+    return true;
+}
+
+// ==================== AGREGACAO DE RENDER (anti-travamento) ====================
+let _monDirty = false;
+let _monProblemas = [];
+let _monProblemasInfo = null;
+let _monProblemasTs = 0;
+let _monFalhaNotifTs = {};
+let _monArmKPIsTs = 0;
+
+function monRenderTudo(d) {
+    try { monRenderKPIs(d); } catch (e) { console.error('[mon] KPIs:', e); }
+    try { monRenderFiltroSetores(d); } catch (e) {}
+    try { monRenderTabela(d); } catch (e) {}
+    try { monRenderAlertas(d); } catch (e) {}
+    try { monRenderIncidentes(d); } catch (e) {}
+    try { monRenderIndisponiveis(d); } catch (e) {}
+    try { monRenderDashboardWidget(); } catch (e) {}
+    try { monRenderZabbixProblemas(); } catch (e) {}
+}
+
+// Notificacoes de falha com throttle (1x a cada 10 min por host/contagem)
+function monNotificarFalhas(d) {
+    const falhas = (d && d.linhas || []).filter(function (l) { return (l.falhasConsecutivas || 0) > 2 || l.estado === 'SEM_RESPOSTA'; });
+    const agora = Date.now();
+    for (const f of falhas) {
+        const key = (f.ip || '?') + ':' + (f.falhasConsecutivas || 0) + ':' + (f.estado || '');
+        if (_monFalhaNotifTs[key] && (agora - _monFalhaNotifTs[key]) < 10 * 60 * 1000) continue;
+        _monFalhaNotifTs[key] = agora;
+        if (typeof showFailureNotification === 'function') {
+            const alvo = f.nome || f.ip || 'host';
+            const detalhe = f.estado === 'SEM_RESPOSTA'
+                ? 'Host nao responde a ping. Verifique se esta ligado, o cabo/portas do switch e o firewall (regra ICMP).'
+                : (f.falhasConsecutivas || 0) + ' falha(s) consecutiva(s). Verifique cabos, energia e o agente de monitoramento.';
+            showFailureNotification('Falha de rede: ' + alvo, detalhe);
+        }
+    }
+}
+
+// ==================== DASHBOARD (widget no Painel) ====================
+function monRenderDashboardWidget() {
+    const onEl = document.getElementById('dshMonOnline');
+    if (!onEl) return;
+    const d = _monDados;
+    const probEl = document.getElementById('dshMonProblemas');
+    const pctEl = document.getElementById('dshMonPct');
+    const barEl = document.getElementById('dshMonBar');
+    const ultEl = document.getElementById('dshMonUltima');
+    if (!d || !d.resumo) { if (ultEl) ultEl.textContent = 'Aguardando primeira coleta...'; return; }
+    const r = d.resumo;
+    const total = r.totalAlvos || 0;
+    const acess = r.acessiveis || 0;
+    onEl.textContent = acess + '/' + total;
+    const pct = total > 0 ? Math.round((acess / total) * 100) : 0;
+    if (pctEl) pctEl.textContent = pct + '%';
+    if (barEl) { barEl.style.width = pct + '%'; barEl.style.background = pct >= 90 ? 'var(--green)' : pct >= 70 ? 'var(--yellow)' : 'var(--red)'; }
+    if (!_monProblemasInfo) { monRenderZabbixProblemas(); }
+    if (probEl) {
+        const info = _monProblemasInfo;
+        const n = info && typeof info.total === 'number' ? info.total : null;
+        probEl.textContent = n == null ? '—' : String(n);
+        probEl.style.color = (n || 0) > 0 ? 'var(--yellow)' : 'var(--green)';
+        probEl.title = (info && info.criticos ? info.criticos + ' critico(s)' : 'sem criticos');
+    }
+    if (ultEl) ultEl.textContent = 'Ultima coleta: ' + (r.coletadoEm ? new Date(r.coletadoEm).toLocaleString('pt-BR') : '—');
+}
+
+// Escapa valor para embutir em handler inline JS entre aspas simples
+function monJsAttr(s) {
+    return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/</g, '\\x3C').replace(/>/g, '\\x3E');
+}
+
+// ==================== PROBLEMAS ZABBIX (painel integrado) ====================
+const MON_SEV_INFO = {
+    '5': { label: 'Desastre', cor: '#ff4757', bg: 'rgba(255,71,87,0.14)' },
+    '4': { label: 'Alto', cor: '#ff6b81', bg: 'rgba(255,107,129,0.12)' },
+    '3': { label: 'Medio', cor: '#ffa502', bg: 'rgba(255,165,2,0.12)' },
+    '2': { label: 'Aviso', cor: '#ffe600', bg: 'rgba(255,230,0,0.10)' },
+    '1': { label: 'Informacao', cor: '#00d4ff', bg: 'rgba(0,212,255,0.10)' },
+    '0': { label: 'N/D', cor: '#8892a8', bg: 'rgba(136,146,168,0.12)' }
+};
+
+// Diagnostico/contorno por padrao do trigger (baseado na doc do Zabbix)
+function monConselhoFalha(trigger) {
+    const t = (trigger || '').toLowerCase();
+    if (t.indexOf('googleupdater') >= 0 || t.indexOf('googleupdate') >= 0) {
+        return {
+            causa: 'Servico de atualizacao do Google (GoogleUpdaterService/GoogleUpdaterInternalService) parado em host Windows. O trigger do template "Windows services" detectou servico Windows em inicializacao Automatica que nao esta Running.',
+            contornoHtml: '<ol style="margin:6px 0 0 18px;"><li>Abra <code>services.msc</code> no host e verifique o servico: tente iniciar manualmente e confira dependencias e o tipo de inicializacao.</li><li>Reinstale/atualize o Google Chrome (ou Edge) — isso recria os servicos GoogleUpdater automaticamente.</li><li>Verifique se o antivirus, GPO ou o AppLocker bloquearam a inicializacao do servico; adicione excecao se necessario.</li><li>Se o servico estiver obsoleto para este host, remova-o com <code>sc.exe delete GoogleUpdaterService157.0.8089.0</code> (como Administrador) ou desabilite a checagem ajustando o trigger no Zabbix.</li><li>Se reincidir, abra chamados/O.S. e investigue com o Visualizador de Eventos (Aplicativo e Sistema) a falha na inicializacao.</li></ol>',
+            contornoTexto: '1) services.msc: iniciar o servico e verificar dependencias; 2) Reinstalar o Google Chrome para recriar o servico; 3) Verificar antivirus/GPO/AppLocker; 4) Se obsoleto, remover com sc.exe delete <servico> (admin); 5) Revisar Visualizador de Eventos e abrir O.S. se reincidir.',
+            notifica: 'Servico GoogleUpdater parado. Inicie em services.msc ou reinstale o Chrome; se for obsoleto, remova o servico.'
+        };
+    }
+    if (t.indexOf('is not running') >= 0 && t.indexOf('windows') >= 0) {
+        return {
+            causa: 'Servico Windows monitorado pelo Zabbix (template "Windows services") esta parado, embora configurado como Automatic.',
+            contornoHtml: '<ol style="margin:6px 0 0 18px;"><li>Identifique o servico exato no <code>services.msc</code> e tente inicia-lo manualmente.</li><li>Confira dependencias (aba Dependencias) e logs de eventos no Visualizador de Eventos.</li><li>Verifique se o executavel foi removido/movido ou bloqueado por antivirus.</li><li>Corrija a causa raiz; se for esperado, ajuste o trigger ou remova o servico da checagem.</li></ol>',
+            contornoTexto: '1) services.msc: iniciar servico e verificar dependencias; 2) Visualizador de Eventos para causa; 3) Antivirus/GPO; 4) Ajustar trigger se for esperado.',
+            notifica: 'Servico Windows parado. Inicie em services.msc e verifique dependencias/antivirus.'
+        };
+    }
+    if (t.indexOf('high icmp ping loss') >= 0) {
+        return {
+            causa: 'Perda de pacotes ICMP acima do limite configurado no trigger "ICMP Ping". Indica problema de rede fisica, enlace saturado ou host em sobrecarga.',
+            contornoHtml: '<ol style="margin:6px 0 0 18px;"><li>Teste continuo: <code>ping -t 192.168.0.x</code> e anote a perda.</li><li>Verifique cabo de rede, porta do switch, LED de link, Wi-Fi instavel ou duplex mismatch.</li><li>Verifique saturacao de link (trafego, broadcast storm) e altere a porta do switch.</li><li>Confira CPU do host (perda por sobrecarga) e dos switches/roteadores.</li></ol>',
+            contornoTexto: '1) ping continuo; 2) Cabo/porta de switch/LED/duplex; 3) Saturacao de link; 4) CPU do host e dos equipamentos de rede.',
+            notifica: 'Perda de pacotes ICMP alta. Verificar cabo/switch/saturacao de link.'
+        };
+    }
+    if (t.indexOf('unavailable by icmp ping') >= 0) {
+        return {
+            causa: 'Host nao responde a ping. Pode estar desligado, sem rede, com firewall bloqueando ICMP ou cabo desconectado.',
+            contornoHtml: '<ol style="margin:6px 0 0 18px;"><li>Confirme se o PC esta ligado (energia, nobreak, tela) e se a rede esta ok (IP/gateway/VLAN).</li><li>Verifique cabo e porta do switch; teste outra porta/cabo.</li><li>Verifique a regra de firewall permitindo ICMP (echo request/reply).</li><li>Se houve manutencao, registre no Zabbix (reconhecer) para nao poluir alertas.</li></ol>',
+            contornoTexto: '1) Host ligado?; 2) Cabo/porta/VLAN; 3) Firewall liberando ICMP; 4) Reconhecer no Zabbix se for manutencao.',
+            notifica: 'Host incontactable por ICMP. Verificar energia/rede/firewall.'
+        };
+    }
+    if (t.indexOf('high icmp ping response time') >= 0) {
+        return {
+            causa: 'Latencia ICMP acima do limite. Geralmente causada por rede congestionada, switch/porta com problema, cabo ruim ou host sobrecarregado.',
+            contornoHtml: '<ol style="margin:6px 0 0 18px;"><li>Meca latencia com <code>ping -t</code> e compare com outros hosts da mesma VLAN.</li><li>Teste outro cabo/porta; verifique erros CRC na porta do switch (<code>show interfaces</code>).</li><li>Verifique saturacao de link/broadcast e CPU do host.</li><li>Se persistente, isole o segmento de rede e troque o cabo/porta.</li></ol>',
+            contornoTexto: '1) ping -t comparativo; 2) Outro cabo/porta + erros CRC; 3) Saturacao/broadcast/CPU; 4) Isolar segmento de rede.',
+            notifica: 'Latencia ICMP alta. Verificar cabo/porta/saturacao.'
+        };
+    }
+    if (t.indexOf('not running') >= 0) {
+        return {
+            causa: 'Processo/servico monitorado pelo Zabbix nao esta Running (item "service state" do agente).',
+            contornoHtml: '<ol style="margin:6px 0 0 18px;"><li>Localize o servico (services.msc) ou processo citado no trigger e inicie-o.</li><li>Verifique logs de eventos e dependencias do servico.</li><li>Se reincidir, investigue causa raiz (crashes, conflitos, atualizacoes) e abra O.S. de analise.</li></ol>',
+            contornoTexto: '1) Iniciar o servico/processo citado; 2) Verificar eventos/dependencias; 3) Investigar recorrencia e abrir O.S.',
+            notifica: 'Servico/processo parado. Iniciar e investigar causa raiz.'
+        };
+    }
+    return {
+        causa: 'Problema detectado pelo Zabbix (problem.get). Analise a expressao do trigger e o item associado no host.',
+        contornoHtml: '<ol style="margin:6px 0 0 18px;"><li>Abra o problema no Zabbix (botao "Abrir no Zabbix") e veja o historico do item.</li><li>Identifique a causa raiz (servico, rede, espaco/disco, CPU/memoria).</li><li>Corrija e reconheca o problema no Zabbix para registrar o tratamento.</li><li>Se for falso positivo, ajuste o trigger ou remova a checagem.</li></ol>',
+        contornoTexto: '1) Ver historico do item no Zabbix; 2) Identificar causa raiz; 3) Corrigir e reconhecer; 4) Ajustar trigger se falso positivo.',
+        notifica: 'Problema detectado pelo Zabbix. Ver historico e reconhecer apos tratar.'
+    };
+}
+
+function monSevInfo(sev) { return MON_SEV_INFO[String(sev)] || MON_SEV_INFO['0']; }
+
+function monProblemaPorId(eventid) {
+    return (_monProblemas || []).find(function (p) { return p.eventid === String(eventid); }) || null;
+}
+
+async function monRenderZabbixProblemas(forcar) {
+    const el = document.getElementById('mon-zabbix-problemas');
+    const agora = Date.now();
+    if (!forcar && _monProblemasTs && (agora - _monProblemasTs) < 20000) { if (el) monRenderProblemasLista(el); return; }
+    try {
+        const r = await fetch('/api/zabbix/problemas');
+        const d = await r.json();
+        _monProblemasInfo = d || { conectado: false, erro: 'Resposta vazia', total: 0, problemas: [] };
+        _monProblemas = (_monProblemasInfo && _monProblemasInfo.problemas) || [];
+        _monProblemasTs = Date.now();
+    } catch (e) {
+        _monProblemasInfo = { conectado: false, erro: e.message, total: 0, criticos: 0, naoReconhecidos: 0, problemas: [] };
+        _monProblemas = [];
+    }
+    if (el) monRenderProblemasLista(el);
+    monRenderDashboardWidget();
+}
+
+function monRenderProblemasLista(el) {
+    const info = _monProblemasInfo || {};
+    const resumoEl = document.getElementById('mon-zabbix-problemas-resumo');
+    if (resumoEl) {
+        if (!info.conectado) resumoEl.innerHTML = '<span style="color:var(--red);"><i class="fas fa-plug-circle-xmark"></i> Zabbix desconectado</span>';
+        else resumoEl.innerHTML = '<b style="color:var(--text-primary);">' + (info.total || 0) + '</b> aberto(s) &middot; <b style="color:var(--red);">' + (info.criticos || 0) + '</b> critico(s) &middot; <b style="color:var(--yellow);">' + (info.naoReconhecidos || 0) + '</b> sem reconhecer';
+    }
+    if (!info.conectado) {
+        el.innerHTML = '<div style="padding:16px;"><p style="color:var(--red);font-size:13px;font-weight:600;"><i class="fas fa-plug-circle-xmark"></i> Nao foi possivel consultar o Zabbix.</p><p style="color:var(--text-muted);font-size:12px;margin-top:6px;">' + esc(info.erro || 'Erro desconhecido') + '</p><p style="color:var(--text-muted);font-size:11px;margin-top:8px;">Para restaurar: inicie o Docker Desktop e rode <code>docker compose -f docker-compose.zabbix.yml up -d</code>, depois clique em Atualizar.</p></div>';
+        return;
+    }
+    if (!_monProblemas.length) {
+        el.innerHTML = '<div style="padding:22px;text-align:center;"><i class="fas fa-circle-check" style="font-size:30px;color:var(--green);opacity:0.6;"></i><p style="margin:10px 0 0;color:var(--text-secondary);font-size:13px;">Nenhum problema aberto no Zabbix.</p><p style="color:var(--text-muted);font-size:11px;">Todos os triggers estao em estado OK.</p></div>';
+        return;
+    }
+    el.innerHTML = _monProblemas.map(monProblemaItemHtml).join('');
+}
+
+function monProblemaItemHtml(p) {
+    const sev = monSevInfo(p.severidade);
+    const inicio = p.inicio ? new Date(p.inicio).toLocaleString('pt-BR') : '—';
+    const conselho = monConselhoFalha(p.trigger);
+    const zabbixUrl = 'http://192.168.0.186:8081/zabbix.php?action=problem.view&hostids[]=' + encodeURIComponent(p.hostid || '');
+    const tags = (p.tags || []).slice(0, 6).map(function (t) {
+        return '<span class="badge badge-inativo" style="margin-right:4px;font-size:9px;">' + esc(t.tag || '') + (t.value ? '=' + esc(t.value) : '') + '</span>';
+    }).join('');
+    const ackBadge = p.reconhecido
+        ? '<span class="badge badge-ativo" title="Problema reconhecido no Zabbix"><i class="fas fa-check"></i> Reconhecido</span>'
+        : '<span class="badge badge-cancelada" title="Ainda nao reconhecido"><i class="fas fa-triangle-exclamation"></i> Nao reconhecido</span>';
+    const botaoAck = p.reconhecido
+        ? ''
+        : '<button class="btn btn-ghost btn-sm" style="justify-content:flex-start;" onclick="monAckProblema(\'' + monJsAttr(p.eventid) + '\')"><i class="fas fa-check-double" style="color:var(--green);"></i> Reconhecer</button>';
+    return '<div style="border:1px solid var(--border);border-left:4px solid ' + sev.cor + ';border-radius:12px;padding:12px 14px;margin-bottom:10px;background:' + sev.bg + ';">' +
+        '<div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;">' +
+            '<span style="display:inline-flex;align-items:center;gap:6px;background:' + sev.cor + ';color:#0b1020;font-size:10px;font-weight:800;letter-spacing:0.6px;text-transform:uppercase;border-radius:6px;padding:4px 9px;white-space:nowrap;margin-top:2px;">' + esc(sev.label) + '</span>' +
+            '<div style="flex:1;min-width:260px;">' +
+                '<b style="font-size:13px;color:var(--text-primary);line-height:1.4;display:block;">' + esc(p.trigger) + '</b>' +
+                '<div style="font-size:11px;color:var(--text-muted);margin-top:5px;display:flex;gap:14px;flex-wrap:wrap;">' +
+                    '<span><i class="fas fa-desktop"></i> ' + esc(p.host) + '</span>' +
+                    '<span><i class="fas fa-clock"></i> Desde ' + esc(inicio) + '</span>' +
+                    '<span><i class="fas fa-hourglass-half"></i> Ha <b style="color:var(--orange);">' + esc(p.duracaoTexto || '') + '</b></span>' +
+                    '<span><i class="fas fa-hashtag"></i> EventID ' + esc(p.eventid) + '</span>' +
+                '</div>' +
+                '<div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' + ackBadge + (tags ? '<span style="margin-left:4px;">' + tags + '</span>' : '') + '</div>' +
+                '<details style="margin-top:10px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:8px 12px;">' +
+                    '<summary style="cursor:pointer;font-size:11px;color:var(--cyan);font-weight:700;outline:none;"><i class="fas fa-stethoscope"></i> Diagnostico e como contornar</summary>' +
+                    '<div style="margin-top:8px;font-size:11px;color:var(--text-secondary);line-height:1.7;">' +
+                        '<p><b style="color:var(--text-primary);">Causa provavel:</b> ' + esc(conselho.causa) + '</p>' +
+                        '<p style="margin-top:6px;"><b style="color:var(--text-primary);">Como contornar:</b>' + conselho.contornoHtml + '</p>' +
+                        (p.opdata ? '<p style="margin-top:6px;"><b style="color:var(--text-primary);">Dados operacionais (opdata):</b> ' + esc(p.opdata) + '</p>' : '') +
+                        (p.mensagensAck ? '<p style="margin-top:6px;color:var(--text-muted);"><i class="fas fa-comment-dots"></i> ' + p.mensagensAck + ' mensagem(ns) de reconhecimento registrada(s).</p>' : '') +
+                    '</div>' +
+                '</details>' +
+            '</div>' +
+            '<div style="display:flex;flex-direction:column;gap:6px;min-width:180px;">' +
+                botaoAck +
+                '<button class="btn btn-ghost btn-sm" style="justify-content:flex-start;" onclick="monAbrirZabbixHost(\'' + monJsAttr(p.hostid || '') + '\')" title="Abrir problem view no Zabbix"><i class="fas fa-external-link-alt" style="color:var(--cyan);"></i> Abrir no Zabbix</button>' +
+                '<button class="btn btn-ghost btn-sm" style="justify-content:flex-start;" onclick="monAbrirOSFalha(\'' + monJsAttr(p.eventid) + '\')" title="Criar Ordem de Servico a partir desta falha"><i class="fas fa-clipboard-list" style="color:var(--purple);"></i> Abrir O.S.</button>' +
+                '<button class="btn btn-ghost btn-sm" style="justify-content:flex-start;" onclick="monVerInventario(\'' + monJsAttr(p.hostTecnico || p.host || '') + '\')" title="Filtrar inventario por este host"><i class="fas fa-desktop" style="color:var(--green);"></i> Localizar no Inventario</button>' +
+            '</div>' +
+        '</div>' +
+    '</div>';
+}
+
+async function monAckProblema(eventid) {
+    const p = monProblemaPorId(eventid);
+    if (!p) { if (typeof showToast === 'function') showToast('Problema nao encontrado na lista local.', 'error'); return; }
+    const msg = prompt('Mensagem de reconhecimento (sera registrada no Zabbix):', 'Em analise pelo time de TI — ' + new Date().toLocaleString('pt-BR'));
+    if (msg === null) return; // usuario cancelou
+    try {
+        const r = await fetch('/api/zabbix/problemas/ack', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ eventid: p.eventid, message: msg || 'Reconhecido via Inventario TI' })
+        });
+        const d = await r.json();
+        if (!r.ok || d.ok === false) throw new Error((d && d.error) || ('HTTP ' + r.status));
+        if (typeof showToast === 'function') showToast('Problema reconhecido no Zabbix.', 'success');
+        if (typeof pushLog === 'function') pushLog('ALTERACAO', 'MONITORAMENTO', p.eventid, 'Zabbix ACK: ' + p.trigger + ' @ ' + p.host);
+        monRenderZabbixProblemas(true);
+    } catch (e) {
+        if (typeof showToast === 'function') showToast('Falha ao reconhecer: ' + e.message, 'error');
+    }
+}
+
+function monAbrirZabbixHost(hostid) {
+    const url = 'http://192.168.0.186:8081/zabbix.php?action=problem.view&hostids[]=' + encodeURIComponent(hostid || '');
+    window.open(url, '_blank', 'noopener');
+}
+
+function monAbrirOSFalha(eventid) {
+    const p = monProblemaPorId(eventid);
+    if (!p) { if (typeof showToast === 'function') showToast('Problema nao encontrado na lista local.', 'error'); return; }
+    const sev = parseInt(p.severidade || '0', 10) || 0;
+    const conselho = monConselhoFalha(p.trigger);
+    const titulo = ('[Zabbix] ' + (p.trigger || 'Falha')).slice(0, 150);
+    const descricao = 'Falha detectada pelo Zabbix e registrada pelo Inventario TI.\n\n' +
+        'Host: ' + p.host + '\n' +
+        'Trigger: ' + p.trigger + '\n' +
+        'Severidade: ' + (p.severidadeLabel || p.severidade) + '\n' +
+        'Inicio: ' + (p.inicio ? new Date(p.inicio).toLocaleString('pt-BR') : '?') + ' (ha ' + (p.duracaoTexto || '?') + ')\n' +
+        'EventID: ' + p.eventid + '\n\n' +
+        'Diagnostico: ' + conselho.causa + '\n\n' +
+        'Como contornar:\n' + conselho.contornoTexto;
+    if (typeof showSection === 'function') showSection('ordens-servico');
+    setTimeout(function () {
+        if (typeof showOrdemForm === 'function') {
+            showOrdemForm(null, { titulo: titulo, descricao: descricao, prioridade: sev >= 4 ? 'ALTA' : 'MEDIA', computadorNome: p.host });
+        } else if (typeof showToast === 'function') {
+            showToast('Formulario de O.S. indisponivel nesta pagina.', 'error');
+        }
+    }, 120);
+    if (typeof pushLog === 'function') pushLog('CRIACAO', 'ORDEM_SERVICO', null, 'O.S. aberta a partir de falha Zabbix: ' + p.trigger + ' @ ' + p.host);
+}
+
+function monVerInventario(termo) {
+    if (typeof showSection === 'function') showSection('computadores');
+    setTimeout(function () {
+        const b = document.getElementById('busca-input');
+        if (b) {
+            b.value = termo || '';
+            b.dispatchEvent(new Event('input', { bubbles: true }));
+            if (typeof showToast === 'function') showToast('Inventario filtrado por: ' + (termo || ''), 'success');
+        }
+    }, 120);
+}
+
+// Relatorio profissional de falhas (nova aba, pronto para impressao/PDF)
+async function monGerarRelatorioFalhas() {
+    if (!_monProblemasTs || (Date.now() - _monProblemasTs) > 60000) {
+        try { await monRenderZabbixProblemas(true); } catch (e) {}
+    }
+    const info = _monProblemasInfo || {};
+    const problemas = (_monProblemas || []).slice();
+    // Ordenar por severidade (desc) e depois por data (desc)
+    const sevRank = { '5': 5, '4': 4, '3': 3, '2': 2, '1': 1, '0': 0 };
+    problemas.sort(function (a, b) {
+        const d = (sevRank[b.severidade] || 0) - (sevRank[a.severidade] || 0);
+        if (d !== 0) return d;
+        return new Date(b.inicio || 0) - new Date(a.inicio || 0);
+    });
+    const w = window.open('', '_blank');
+    if (!w) { alert('Pop-up bloqueado. Permita pop-ups para este site.'); return; }
+    const agora = new Date();
+    const contagemSev = {};
+    for (const p of problemas) contagemSev[p.severidade] = (contagemSev[p.severidade] || 0) + 1;
+    const naoReconhecidos = problemas.filter(function (p) { return !p.reconhecido; }).length;
+    const hostsAfetados = {};
+    for (const p of problemas) hostsAfetados[p.host] = (hostsAfetados[p.host] || 0) + 1;
+    const maisAntigo = problemas.reduce(function (min, p) { return (!min || new Date(p.inicio) < new Date(min.inicio)) ? p : min; }, null);
+    const hostTop = Object.keys(hostsAfetados).sort(function (a, b) { return hostsAfetados[b] - hostsAfetados[a]; })[0] || '—';
+
+    const linhasSev = ['5', '4', '3', '2', '1', '0'].map(function (s) {
+        const infoSev = MON_SEV_INFO[s];
+        return '<tr><td><span style="display:inline-block;min-width:96px;text-align:center;background:' + infoSev.cor + ';color:#0b1020;font-weight:800;font-size:11px;border-radius:4px;padding:3px 8px;">' + esc(infoSev.label.toUpperCase()) + '</span></td><td style="text-align:center;font-weight:700;">' + (contagemSev[s] || 0) + '</td></tr>';
+    }).join('');
+
+    const blocos = problemas.map(function (p, i) {
+        const sev = monSevInfo(p.severidade);
+        const conselho = monConselhoFalha(p.trigger);
+        const inicio = p.inicio ? new Date(p.inicio).toLocaleString('pt-BR') : '—';
+        const tags = (p.tags || []).map(function (t) { return (t.tag || '') + (t.value ? '=' + t.value : ''); }).join(', ');
+        const zabbixUrl = 'http://192.168.0.186:8081/zabbix.php?action=problem.view&hostids[]=' + encodeURIComponent(p.hostid || '');
+        return '<section class="incident">' +
+            '<div class="incident-head" style="border-left:6px solid ' + sev.cor + ';">' +
+                '<div class="incident-num">' + String(i + 1).padStart(2, '0') + '</div>' +
+                '<div class="incident-title"><h3>' + esc(p.trigger) + '</h3>' +
+                    '<div class="incident-host"><i>&#9632;</i> ' + esc(p.host) + '</div>' +
+                '</div>' +
+                '<div class="incident-sev" style="background:' + sev.cor + ';">' + esc(sev.label.toUpperCase()) + '</div>' +
+            '</div>' +
+            '<table class="kv"><tbody>' +
+                '<tr><th>Host</th><td>' + esc(p.host) + '</td></tr>' +
+                '<tr><th>Severidade</th><td>' + esc(p.severidadeLabel || sev.label) + '</td></tr>' +
+                '<tr><th>Inicio</th><td>' + esc(inicio) + '</td></tr>' +
+                '<tr><th>Duracao</th><td>' + esc(p.duracaoTexto || '—') + '</td></tr>' +
+                '<tr><th>Reconhecido</th><td>' + (p.reconhecido ? 'Sim' : '<b style="color:#c0392b;">Nao</b>') + '</td></tr>' +
+                '<tr><th>EventID</th><td>' + esc(p.eventid) + '</td></tr>' +
+                (tags ? '<tr><th>Tags</th><td>' + esc(tags) + '</td></tr>' : '') +
+                (p.opdata ? '<tr><th>Dados operacionais</th><td>' + esc(p.opdata) + '</td></tr>' : '') +
+            '</tbody></table>' +
+            '<div class="block"><h4>Diagnostico</h4><p>' + esc(conselho.causa) + '</p></div>' +
+            '<div class="block"><h4>Plano de acao recomendado</h4>' + conselho.contornoHtml + '</div>' +
+            '<div class="block"><h4>Verificacao no Zabbix</h4><p><a class="zlink" href="' + zabbixUrl + '" target="_blank" rel="noopener">Abrir problem view deste host no Zabbix &rarr;</a></p></div>' +
+        '</section>';
+    }).join('');
+
+    const resumoExec = problemas.length === 0
+        ? '<p>Nao ha problemas abertos registrados no Zabbix. O ambiente encontra-se operacional neste momento.</p>'
+        : '<ul><li><b>' + problemas.length + '</b> problema(s) aberto(s) no total, sendo <b>' + (info.criticos || 0) + '</b> de severidade alta/desastre.</li>' +
+          '<li><b>' + naoReconhecidos + '</b> problema(s) ainda nao reconhecido(s) pelos operadores.</li>' +
+          '<li>Host mais afetado: <b>' + esc(hostTop) + '</b> (' + (hostsAfetados[hostTop] || 0) + ' problema(s)).</li>' +
+          (maisAntigo ? '<li>Ocorrencia mais antiga: <b>' + esc(maisAntigo.trigger) + '</b> (desde ' + new Date(maisAntigo.inicio).toLocaleString('pt-BR') + ', ha ' + esc(maisAntigo.duracaoTexto || '') + ').</li>' : '') +
+          '</ul>';
+
+    const doc = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">' +
+        '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+        '<title>Relatorio de Falhas Zabbix — Inventario TI</title>' +
+        '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
+        '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">' +
+        '<style>' +
+        ':root{--navy:#0d1b2a;--teal:#0e8a7d;--teal2:#12b5a5;--ink:#1c2b3a;--mut:#5b6b7d;--line:#dfe6ee;--red:#c0392b;--amber:#b45309;}' +
+        '*{margin:0;padding:0;box-sizing:border-box;}' +
+        'body{font-family:Inter,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);background:#eef2f7;font-size:13px;line-height:1.55;}' +
+        '.page{max-width:1000px;margin:0 auto;background:#fff;box-shadow:0 10px 40px rgba(13,27,42,.18);}' +
+        '.cover{background:linear-gradient(135deg,var(--navy) 0%,#13293f 60%,#0e3a45 100%);color:#fff;padding:44px 48px 36px;}' +
+        '.brand{display:flex;align-items:center;gap:14px;border-bottom:1px solid rgba(255,255,255,.18);padding-bottom:18px;margin-bottom:26px;}' +
+        '.brand-mark{width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,var(--teal2),#0e8a7d);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px;letter-spacing:1px;color:#04241f;}' +
+        '.brand small{display:block;font-size:10px;letter-spacing:2.4px;text-transform:uppercase;color:#9fd8cf;}' +
+        '.brand b{font-size:15px;letter-spacing:.4px;}' +
+        'h1{font-size:30px;font-weight:800;letter-spacing:-.5px;line-height:1.2;}' +
+        '.subtitle{margin-top:8px;color:#bcd3e0;font-size:14px;font-weight:500;}' +
+        '.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-top:26px;border-top:1px solid rgba(255,255,255,.18);padding-top:20px;}' +
+        '.meta div small{display:block;font-size:9px;letter-spacing:1.6px;text-transform:uppercase;color:#8fb8c9;margin-bottom:4px;}' +
+        '.meta div span{font-size:13px;font-weight:600;color:#fff;}' +
+        '.content{padding:36px 48px 48px;}' +
+        'h2{font-size:17px;text-transform:uppercase;letter-spacing:1.6px;color:var(--navy);border-bottom:2px solid var(--teal2);display:inline-block;padding-bottom:6px;margin:30px 0 14px;}' +
+        '.summary{background:#f3f7fb;border:1px solid var(--line);border-left:4px solid var(--teal);border-radius:10px;padding:16px 18px;}' +
+        '.summary ul{margin-left:18px;}.summary li{margin:6px 0;}' +
+        'table.sev{width:100%;border-collapse:collapse;margin-top:6px;}' +
+        'table.sev th,table.sev td{border:1px solid var(--line);padding:8px 10px;font-size:12px;text-align:left;}' +
+        'table.sev th{background:#f3f7fb;text-transform:uppercase;font-size:10px;letter-spacing:1.2px;color:var(--mut);}' +
+        '.incident{break-inside:avoid;page-break-inside:avoid;border:1px solid var(--line);border-radius:12px;margin:16px 0;overflow:hidden;}' +
+        '.incident-head{display:flex;align-items:center;gap:16px;background:#f8fafc;padding:14px 16px;}' +
+        '.incident-num{font-family:JetBrains Mono,monospace;font-size:26px;font-weight:600;color:#c3cedb;}' +
+        '.incident-title{flex:1;}.incident-title h3{font-size:15px;color:var(--navy);line-height:1.35;}' +
+        '.incident-host{font-size:11px;color:var(--mut);margin-top:4px;font-family:JetBrains Mono,monospace;}' +
+        '.incident-sev{color:#0b1020;font-size:10px;font-weight:800;letter-spacing:1.4px;border-radius:5px;padding:5px 10px;white-space:nowrap;}' +
+        'table.kv{width:100%;border-collapse:collapse;}table.kv th,table.kv td{border-bottom:1px solid #eef1f6;padding:6px 16px;font-size:11px;text-align:left;vertical-align:top;}' +
+        'table.kv th{width:170px;color:var(--mut);text-transform:uppercase;font-size:9px;letter-spacing:1.1px;}' +
+        '.block{padding:12px 16px;border-top:1px solid #eef1f6;}' +
+        '.block h4{font-size:10px;letter-spacing:1.6px;text-transform:uppercase;color:var(--teal);margin-bottom:6px;}' +
+        '.block p{color:#2c3e50;}.block ol{margin-left:18px;}.block li{margin:4px 0;}' +
+        '.zlink{color:var(--teal);font-weight:700;text-decoration:none;}.zlink:hover{text-decoration:underline;}' +
+        '.footer{border-top:1px solid var(--line);padding:18px 48px;display:flex;justify-content:space-between;gap:20px;color:var(--mut);font-size:10px;}' +
+        '.actions{display:flex;gap:10px;padding:0 48px 0;background:#fff;}' +
+        '.btn{display:inline-flex;align-items:center;gap:8px;border:none;border-radius:8px;padding:11px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}' +
+        '.btn-print{background:var(--teal);color:#fff;}.btn-close{background:#e5eaf1;color:var(--ink);}' +
+        'code{background:#eef1f6;border-radius:4px;padding:1px 5px;font-family:JetBrains Mono,monospace;font-size:11px;}' +
+        '@media print{body{background:#fff;font-size:11px;}.page{box-shadow:none;max-width:none;}.actions{display:none;}.cover{background:var(--navy) !important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}.incident{margin:10px 0;}h2{margin-top:18px;}.footer{padding:12px 0;}}' +
+        '@page{size:A4;margin:14mm 12mm;}' +
+        '</style></head><body><div class="page">' +
+        '<header class="cover">' +
+            '<div class="brand"><div class="brand-mark">IT</div><div><small>Inventario TI</small><b>Suporte Tecnico e Infraestrutura</b></div></div>' +
+            '<h1>Relatorio de Falhas e Diagnostico</h1>' +
+            '<p class="subtitle">Incidentes abertos no Zabbix &mdash; analise tecnica, causa provavel e plano de acao</p>' +
+            '<div class="meta">' +
+                '<div><small>Gerado em</small><span>' + esc(agora.toLocaleString('pt-BR')) + '</span></div>' +
+                '<div><small>Origem</small><span>Zabbix 7.0 &mdash; problem.view</span></div>' +
+                '<div><small>Total de incidentes</small><span>' + problemas.length + '</span></div>' +
+                '<div><small>Criticos (Alto/Desastre)</small><span>' + (info.criticos || 0) + '</span></div>' +
+                '<div><small>Nao reconhecidos</small><span>' + naoReconhecidos + '</span></div>' +
+                '<div><small>Host mais afetado</small><span>' + esc(hostTop) + '</span></div>' +
+            '</div>' +
+        '</header>' +
+        '<div class="actions" style="padding-top:18px;">' +
+            '<button class="btn btn-print" onclick="window.print()">Imprimir / Salvar PDF</button>' +
+            '<button class="btn btn-close" onclick="window.close()">Fechar</button>' +
+        '</div>' +
+        '<main class="content">' +
+            '<h2>Sumario Executivo</h2><div class="summary">' + resumoExec + '</div>' +
+            '<h2>Distribuicao por Severidade</h2><table class="sev"><thead><tr><th>Severidade</th><th>Incidentes</th></tr></thead><tbody>' + linhasSev + '</tbody></table>' +
+            '<h2>Incidentes Detalhados</h2>' + (blocos || '<p>Nenhum incidente aberto.</p>') +
+        '</main>' +
+        '<footer class="footer"><div><b>Inventario TI</b> &mdash; Relatorio de Falhas e Diagnostico</div><div>Documento gerado automaticamente em ' + esc(agora.toLocaleString('pt-BR')) + ' &middot; Confidencial &mdash; uso interno</div></footer>' +
+        '</div></body></html>';
+    w.document.write(doc);
+    w.document.close();
+    if (typeof pushLog === 'function') pushLog('EXPORTACAO', 'MONITORAMENTO', null, 'Relatorio de falhas Zabbix gerado (' + problemas.length + ' incidente(s))');
+}
+
 // Conecta ao stream SSE para atualizacao em tempo real
 function monConectarSSE() {
     if (typeof EventSource === 'undefined') return;
@@ -176,23 +618,14 @@ function monConectarSSE() {
         _monEventSource.addEventListener('painel', function(e) {
             try {
                 _monDados = JSON.parse(e.data);
-                _monArmKPIs = null;
-                // Notifica se houver falhas consecutivas (para informar o usuario)
-                try {
-                    var falhas = (_monDados && _monDados.linhas || []).filter(function(l){ return (l.falhasConsecutivas || 0) > 2 || l.estado === 'SEM_RESPOSTA'; });
-                    if (falhas.length > 0) {
-                        var nome = falhas[0].nome || falhas[0].ip;
-                        if (typeof showFailureNotification === 'function') {
-                            showFailureNotification('Falha detectada: ' + nome, falhas[0].falhasConsecutivas + ' falhas consecutivas — verifique o cabos/rede e veja detalhes no historico.');
-                        }
-                    }
-                } catch (n) {}
-                monRenderKPIs(_monDados);
-                monRenderFiltroSetores(_monDados);
-                monRenderTabela(_monDados);
-                monRenderAlertas(_monDados);
-                monRenderIncidentes(_monDados);
-                monRenderIndisponiveis(_monDados);
+                // Se a secao de monitoramento esta oculta, apenas guarda dados
+                // (renderiza quando o usuario abrir a aba). Evita reflow inutil.
+                const secao = document.getElementById('monitoramento');
+                const oculta = secao && secao.classList.contains('hidden');
+                // Notificar falhas novas apenas 1x a cada 10 min por host+contagem
+                try { monNotificarFalhas(_monDados); } catch (n) {}
+                if (oculta) { _monDirty = true; monRenderDashboardWidget(); return; }
+                monRenderTudo(_monDados);
             } catch (err) {}
         });
 
@@ -202,13 +635,10 @@ function monConectarSSE() {
                 const mock = JSON.parse(e.data);
                 if (_monFonteMock && mock && mock.linhas && mock.linhas.length) {
                     _monDados = mock;
-                    _monArmKPIs = null;
-                    monRenderKPIs(mock);
-                    monRenderFiltroSetores(mock);
-                    monRenderTabela(mock);
-                    monRenderAlertas(mock);
-                    monRenderIncidentes(mock);
-                    monRenderIndisponiveis(mock);
+                    // Respeita aba oculta: guarda e renderiza no proximo acesso
+                    const secao = document.getElementById('monitoramento');
+                    if (secao && secao.classList.contains('hidden')) { _monDirty = true; return; }
+                    monRenderTudo(mock);
                     console.log('[monitor] [MOCK] mock-painel atualizado com dados do inventario (', mock.linhas.length, ' PCs)');
                 }
             } catch (err) {
@@ -221,6 +651,8 @@ function monConectarSSE() {
             try {
                 const s = JSON.parse(e.data);
                 _monSistema = s;
+                const secao = document.getElementById('monitoramento');
+                if (secao && secao.classList.contains('hidden')) { _monDirty = true; return; }
                 monRenderSistema(s);
             } catch (err) {}
         });
@@ -269,6 +701,12 @@ if (typeof document !== 'undefined' && document.addEventListener) {
         window.monCarregarHistorico = monCarregarHistorico;
         window.monToggleKpiDetail = monToggleKpiDetail;
         window.monCloseKpiDetail = monCloseKpiDetail;
+        window.monRenderZabbixProblemas = monRenderZabbixProblemas;
+        window.monAckProblema = monAckProblema;
+        window.monAbrirZabbixHost = monAbrirZabbixHost;
+        window.monAbrirOSFalha = monAbrirOSFalha;
+        window.monVerInventario = monVerInventario;
+        window.monGerarRelatorioFalhas = monGerarRelatorioFalhas;
     });
 }
 
@@ -300,6 +738,7 @@ async function monAtualizar() {
         ]);
         _monZabbix = zabbix;
         _monSistema = sistema;
+        _monDirty = false;
         monRenderZabbixStatus(zabbix);
         monRenderSistema(sistema);
 
@@ -311,12 +750,7 @@ async function monAtualizar() {
             _monDados = painelReal;
         }
 
-        monRenderKPIs(_monDados);
-        monRenderFiltroSetores(_monDados);
-        monRenderTabela(_monDados);
-        monRenderAlertas(_monDados);
-        monRenderIncidentes(_monDados);
-        monRenderIndisponiveis(_monDados);
+        monRenderTudo(_monDados);
         monRenderZabbixHosts();
         monAtualizarArmazenamento();
     } catch (e) {
@@ -329,6 +763,7 @@ async function monExecutarCiclo() {
         const btn = document.querySelector('#monitoramento .toolbar-actions .btn-primary');
         if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando...'; }
         await fetch('/api/monitor/ciclo', { method: 'POST' });
+        if (typeof pushLog === 'function') pushLog('ALTERACAO', 'MONITORAMENTO', null, 'Verificacao manual de monitoramento executada');
         await monAtualizar();
         if (typeof showToast === 'function') showToast('Verificacao concluida.', 'success');
     } catch (e) {
@@ -344,28 +779,28 @@ function monRenderZabbixStatus(z) {
     const el = document.getElementById('mon-zabbix-status');
     if (!el) return;
     if (z && z.desabilitado) {
-        el.innerHTML = '<div class="glass-panel" style="border-left:3px solid var(--yellow);margin-bottom:0;">' +
+        monSetHtmlSeMudou(el, '<div class="glass-panel" style="border-left:3px solid var(--yellow);margin-bottom:0;">' +
             '<div style="padding:14px 18px;display:flex;align-items:center;gap:12px;">' +
             '<i class="fas fa-plug-circle-xmark" style="color:var(--yellow);font-size:18px;"></i>' +
             '<div><b style="font-size:13px;color:var(--text-primary);">Zabbix: desabilitado</b>' +
             '<p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">' + z.mensagem + '</p></div>' +
-            '</div></div>';
+            '</div></div>');
         return;
     }
     if (!z || z.erro) {
-        el.innerHTML = '<div class="glass-panel" style="border-left:3px solid var(--red);margin-bottom:0;">' +
+        monSetHtmlSeMudou(el, '<div class="glass-panel" style="border-left:3px solid var(--red);margin-bottom:0;">' +
             '<div style="padding:14px 18px;display:flex;align-items:center;gap:12px;">' +
             '<i class="fas fa-plug-circle-xmark" style="color:var(--red);font-size:18px;"></i>' +
             '<div><b style="font-size:13px;color:var(--text-primary);">Zabbix: desconectado</b>' +
             '<p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">' + (z && z.erro ? z.erro : 'Configure monitor/zabbix-config.json e reinicie o servidor.') + '</p>' +
             '<p style="font-size:10px;color:var(--text-muted);margin-top:4px;"><i class="fas fa-info-circle"></i> Para restaurar: inicie Docker Desktop e rode <code>docker compose -f docker-compose.zabbix.yml up -d</code></p></div>' +
-            '</div></div>';
+            '</div></div>');
         return;
     }
     const zx = z.zabbix || {};
     const pr = z.problemas || {};
     const ok = z.conectado;
-    el.innerHTML = '<div class="glass-panel" style="border-left:3px solid ' + (ok ? 'var(--green)' : 'var(--red)') + ';margin-bottom:0;">' +
+    monSetHtmlSeMudou(el, '<div class="glass-panel" style="border-left:3px solid ' + (ok ? 'var(--green)' : 'var(--red)') + ';margin-bottom:0;">' +
         '<div style="padding:14px 18px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;">' +
         '<div style="display:flex;align-items:center;gap:10px;">' +
         '<i class="fas fa-' + (ok ? 'circle-check' : 'circle-xmark') + '" style="color:var(--' + (ok ? 'green' : 'red') + ');font-size:18px;"></i>' +
@@ -375,22 +810,71 @@ function monRenderZabbixStatus(z) {
             '<span style="font-size:11px;color:var(--text-muted);">Problemas:</span>' +
             '<span class="badge badge-' + (pr.criticos ? 'cancelada' : 'pendente') + '">' + pr.total + ' (' + (pr.criticos || 0) + ' criticos)</span>' +
             '</div>' : '') +
-        '</div></div>';
+        '</div></div>');
 }
 
-// ==================== RENDER: SISTEMA LOCAL ====================
+// ==================== RENDER: SISTEMA LOCAL (in-place; sem innerHTML total) ====================
+// O painel e desenhado uma vez (skeleton) e depois apenas textos/cores sao
+// atualizados — elimina reflow e o "travamento" a cada ciclo SSE de 3s.
+const MON_SYS_COR = { green: 'var(--green)', yellow: 'var(--yellow)', red: 'var(--red)', cyan: 'var(--cyan)', purple: 'var(--purple)', magenta: 'var(--magenta)', muted: 'var(--text-muted)' };
+
+function monSistemaSkeleton() {
+    const item = function (id, icon, label) {
+        return '<div id="mon-sys-' + id + '" style="padding:10px 12px;background:rgba(255,255,255,0.03);border-radius:10px;border-left:3px solid var(--text-muted);">' +
+            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
+            '<i class="fas ' + icon + ' mon-sys-icon" style="color:var(--text-muted);font-size:11px;"></i>' +
+            '<span id="mon-sys-' + id + '-l" style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">' + label + '</span>' +
+            '</div>' +
+            '<div id="mon-sys-' + id + '-v" style="font-size:20px;font-weight:700;color:var(--text-primary);">—</div>' +
+            '<div id="mon-sys-' + id + '-s" style="font-size:10px;color:var(--text-muted);margin-top:2px;"></div>' +
+            '</div>';
+    };
+    return '<div class="glass-panel" style="border-left:3px solid var(--cyan);margin-bottom:0;">' +
+        '<div style="padding:16px 20px;">' +
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">' +
+        '<i class="fas fa-microchip" style="color:var(--cyan);font-size:16px;"></i>' +
+        '<b id="mon-sys-titulo" style="font-size:13px;color:var(--text-primary);">PC Local</b>' +
+        '<span id="mon-sys-quando" style="font-size:10px;color:var(--text-muted);margin-left:auto;"></span>' +
+        '<button class="btn btn-ghost btn-sm" style="margin-left:8px;" onclick="monAbrirRelatorioPC()" title="Relatorio detalhado em nova aba"><i class="fas fa-file-lines"></i> Relatorio</button>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">' +
+        item('cpu', 'fa-microchip', 'CPU') +
+        item('gpu', 'fa-microchip', 'GPU') +
+        item('ram', 'fa-memory', 'RAM') +
+        item('disco', 'fa-hard-drive', 'Disco') +
+        item('uptime', 'fa-clock', 'Uptime') +
+        item('rede', 'fa-network-wired', 'Rede') +
+        item('sistema', 'fa-server', 'Sistema') +
+        '</div></div></div>';
+}
+
+function monSetSysItem(id, label, valor, sub, cor) {
+    const wrap = document.getElementById('mon-sys-' + id);
+    if (!wrap) return;
+    const c = MON_SYS_COR[cor] || 'var(--text-primary)';
+    wrap.style.borderLeftColor = c;
+    const icon = wrap.querySelector('.mon-sys-icon'); if (icon) icon.style.color = c;
+    if (label != null) { const l = document.getElementById('mon-sys-' + id + '-l'); if (l && l.textContent !== label) l.textContent = label; }
+    const v = document.getElementById('mon-sys-' + id + '-v');
+    if (v) { const t = valor == null ? '—' : String(valor); if (v.textContent !== t) v.textContent = t; v.style.color = c; }
+    const sb = document.getElementById('mon-sys-' + id + '-s');
+    if (sb) { const t = sub || ''; if (sb.textContent !== t) sb.textContent = t; }
+}
+
 function monRenderSistema(s) {
     const el = document.getElementById('mon-sistema');
     if (!el) return;
     if (!s || s.error) {
-        el.innerHTML = '<div class="glass-panel" style="border-left:3px solid var(--yellow);margin-bottom:0;">' +
+        el._skeleton = 0;
+        monSetHtmlSeMudou(el, '<div class="glass-panel" style="border-left:3px solid var(--yellow);margin-bottom:0;">' +
             '<div style="padding:14px 18px;display:flex;align-items:center;gap:12px;">' +
             '<i class="fas fa-microchip" style="color:var(--yellow);font-size:18px;"></i>' +
             '<div><b style="font-size:13px;color:var(--text-primary);">Metricas Locais</b>' +
-            '<p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">' + (s && s.error ? s.error : 'Indisponivel') + '</p></div>' +
-            '</div></div>';
+            '<p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">' + (s && s.error ? esc(s.error) : 'Indisponivel') + '</p></div>' +
+            '</div></div>');
         return;
     }
+    if (el._skeleton !== 1) { el.innerHTML = monSistemaSkeleton(); el._skeleton = 1; }
     const cpu = s.cpu || {};
     const mem = s.memoria || {};
     const up = s.uptime || {};
@@ -409,23 +893,27 @@ function monRenderSistema(s) {
         gpuCor = g0.usoPct != null ? (g0.usoPct > 80 ? 'red' : g0.usoPct > 50 ? 'yellow' : 'green') : 'muted';
     }
 
-    el.innerHTML = '<div class="glass-panel" style="border-left:3px solid var(--cyan);margin-bottom:0;">' +
-        '<div style="padding:16px 20px;">' +
-        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">' +
-        '<i class="fas fa-microchip" style="color:var(--cyan);font-size:16px;"></i>' +
-        '<b style="font-size:13px;color:var(--text-primary);">PC Local — ' + esc(s.hostname || '?') + ' (' + esc((s.rede && s.rede[0] && s.rede[0].ip) || '?') + ')</b>' +
-        '<span style="font-size:10px;color:var(--text-muted);margin-left:auto;">Coletado: ' + new Date(s.quando).toLocaleString('pt-BR') + '</span>' +
-        '<button class="btn btn-ghost btn-sm" style="margin-left:8px;" onclick="monAbrirRelatorioPC()" title="Relatorio detalhado em nova aba"><i class="fas fa-file-lines"></i> Relatorio</button>' +
-        '</div>' +
-        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">' +
-        monSistemaItem('fa-microchip', 'CPU', cpu.usoPct != null ? cpu.usoPct + '%' : 'Aguardando...', cpu.modelo ? cpu.nucleos + ' nucleos · ' + cpu.modelo : '', cpu.usoPct != null ? (cpu.usoPct > 80 ? 'red' : cpu.usoPct > 50 ? 'yellow' : 'green') : 'muted') +
-        monSistemaItem('fa-microchip', 'GPU', gpuValor, gpuSub, gpuCor) +
-        monSistemaItem('fa-memory', 'RAM', mem.usoPct != null ? mem.usoPct + '%' : '?', mem.usoPct != null ? mem.usadoGb + '/' + mem.totalGb + ' GB (livre: ' + mem.livreGb + ' GB)' : '', mem.usoPct != null ? (mem.usoPct > 80 ? 'red' : mem.usoPct > 50 ? 'yellow' : 'green') : 'muted') +
-        monSistemaItem('fa-hard-drive', 'Disco ' + (disco ? disco.letra : '') + ' (espaço)', disco ? disco.usoPct + '%' : 'Indisp.', disco ? disco.usadoGb + '/' + disco.totalGb + ' GB (livre: ' + disco.livreGb + ' GB)' : '', disco ? (disco.usoPct > 90 ? 'red' : disco.usoPct > 70 ? 'yellow' : 'green') : 'muted') +
-        monSistemaItem('fa-clock', 'Uptime', up.uptimeHumano || '?', 'Boot: ' + (up.bootTime ? new Date(up.bootTime).toLocaleString('pt-BR') : '?') + (up.reiniciadoDesdeUltimaColeta ? ' · REINICIADO!' : ''), up.reiniciadoDesdeUltimaColeta ? 'red' : 'cyan') +
-        monSistemaItem('fa-network-wired', 'Rede', rede.ip || '?', rede.nome ? rede.nome + ' · MAC: ' + rede.mac : '', 'purple') +
-        monSistemaItem('fa-server', 'Sistema', (info.plataforma || '?') + ' ' + (info.arquitetura || ''), 'Kernel ' + (info.release || '?') + ' · Node ' + (info.node || '?'), 'magenta') +
-        '</div></div></div>';
+    const titulo = document.getElementById('mon-sys-titulo');
+    if (titulo) titulo.textContent = 'PC Local — ' + (s.hostname || '?') + ' (' + ((s.rede && s.rede[0] && s.rede[0].ip) || '?') + ')';
+    const quando = document.getElementById('mon-sys-quando');
+    if (quando) quando.textContent = 'Coletado: ' + new Date(s.quando).toLocaleString('pt-BR');
+
+    monSetSysItem('cpu', 'CPU', cpu.usoPct != null ? cpu.usoPct + '%' : 'Aguardando...',
+        cpu.modelo ? cpu.nucleos + ' nucleos · ' + cpu.modelo : '',
+        cpu.usoPct != null ? (cpu.usoPct > 80 ? 'red' : cpu.usoPct > 50 ? 'yellow' : 'green') : 'muted');
+    monSetSysItem('gpu', 'GPU', gpuValor, gpuSub, gpuCor);
+    monSetSysItem('ram', 'RAM', mem.usoPct != null ? mem.usoPct + '%' : '?',
+        mem.usoPct != null ? mem.usadoGb + '/' + mem.totalGb + ' GB (livre: ' + mem.livreGb + ' GB)' : '',
+        mem.usoPct != null ? (mem.usoPct > 80 ? 'red' : mem.usoPct > 50 ? 'yellow' : 'green') : 'muted');
+    monSetSysItem('disco', 'Disco ' + (disco ? disco.letra : '') + ' (espaco)', disco ? disco.usoPct + '%' : 'Indisp.',
+        disco ? disco.usadoGb + '/' + disco.totalGb + ' GB (livre: ' + disco.livreGb + ' GB)' : '',
+        disco ? (disco.usoPct > 90 ? 'red' : disco.usoPct > 70 ? 'yellow' : 'green') : 'muted');
+    monSetSysItem('uptime', 'Uptime', up.uptimeHumano || '?',
+        'Boot: ' + (up.bootTime ? new Date(up.bootTime).toLocaleString('pt-BR') : '?') + (up.reiniciadoDesdeUltimaColeta ? ' · REINICIADO!' : ''),
+        up.reiniciadoDesdeUltimaColeta ? 'red' : 'cyan');
+    monSetSysItem('rede', 'Rede', rede.ip || '?', rede.nome ? rede.nome + ' · MAC: ' + rede.mac : '', 'purple');
+    monSetSysItem('sistema', 'Sistema', (info.plataforma || '?') + ' ' + (info.arquitetura || ''),
+        'Kernel ' + (info.release || '?') + ' · Node ' + (info.node || '?'), 'magenta');
 
     // Acumula historico para grafico cardiaco (ultimos 30 pontos)
     if (cpu.usoPct != null) { _monCpuHist.push(cpu.usoPct); if (_monCpuHist.length > 30) _monCpuHist.shift(); }
@@ -438,19 +926,6 @@ function monRenderSistema(s) {
         _monKpiCharts['sys-cpu'] = { titulo: 'CPU do PC Local (%)', html: cpuHtml };
         _monKpiCharts['sys-ram'] = { titulo: 'RAM do PC Local (%)', html: ramHtml };
     }
-}
-
-function monSistemaItem(icon, label, valor, sub, cor) {
-    const corMap = { green: 'var(--green)', yellow: 'var(--yellow)', red: 'var(--red)', cyan: 'var(--cyan)', purple: 'var(--purple)', magenta: 'var(--magenta)', muted: 'var(--text-muted)' };
-    const corVal = corMap[cor] || 'var(--text-primary)';
-    return '<div style="padding:10px 12px;background:rgba(255,255,255,0.03);border-radius:10px;border-left:3px solid ' + corVal + ';">' +
-        '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
-        '<i class="fas ' + icon + '" style="color:' + corVal + ';font-size:11px;"></i>' +
-        '<span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">' + label + '</span>' +
-        '</div>' +
-        '<div style="font-size:20px;font-weight:700;color:' + corVal + ';">' + valor + '</div>' +
-        (sub ? '<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">' + sub + '</div>' : '') +
-        '</div>';
 }
 
 // ==================== SISTEMA DE GRAFICOS SVG ====================
@@ -661,88 +1136,88 @@ async function monCarregarMockMetricas(ip) {
     } catch (e) { return null; }
 }
 
-// ==================== RENDER: KPIs ====================
+// ==================== RENDER: KPIs (atualizacao diferencial, sem innerHTML total) ====================
+// Cada card tem data-key fixo; atualizamos apenas texto/classes, preservando os
+// nos do DOM. Isso elimina o "travamento" a cada ciclo do coletor/SSE.
 function monRenderKPIs(p) {
     const el = document.getElementById('mon-kpis');
-    if (!el || !p || !p.resumo) { if (el) el.innerHTML = ''; return; }
+    if (!el || !p || !p.resumo) { if (el) { el.innerHTML = ''; } return; }
+    const defs = monKpiDefs(p);
+    for (const d of defs) monAtualizarKpiCardDom(el, d);
+    // KPIs de armazenamento (carrega sob demanda, com cache de 60s)
+    monRenderArmazenamentoKPIs();
+}
+
+function monKpiDefs(p) {
     const r = p.resumo;
     const servico = p.servico || {};
-
-    // Calcula porcentagem de disponibilidade
     const pctDisponivel = r.totalAlvos > 0 ? Math.round((r.acessiveis / r.totalAlvos) * 100) : 0;
     const pctIndisponivel = r.totalAlvos > 0 ? Math.round((r.semResposta / r.totalAlvos) * 100) : 0;
-
-    // CPU tempo real (se disponível)
     const cpuReal = _monCpuTempoReal != null ? _monCpuTempoReal.toFixed(1) + '%' : '...';
     const cpuCor = _monCpuTempoReal != null ? (_monCpuTempoReal > 80 ? 'red' : _monCpuTempoReal > 60 ? 'yellow' : 'green') : 'cyan';
+    const dispCor = pctDisponivel >= 90 ? 'green' : pctDisponivel >= 70 ? 'yellow' : 'red';
+    return [
+        { icon: 'fa-microchip', cor: cpuCor, valor: cpuReal, label: 'CPU Tempo Real', sub: 'Coleta a cada 3s', key: 'mon-kpi-cpu-tempo-real',
+          extra: '<span style="font-size:10px;color:var(--green);"><i class="fas fa-circle" style="font-size:6px;"></i> AO VIVO</span>' },
+        { icon: 'fa-chart-pie', cor: dispCor, valor: pctDisponivel + '%', label: 'Disponibilidade', sub: r.acessiveis + ' de ' + r.totalAlvos + ' respondendo', key: 'mon-kpi-disponibilidade',
+          extra: '<div style="width:60px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;"><div style="width:' + pctDisponivel + '%;height:100%;background:var(--' + dispCor + ');"></div></div>' },
+        { icon: 'fa-desktop', cor: 'cyan', valor: r.totalAlvos, label: 'Equipamentos', sub: 'Total com IP cadastrado', key: 'mon-kpi-total' },
+        { icon: 'fa-circle-check', cor: 'green', valor: r.acessiveis, label: 'Acessiveis', sub: 'Respondendo agora', key: 'mon-kpi-acessiveis' },
+        { icon: 'fa-circle-xmark', cor: 'red', valor: r.semResposta, label: 'Sem Resposta', sub: pctIndisponivel + '% do total', key: 'mon-kpi-semresposta' },
+        { icon: 'fa-wave-square', cor: 'yellow', valor: r.instaveis, label: 'Instaveis', sub: 'Oscilando na rede', key: 'mon-kpi-instaveis' },
+        { icon: 'fa-triangle-exclamation', cor: r.alertasAbertos > 0 ? 'orange' : 'green', valor: r.alertasAbertos, label: 'Alertas', sub: r.alertasAbertos > 0 ? 'Requer atencao' : 'Tudo normal', key: 'mon-kpi-alertas' },
+        { icon: 'fa-share-nodes', cor: 'purple', valor: r.incidentesSetor, label: 'Incidentes', sub: 'Falha em massa por setor', key: 'mon-kpi-incidentes' },
+        { icon: 'fa-circle-question', cor: 'magenta', valor: r.semDados, label: 'Sem Dados', sub: 'Ainda nao verificados', key: 'mon-kpi-semdados' },
+        { icon: 'fa-clock', cor: servico.rodando ? 'green' : 'red', valor: servico.rodando ? 'ON' : 'OFF', label: 'Coletor', sub: servico.rodando ? 'Ativo' : 'Parado', key: 'mon-kpi-coletor' }
+    ];
+}
 
-    let html =
-        // CPU em tempo real (primeiro, mais importante)
-        monKpiCard('fa-microchip', cpuCor, cpuReal, 'CPU Tempo Real', 'Coleta a cada 3s', 'mon-kpi-cpu-tempo-real',
-            '<span style="font-size:10px;color:var(--green);"><i class="fas fa-circle" style="font-size:6px;"></i> AO VIVO</span>') +
-
-        // Disponibilidade (barra visual)
-        monKpiCard('fa-chart-pie', pctDisponivel >= 90 ? 'green' : pctDisponivel >= 70 ? 'yellow' : 'red',
-            pctDisponivel + '%', 'Disponibilidade', r.acessiveis + ' de ' + r.totalAlvos + ' respondendo', 'mon-kpi-disponibilidade',
-            '<div style="width:60px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;"><div style="width:' + pctDisponivel + '%;height:100%;background:var(--' + (pctDisponivel >= 90 ? 'green' : pctDisponivel >= 70 ? 'yellow' : 'red') + ');"></div></div>') +
-
-        // Total
-        monKpiCard('fa-desktop', 'cyan', r.totalAlvos, 'Equipamentos', 'Total com IP cadastrado', 'mon-kpi-total') +
-
-        // Acessiveis
-        monKpiCard('fa-circle-check', 'green', r.acessiveis, 'Acessiveis', 'Respondendo agora', 'mon-kpi-acessiveis') +
-
-        // Sem resposta
-        monKpiCard('fa-circle-xmark', 'red', r.semResposta, 'Sem Resposta', pctIndisponivel + '% do total', 'mon-kpi-semresposta') +
-
-        // Instaveis
-        monKpiCard('fa-wave-square', 'yellow', r.instaveis, 'Instaveis', 'Oscilando na rede', 'mon-kpi-instaveis') +
-
-        // Alertas
-        monKpiCard('fa-triangle-exclamation', r.alertasAbertos > 0 ? 'orange' : 'green', r.alertasAbertos, 'Alertas', r.alertasAbertos > 0 ? 'Requer atencao' : 'Tudo normal', 'mon-kpi-alertas') +
-
-        // Incidentes
-        monKpiCard('fa-share-nodes', 'purple', r.incidentesSetor, 'Incidentes', 'Falha em massa por setor', 'mon-kpi-incidentes') +
-
-        // Sem dados
-        monKpiCard('fa-circle-question', 'magenta', r.semDados, 'Sem Dados', 'Ainda nao verificados', 'mon-kpi-semdados') +
-
-        // Coletor
-        monKpiCard('fa-clock', servico.rodando ? 'green' : 'red', servico.rodando ? 'ON' : 'OFF', 'Coletor', servico.rodando ? 'Ativo' : 'Parado', 'mon-kpi-coletor');
-
-    el.innerHTML = html;
-
-    // KPIs de armazenamento (carrega sob demanda)
-    monRenderArmazenamentoKPIs();
+function monAtualizarKpiCardDom(el, d) {
+    let card = el.querySelector('[data-key="' + d.key + '"]');
+    if (!card) { el.insertAdjacentHTML('beforeend', monKpiCard(d.icon, d.cor, d.valor, d.label, d.sub, d.key, d.extra)); return; }
+    const ativo = card.classList.contains('active');
+    card.className = 'kpi-card kpi-card-' + d.cor + (ativo ? ' active' : '');
+    const ic = card.querySelector('.kpi-icon');
+    if (ic) ic.className = 'kpi-icon kpi-icon-' + d.cor;
+    const val = card.querySelector('.kpi-value');
+    const valStr = String(d.valor);
+    if (val && val.textContent !== valStr) val.textContent = valStr;
+    const lab = card.querySelector('.kpi-label');
+    if (lab && lab.textContent !== d.label) lab.textContent = d.label;
+    const sub = card.querySelector('.kpi-sub');
+    if (sub && sub._lastSet !== d.sub) { sub.innerHTML = d.sub; sub._lastSet = d.sub; }
+    if (d.extra) {
+        let ex = card.querySelector('.kpi-extra');
+        if (ex) { if (ex._lastSet !== d.extra) { ex.innerHTML = d.extra; ex._lastSet = d.extra; } }
+        else { const hd = card.querySelector('.kpi-header'); if (hd) hd.insertAdjacentHTML('beforeend', '<div class="kpi-extra">' + d.extra + '</div>'); }
+    }
 }
 
 let _monArmKPIs = null;
 async function monRenderArmazenamentoKPIs() {
     const el = document.getElementById('mon-kpis');
     if (!el) return;
+    const agora = Date.now();
     try {
-        if (!_monArmKPIs) {
-            _monArmKPIs = await fetch('/api/monitor/armazenamento').then(r => r.json()).catch(() => null);
+        if (!_monArmKPIs || (agora - _monArmKPIsTs) > 60000) {
+            const d = await fetch('/api/monitor/armazenamento').then(r => r.json()).catch(() => null);
+            if (d) { _monArmKPIs = d; _monArmKPIsTs = Date.now(); }
         }
         if (!_monArmKPIs) return;
         const dm = _monArmKPIs || {};
         const discos = _monArmKPIs.discos || [];
         const disco0 = discos[0] || null;
-        // Mostrar valores em GB em vez de % (conforme requisito do usuario)
-        let discoTexto = 'Indisp.';
         let discoSub = '';
         let discoCor = 'green';
         if (disco0) {
-            discoTexto = disco0.usadoGb + ' de ' + disco0.totalGb + ' GB';
             discoSub = disco0.livreGb + ' GB livre';
             discoCor = disco0.usoPct > 90 ? 'red' : disco0.usoPct > 70 ? 'yellow' : 'green';
         }
-        const armHtml =
-            monKpiCard('fa-hard-drive', discoCor,
-                disco0 ? disco0.usadoGb + ' de ' + disco0.totalGb + ' GB' : '?', 'Disco ' + (disco0 ? disco0.letra : ''),
-                discoSub, 'mon-kpi-disco') +
-            monKpiCard('fa-database', 'purple', dm.totalMedicoes != null ? dm.totalMedicoes : '?', 'Medicoes', dm.diasComDados + ' dia(s) | ' + (dm.tamanhoTotalMB || 0) + ' MB', 'mon-kpi-medicoes');
-        el.insertAdjacentHTML('beforeend', armHtml);
+        const defs = [
+            { icon: 'fa-hard-drive', cor: discoCor, valor: disco0 ? disco0.usadoGb + ' de ' + disco0.totalGb + ' GB' : '?', label: 'Disco ' + (disco0 ? disco0.letra : ''), sub: discoSub, key: 'mon-kpi-disco' },
+            { icon: 'fa-database', cor: 'purple', valor: dm.totalMedicoes != null ? dm.totalMedicoes : '?', label: 'Medicoes', sub: (dm.diasComDados || 0) + ' dia(s) | ' + (dm.tamanhoTotalMB || 0) + ' MB', key: 'mon-kpi-medicoes' }
+        ];
+        for (const d of defs) monAtualizarKpiCardDom(el, d);
     } catch (e) {}
 }
 
@@ -754,7 +1229,7 @@ function monKpiCard(icon, cor, valor, label, sub, key, extra) {
         '</div>' +
         '<div class="kpi-value" style="font-size:36px;">' + valor + '</div>' +
         '<div class="kpi-label">' + label + '</div>' +
-        '<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">' + sub + '</div>' +
+        '<div class="kpi-sub" style="font-size:11px;color:var(--text-muted);margin-top:4px;">' + sub + '</div>' +
         '</div>';
 }
 
@@ -965,9 +1440,43 @@ function monRenderFiltroSetores(p) {
     if (!sel || !p || !p.linhas) return;
     const setores = [...new Set(p.linhas.map(l => l.setor).filter(Boolean))].sort();
     const atual = sel.value;
-    sel.innerHTML = '<option value="">Todos os Setores</option>' +
+    const html = '<option value="">Todos os Setores</option>' +
         setores.map(s => '<option value="' + esc(s) + '"' + (s === atual ? ' selected' : '') + '>' + esc(s) + '</option>').join('');
+    // Nao reconstroi o combo se nada mudou (preserva foco/selecao do usuario)
+    if (sel._lastHtml !== html) {
+        sel._lastHtml = html;
+        sel.innerHTML = html;
+    }
     sel.onchange = function() { _monFiltroSetor = this.value; monRenderTabela(_monDados); };
+}
+
+// Assinatura estavel dos dados da tabela (quantiza metricas em inteiros e
+// frescor em buckets de 2 minutos) para evitar rebuild do DOM a cada poll.
+function monLinhaChave(l) {
+    const q = function (v) {
+        if (v == null) return -1;
+        const m = String(v).match(/-?\d+(\.\d+)?/);
+        return m ? Math.round(parseFloat(m[0])) : -1;
+    };
+    const zbx = l.zabbix || {};
+    const ultimoTs = l.ultimoHorario ? new Date(l.ultimoHorario).getTime() : 0;
+    const segBucket = ultimoTs ? Math.floor((Date.now() - ultimoTs) / 120000) : -1;
+    return [
+        l.ip, l.nome, l.setor, l.estado,
+        q(l.latenciaMediaMs), l.falhasConsecutivas || 0,
+        q(l.cpu), q(l.gpu), q(l.ram), q(l.disco),
+        l.alertasAtivos || 0, l.fonte || '',
+        zbx.indisponivelZb ? 'z' : '',
+        (zbx.perdaPct != null ? Math.round(zbx.perdaPct) : ''),
+        segBucket
+    ].join('|');
+}
+
+function monAtualizarStamp(p) {
+    const stamp = document.getElementById('mon-atualizado-em');
+    if (!stamp) return;
+    const quando = p.resumo && p.resumo.coletadoEm ? p.resumo.coletadoEm : (p.servico && p.servico.ultimaExecucao ? p.servico.ultimaExecucao.quando : null);
+    stamp.textContent = 'Ultima coleta: ' + (quando ? new Date(quando).toLocaleString('pt-BR') : '—');
 }
 
 // ==================== RENDER: TABELA ====================
@@ -995,6 +1504,11 @@ function monRenderTabela(p) {
             (l.setor || '').toLowerCase().includes(b)
         );
     }
+
+    // ===== Atualizacao diferencial: so recria o DOM quando algo relevante mudou =====
+    const assinatura = _monFiltroEstado + '|' + _monFiltroSetor + '|' + _monBusca + '|' + linhas.map(monLinhaChave).join('||');
+    if (tbody._assinatura === assinatura) { monAtualizarStamp(p); return; }
+    tbody._assinatura = assinatura;
 
     tbody.innerHTML = linhas.map(function(l) {
         const estadoBadge = monEstadoBadge(l.estado);
@@ -1065,11 +1579,7 @@ function monRenderTabela(p) {
             '</tr>';
     }).join('');
 
-    const stamp = document.getElementById('mon-atualizado-em');
-    if (stamp) {
-        const quando = p.resumo && p.resumo.coletadoEm ? p.resumo.coletadoEm : (p.servico && p.servico.ultimaExecucao ? p.servico.ultimaExecucao.quando : null);
-        stamp.textContent = 'Ultima coleta: ' + (quando ? new Date(quando).toLocaleString('pt-BR') : '—');
-    }
+    monAtualizarStamp(p);
 }
 
 function monEstadoBadge(estado) {
@@ -1087,10 +1597,12 @@ function monRenderAlertas(p) {
     const el = document.getElementById('mon-alertas-list');
     if (!el) return;
     if (!p || !p.alertas || !p.alertas.length) {
-        el.innerHTML = '<p style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px;">Nenhum alerta ativo</p>';
+        monSetHtmlSeMudou(el, '<p style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px;">Nenhum alerta ativo</p>');
+        var badgeVazio = document.getElementById('nav-monitor-alerts');
+        if (badgeVazio) badgeVazio.style.display = 'none';
         return;
     }
-    el.innerHTML = p.alertas.map(function(a) {
+    monSetHtmlSeMudou(el, p.alertas.map(function(a) {
         const gravClass = { CRITICA: 'cancelada', ALTA: 'cancelada', MEDIA: 'pendente', BAIXA: 'pendente', INFO: 'inativo' }[a.gravidade] || 'inativo';
         const confBadge = { CONFIRMADO: 'badge-ativo', ALTA: 'badge-ativo', MODERADA: 'badge-pendente', BAIXA: 'badge-inativo', INCONCLUSIVO: 'badge-inativo' }[a.confianca] || 'badge-inativo';
         return '<div style="display:flex;align-items:flex-start;gap:12px;padding:12px;border-bottom:1px solid var(--border);">' +
@@ -1103,7 +1615,7 @@ function monRenderAlertas(p) {
             '</div>' +
             '<span class="badge ' + confBadge + '" style="margin-top:2px;" title="Confianca do diagnostico">' + a.confianca + '</span>' +
             '</div>';
-    }).join('');
+    }).join(''));
 
     // Badge no sidebar
     const badge = document.getElementById('nav-monitor-alerts');
@@ -1122,10 +1634,10 @@ function monRenderAlertasZabbix() {
     if (!el) return;
     const lista = _monAlertasZabbix || [];
     if (!lista.length) {
-        el.innerHTML = '<p style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px;">Nenhuma notificacao recebida</p>';
+        monSetHtmlSeMudou(el, '<p style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px;">Nenhuma notificacao recebida</p>');
         return;
     }
-    el.innerHTML = lista.map(function(a) {
+    monSetHtmlSeMudou(el, lista.map(function(a) {
         const cor = a.status === 'PROBLEM' ? 'var(--red)' : 'var(--green)';
         const icone = a.status === 'PROBLEM' ? 'fa-triangle-exclamation' : 'fa-check-circle';
         return '<div style="display:flex;align-items:flex-start;gap:12px;padding:10px;border-bottom:1px solid var(--border);">' +
@@ -1137,7 +1649,7 @@ function monRenderAlertasZabbix() {
             '</div>' +
             '<span class="badge ' + (a.status === 'PROBLEM' ? 'badge-cancelada' : 'badge-ativo') + '">' + esc(a.status) + '</span>' +
             '</div>';
-    }).join('');
+    }).join(''));
 }
 
 function monLimparAlertasZabbix() {
@@ -1149,8 +1661,8 @@ function monLimparAlertasZabbix() {
 function monRenderIncidentes(p) {
     const el = document.getElementById('mon-incidentes');
     if (!el) return;
-    if (!p || !p.incidentes || !p.incidentes.length) { el.innerHTML = ''; return; }
-    el.innerHTML = p.incidentes.map(function(inc) {
+    if (!p || !p.incidentes || !p.incidentes.length) { monSetHtmlSeMudou(el, ''); return; }
+    monSetHtmlSeMudou(el, p.incidentes.map(function(inc) {
         return '<div class="glass-panel" style="border-left:3px solid var(--red);margin-bottom:8px;">' +
             '<div style="padding:14px 18px;display:flex;align-items:center;gap:12px;">' +
             '<i class="fas fa-share-nodes" style="color:var(--red);font-size:16px;"></i>' +
@@ -1159,7 +1671,7 @@ function monRenderIncidentes(p) {
             inc.afetados + ' de ' + inc.total + ' equipamentos afetados | Confianca: ' + inc.confianca + '</p>' +
             '<p style="font-size:11px;color:var(--text-secondary);margin:2px 0 0;">Hosts: ' + inc.hosts.map(h => '<code>' + esc(h) + '</code>').join(', ') + '</p>' +
             '</div></div></div>';
-    }).join('');
+    }).join(''));
 }
 
 // ==================== RENDER: INDISPONIVEIS ====================
@@ -1173,26 +1685,29 @@ function monRenderIndisponiveis(p) {
         'Qualidade Wi-Fi: indisponivel (requer controlador Wi-Fi)',
         'Registros DHCP/DNS: indisponivel (requer acesso aos servidores)'
     ];
-    el.innerHTML = lista.map(function(item) {
+    monSetHtmlSeMudou(el, lista.map(function(item) {
         return '<div><i class="fas fa-ban" style="color:var(--red);width:16px;"></i> ' + esc(item) + '</div>';
     }).join('') +
     '<p style="margin-top:10px;font-size:11px;color:var(--green);"><i class="fas fa-check-circle"></i> No PC LOCAL (este servidor) CPU/RAM/disco/uptime sao REAIS e coletados por SO — veja o painel "PC Local" no topo.</p>' +
-    '<p style="margin-top:4px;font-size:11px;color:var(--yellow);"><i class="fas fa-info-circle"></i> Para PCs remotos completos, instale o Zabbix Agent 2.</p>';
+    '<p style="margin-top:4px;font-size:11px;color:var(--yellow);"><i class="fas fa-info-circle"></i> Para PCs remotos completos, instale o Zabbix Agent 2.</p>');
 }
 
 // ==================== RENDER: HOSTS ZABBIX ====================
-async function monRenderZabbixHosts() {
+let _monZbxHostsTs = 0;
+async function monRenderZabbixHosts(forcar) {
     const el = document.getElementById('mon-zabbix-hosts');
     if (!el) return;
+    if (!forcar && _monZbxHostsTs && (Date.now() - _monZbxHostsTs) < 30000) return; // throttle 30s
+    _monZbxHostsTs = Date.now();
     try {
         const z = await fetch('/api/zabbix/hosts').then(r => r.json()).catch(() => null);
         const hosts = Array.isArray(z) ? z : (z && z.hosts) || [];
         if (!hosts.length) {
-            el.innerHTML = '<p style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px;">' +
-                (z && z.erro ? 'Zabbix: ' + esc(z.erro) : 'Nenhum host cadastrado no Zabbix.') + '</p>';
+            monSetHtmlSeMudou(el, '<p style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px;">' +
+                (z && z.erro ? 'Zabbix: ' + esc(z.erro) : 'Nenhum host cadastrado no Zabbix.') + '</p>');
             return;
         }
-        el.innerHTML = '<div style="overflow-x:auto;"><table class="data-table" style="font-size:11px;"><thead><tr>' +
+        monSetHtmlSeMudou(el, '<div style="overflow-x:auto;"><table class="data-table" style="font-size:11px;"><thead><tr>' +
             '<th>Hostname</th><th>Nome</th><th>IP</th><th>Status Agente</th><th>Templates</th><th>Erro</th>' +
             '</tr></thead><tbody>' +
             hosts.map(h => {
@@ -1212,9 +1727,9 @@ async function monRenderZabbixHosts() {
                     '<td style="font-size:10px;color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="' + esc(iface.error || '') + '">' + esc((iface.error || '—').substring(0, 60)) + '</td>' +
                     '</tr>';
             }).join('') +
-            '</tbody></table></div>';
+            '</tbody></table></div>');
     } catch (e) {
-        el.innerHTML = '<p style="color:var(--red);font-size:12px;text-align:center;padding:20px;">Erro ao listar hosts Zabbix</p>';
+        monSetHtmlSeMudou(el, '<p style="color:var(--red);font-size:12px;text-align:center;padding:20px;">Erro ao listar hosts Zabbix</p>');
     }
 }
 
@@ -1224,7 +1739,8 @@ async function monSyncZabbix() {
         const r = await fetch('/api/zabbix/sincronizar', { method: 'POST' }).then(r => r.json());
         if (r.ok) {
             if (typeof showToast === 'function') showToast('Sincronizado: ' + (r.criados || 0) + ' hosts criados, ' + (r.atualizados || 0) + ' atualizados.', 'success');
-            monRenderZabbixHosts();
+            if (typeof pushLog === 'function') pushLog('ALTERACAO', 'MONITORAMENTO', null, 'Sincronizacao Zabbix: ' + (r.criados || 0) + ' criados, ' + (r.atualizados || 0) + ' atualizados');
+            monRenderZabbixHosts(true);
         } else {
             if (typeof showToast === 'function') showToast('Erro: ' + (r.erro || 'desconhecido'), 'error');
         }
@@ -1248,7 +1764,7 @@ function monRenderArmazenamento(d) {
     const el = document.getElementById('mon-armazenamento');
     if (!el) return;
     if (!d || d.error) {
-        el.innerHTML = '<p style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px;">' + esc(d && d.error ? d.error : 'Indisponivel') + '</p>';
+        monSetHtmlSeMudou(el, '<p style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px;">' + esc(d && d.error ? d.error : 'Indisponivel') + '</p>');
         return;
     }
 
@@ -1315,7 +1831,7 @@ function monRenderArmazenamento(d) {
     html += '</div>';
     html += '</div>';
 
-    el.innerHTML = html;
+    monSetHtmlSeMudou(el, html);
 }
 
 function monArmItem(icon, label, valor, sub, cor) {
@@ -2832,4 +3348,18 @@ function monAbrirRelatorioPC() {
 function esc(s) {
     if (s == null) return '';
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ==================== BOOTSTRAP (widget do Painel) ====================
+// Popula o widget "Monitoramento da Rede" no dashboard mesmo antes do usuario
+// abrir a aba de monitoramento. Atualiza tambem quando a aba e aberta.
+if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('DOMContentLoaded', function () {
+        try {
+            fetch('/api/monitor/painel').then(function (r) { return r.json(); }).then(function (d) {
+                if (d && d.resumo) { _monDados = d; monRenderDashboardWidget(); }
+            }).catch(function () {});
+            monRenderZabbixProblemas();
+        } catch (e) {}
+    });
 }

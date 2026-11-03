@@ -205,6 +205,20 @@
                     <div class="glass-panel-header"><h3><i class="fas fa-desktop"></i> Computadores</h3><button class="btn btn-ghost btn-sm dsh-link" onclick="showSection('computadores')">Ver lista</button></div>
                     <div id="dashboardCompList" class="dsh-table-wrap"></div>
                 </div>
+                <div class="glass-panel dashboard-chart-half" id="dshMonWidgetPanel">
+                    <div class="glass-panel-header"><h3><i class="fas fa-heartbeat"></i> Monitoramento da Rede</h3><button class="btn btn-ghost btn-sm dsh-link" onclick="showSection('monitoramento')">Abrir monitoramento</button></div>
+                    <div id="dshMonWidget" style="padding:6px 4px 2px;">
+                        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;">
+                            <div style="min-width:120px;"><div id="dshMonOnline" style="font-size:32px;font-weight:800;color:var(--cyan);line-height:1;">—</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-top:4px;">Acessiveis</div></div>
+                            <div style="min-width:120px;"><div id="dshMonProblemas" style="font-size:32px;font-weight:800;color:var(--yellow);line-height:1;">—</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-top:4px;">Problemas Zabbix</div></div>
+                            <div style="flex:1;min-width:180px;">
+                                <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:4px;"><span>Disponibilidade</span><span id="dshMonPct">—</span></div>
+                                <div style="height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;"><div id="dshMonBar" style="height:100%;width:0%;background:var(--green);transition:width .4s ease;"></div></div>
+                                <div id="dshMonUltima" style="font-size:10px;color:var(--text-muted);margin-top:6px;">Carregando...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -858,6 +872,23 @@
             </div>
             <div class="glass-panel" style="margin-top:16px;">
                 <div class="glass-panel-header">
+                    <h3><i class="fas fa-triangle-exclamation"></i> Problemas Zabbix (Abertos)</h3>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <span id="mon-zabbix-problemas-resumo" style="font-size:11px;color:var(--text-muted);align-self:center;"></span>
+                        <button onclick="monGerarRelatorioFalhas()" class="btn btn-ghost btn-sm" title="Relatorio profissional de falhas (nova aba, pronto para PDF)">
+                            <i class="fas fa-file-pdf"></i> Relatorio de Falhas
+                        </button>
+                        <button onclick="monRenderZabbixProblemas()" class="btn btn-ghost btn-sm" title="Atualizar problemas">
+                            <i class="fas fa-rotate"></i> Atualizar
+                        </button>
+                    </div>
+                </div>
+                <div id="mon-zabbix-problemas" style="padding:12px;">
+                    <p style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px;">Carregando problemas Zabbix...</p>
+                </div>
+            </div>
+            <div class="glass-panel" style="margin-top:16px;">
+                <div class="glass-panel-header">
                     <h3><i class="fas fa-exclamation-triangle"></i> Alertas Ativos</h3>
                 </div>
                 <div id="mon-alertas-list" style="padding:12px;">
@@ -963,7 +994,7 @@
     <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="js/app.js?v=4400-gpu-realtime-charts"></script>
-<script src="js/monitor.js?v=6400-gpu-realtime-charts"></script>
+<script src="js/app.js?v=4500-zabbix-problemas"></script>
+<script src="js/monitor.js?v=6500-zabbix-problemas"></script>
 </body>
 </html>

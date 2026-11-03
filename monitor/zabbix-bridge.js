@@ -275,6 +275,74 @@ async function listarProblemas(hostid) {
     return authCall('problem.get', params);
 }
 
+const SEVERIDADE_LABELS = { '0': 'Nao classificada', '1': 'Informacao', '2': 'Aviso', '3': 'Medio', '4': 'Alto', '5': 'Desastre' };
+
+/** Formata duracao em segundos para texto legivel (ex.: "237 dias, 4 horas"). */
+function formatarDuracao(segundos) {
+    let s = Math.max(0, Math.floor(segundos || 0));
+    const dias = Math.floor(s / 86400); s %= 86400;
+    const horas = Math.floor(s / 3600); s %= 3600;
+    const minutos = Math.floor(s / 60);
+    const partes = [];
+    if (dias > 0) partes.push(dias + (dias === 1 ? ' dia' : ' dias'));
+    if (horas > 0) partes.push(horas + (horas === 1 ? ' hora' : ' horas'));
+    if (dias === 0 && minutos > 0) partes.push(minutos + (minutos === 1 ? ' minuto' : ' minutos'));
+    if (!partes.length) partes.push('menos de 1 minuto');
+    return partes.join(', ');
+}
+
+/**
+ * Problemas abertos enriquecidos para o painel do Inventario TI.
+ * O problem.get do Zabbix 7.0 NAO tem selectHosts; o host e resolvido pelo
+ * objectid (triggerid) via trigger.get + selectHosts em uma unica chamada.
+ */
+async function listarProblemasDetalhado(hostid) {
+    const raw = await listarProblemas(hostid);
+    // Resolve triggerid -> host em lote
+    const objectids = [...new Set((raw || []).map(function (p) { return p.objectid; }).filter(Boolean))];
+    const hostPorTrigger = {};
+    if (objectids.length) {
+        try {
+            const triggers = await authCall('trigger.get', {
+                triggerids: objectids,
+                output: ['triggerid'],
+                selectHosts: ['hostid', 'host', 'name']
+            });
+            for (const t of (triggers || [])) {
+                const h = (t.hosts && t.hosts[0]) || null;
+                if (h) hostPorTrigger[t.triggerid] = h;
+            }
+        } catch (e) { /* sem host resolvido — segue com "Desconhecido" */ }
+    }
+    const agora = Date.now();
+    return (raw || []).map(function (p) {
+        const host = hostPorTrigger[p.objectid] || {};
+        const clock = (parseInt(p.clock, 10) || 0) * 1000;
+        const dur = clock ? Math.max(0, Math.round((agora - clock) / 1000)) : 0;
+        const ackViaFlag = p.acknowledged === '1' || p.acknowledged === 1 || p.acknowledged === true;
+        const ackViaMensagens = Array.isArray(p.acknowledges) && p.acknowledges.length > 0;
+        return {
+            eventid: String(p.eventid || ''),
+            hostid: host.hostid || null,
+            host: host.name || host.host || 'Desconhecido',
+            hostTecnico: host.host || null,
+            trigger: p.name || ('Problema no objeto ' + (p.objectid || '?')),
+            objeto: p.object || null,
+            objetoId: p.objectid || null,
+            severidade: String(p.severity == null ? '0' : p.severity),
+            severidadeLabel: SEVERIDADE_LABELS[String(p.severity == null ? '0' : p.severity)] || 'Desconhecida',
+            inicio: clock ? new Date(clock).toISOString() : null,
+            duracaoSegundos: dur,
+            duracaoTexto: formatarDuracao(dur),
+            reconhecido: ackViaFlag || ackViaMensagens,
+            supresso: p.suppressed === '1' || p.suppressed === 1 || p.suppressed === true,
+            opdata: p.opdata || '',
+            tags: Array.isArray(p.tags) ? p.tags.map(function (t) { return { tag: t.tag, value: t.value }; }) : [],
+            mensagensAck: Array.isArray(p.acknowledges) ? p.acknowledges.length : 0
+        };
+    });
+}
+
 /** Busca historico de um item especifico. */
 async function historicoItem(itemids, time_from, time_till, limit) {
     return authCall('history.get', {
@@ -415,12 +483,17 @@ async function adicionarTag(hostid, tag, value) {
     });
 }
 
-/** Reconhece um problema (acknowledge). */
+/**
+ * Reconhece um problema (acknowledge) conforme doc oficial Zabbix 7.0:
+ * event.acknowledge exige `eventids` (ID/array) e `action` (bitmask).
+ * action=6 = 2 (acknowledge event) + 4 (add message); message e obrigatoria.
+ */
 async function reconhecerProblema(eventid, mensagem) {
+    if (!eventid) throw new Error('eventid obrigatorio');
     return authCall('event.acknowledge', {
-        eventid,
-        action: 6, // acknowledge + add message
-        message: mensagem
+        eventids: [String(eventid)],
+        action: 6, // 2=acknowledge + 4=add message
+        message: mensagem || 'Reconhecido via Inventario TI'
     });
 }
 
@@ -913,6 +986,8 @@ module.exports = {
     enriquecerDisponibilidade,
     buscarHostPorIp,
     listarProblemas,
+    listarProblemasDetalhado,
+    formatarDuracao,
     historicoItem,
     listarItens,
     listarTriggers,

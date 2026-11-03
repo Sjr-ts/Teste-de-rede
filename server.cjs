@@ -750,6 +750,54 @@ app.get('/api/zabbix/monitoramento', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ---- Zabbix: incidentes abertos enriquecidos (para a aba Monitoramento) ----
+// Cache curto (10s) para nao martelar a API do Zabbix a cada refresh do painel.
+let _zbProblemasCache = { ts: 0, data: null };
+app.get('/api/zabbix/problemas', async (req, res) => {
+    try {
+        const hostid = (req.query.hostid || '').trim();
+        const agora = Date.now();
+        // Cache so para a consulta global (sem filtro por host)
+        if (!hostid && _zbProblemasCache.data && (agora - _zbProblemasCache.ts) < 10000) {
+            return res.json(_zbProblemasCache.data);
+        }
+        const zb = require('./monitor/zabbix-bridge');
+        const problemas = await zb.listarProblemasDetalhado(hostid || undefined);
+        const porSeveridade = { '0': 0, '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
+        for (const p of problemas) porSeveridade[p.severidade] = (porSeveridade[p.severidade] || 0) + 1;
+        const payload = {
+            conectado: true,
+            total: problemas.length,
+            criticos: (porSeveridade['4'] || 0) + (porSeveridade['5'] || 0),
+            naoReconhecidos: problemas.filter(p => !p.reconhecido).length,
+            porSeveridade,
+            problemas,
+            atualizadoEm: new Date().toISOString()
+        };
+        if (!hostid) _zbProblemasCache = { ts: agora, data: payload };
+        res.json(payload);
+    } catch (e) {
+        res.json({ conectado: false, erro: e.message, total: 0, criticos: 0, problemas: [], atualizadoEm: new Date().toISOString() });
+    }
+});
+
+// ---- Zabbix: reconhecer problema (acknowledge) ----
+app.post('/api/zabbix/problemas/ack', async (req, res) => {
+    try {
+        const body = req.body || {};
+        const eventid = body.eventid != null ? String(body.eventid) : '';
+        if (!eventid) return res.status(400).json({ ok: false, error: 'eventid obrigatorio' });
+        const mensagem = (body.message || 'Reconhecido via Inventario TI').toString().slice(0, 2000);
+        const zb = require('./monitor/zabbix-bridge');
+        const resultado = await zb.reconhecerProblema(eventid, mensagem);
+        // Invalida o cache de problemas para o painel refletir o ack na hora
+        _zbProblemasCache = { ts: 0, data: null };
+        res.json({ ok: true, resultado });
+    } catch (e) {
+        res.status(500).json({ ok: false, error: e.message });
+    }
+});
+
 // ---- Zabbix webhook: notificacoes push (action → nosso servidor → SSE) ----
 const alertasWebhook = [];
 app.post('/api/zabbix/webhook', (req, res) => {

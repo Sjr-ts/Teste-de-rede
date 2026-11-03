@@ -2908,13 +2908,23 @@ async function quickToggleOsStatus(id, currentStatus) {
     } catch (e) { showToast(e.message, 'error'); }
 }
 
-async function showOrdemForm(id) {
+async function showOrdemForm(id, prefill) {
     var o = { titulo: '', descricao: '', prioridade: 'MEDIA', status: 'ABERTA', solicitante: '', tecnicoResponsavel: '' };
+    // Prefill opcional (ex.: falha Zabbix convertida em O.S.)
+    if (!id && prefill) {
+        o.titulo = prefill.titulo || '';
+        o.descricao = prefill.descricao || '';
+        o.prioridade = prefill.prioridade || 'MEDIA';
+        o.solicitante = prefill.solicitante || 'Monitoramento TI';
+        o.status = 'ABERTA';
+    }
     if (id) { try { o = await apiFetch('/api/ordens-servico/' + id); } catch (e) { showToast('Erro ao carregar OS: ' + e.message, 'error'); return; } }
     try { allComputadores = await apiFetch('/api/computadores/paginado?page=0&size=1000&status=&termo='); } catch (e) { allComputadores = { content: [] }; }
     var compList = allComputadores.content || allComputadores;
     var osCompItems = compList.map(function(c) { return { value: String(c.id), label: c.nomePc, sub: c.numeroSerie }; });
-    var osCompInit = compList.find(function(c) { return o.computadorId != null && c.id == o.computadorId; });
+    var osCompInit = compList.find(function(c) { return o.computadorId != null && c.id == o.computadorId; }) ||
+                     (o.computadorNome ? compList.find(function(c) { return c.nomePc && String(c.nomePc).toUpperCase().indexOf(String(o.computadorNome).toUpperCase()) !== -1; }) : null);
+    if (osCompInit && o.computadorId == null) o.computadorId = osCompInit.id;
     var usuarios = [];
     try { usuarios = await apiFetch('/api/usuarios'); } catch (e) { }
     var tecnicos = usuarios.filter(function(u) { return u.perfil === 'ADMIN' || u.perfil === 'TECNICO'; });
