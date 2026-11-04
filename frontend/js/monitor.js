@@ -181,6 +181,8 @@ let _monProblemas = [];
 let _monProblemasInfo = null;
 let _monProblemasTs = 0;
 let _monMostrarSilenciados = false;
+// Filtros dinamicos do painel de problemas (estilo Zabbix problem view)
+let _monProbFiltro = { texto: '', host: '', ordem: 'sev', soNaoRec: false, sev: '' };
 let _monFalhaNotifTs = {};
 let _monArmKPIsTs = 0;
 
@@ -361,6 +363,7 @@ async function monRenderZabbixProblemas(forcar) {
         _monProblemas = [];
     }
     if (el) monRenderProblemasLista(el);
+    try { monAtualizarTemposRelativos(); } catch (e) {}
     monRenderDashboardWidget();
 }
 
@@ -370,14 +373,134 @@ function monToggleSilenciados() {
     if (el) monRenderProblemasLista(el);
 }
 
+// ==================== FILTROS DINAMICOS ====================
+function monProbFiltroTexto(v) { _monProbFiltro.texto = (v || '').toLowerCase(); monReRenderProblemas(); }
+function monProbFiltroHost(v) { _monProbFiltro.host = v || ''; monReRenderProblemas(); }
+function monProbOrdem(v) { _monProbFiltro.ordem = v || 'sev'; monReRenderProblemas(); }
+function monProbSoNaoRec(v) { _monProbFiltro.soNaoRec = !!v; monReRenderProblemas(); }
+function monProbChipSev(sev) {
+    _monProbFiltro.sev = (_monProbFiltro.sev === String(sev)) ? '' : String(sev);
+    monReRenderProblemas();
+}
+function monReRenderProblemas() {
+    const el = document.getElementById('mon-zabbix-problemas');
+    if (el) monRenderProblemasLista(el);
+}
+
+// Aplica todos os filtros ativos e retorna a lista final de problemas
+function monProbFiltrados() {
+    const f = _monProbFiltro;
+    let lista = (_monProblemas || []).slice();
+    // Silenciados ficam de fora por padrao
+    if (!_monMostrarSilenciados) lista = lista.filter(function (p) { return !p.suppressed; });
+    if (f.soNaoRec) lista = lista.filter(function (p) { return !p.reconhecido; });
+    if (f.sev !== '') lista = lista.filter(function (p) { return String(p.severidade) === f.sev; });
+    if (f.host) lista = lista.filter(function (p) { return String(p.hostid || '') === f.host; });
+    if (f.texto) {
+        lista = lista.filter(function (p) {
+            const alvo = ((p.trigger || '') + ' ' + (p.host || '') + ' ' + (p.hostTecnico || '') + ' ' +
+                (p.tags || []).map(function (t) { return (t.tag || '') + '=' + (t.value || ''); }).join(' ')).toLowerCase();
+            return alvo.indexOf(f.texto) >= 0;
+        });
+    }
+    const rank = { '5': 5, '4': 4, '3': 3, '2': 2, '1': 1, '0': 0 };
+    if (f.ordem === 'recente') {
+        lista.sort(function (a, b) { return (new Date(b.inicio || 0)) - (new Date(a.inicio || 0)); });
+    } else if (f.ordem === 'antigo') {
+        lista.sort(function (a, b) { return (new Date(a.inicio || 0)) - (new Date(b.inicio || 0)); });
+    } else {
+        lista.sort(function (a, b) {
+            const d = (rank[String(b.severidade)] || 0) - (rank[String(a.severidade)] || 0);
+            if (d !== 0) return d;
+            return (new Date(b.inicio || 0)) - (new Date(a.inicio || 0));
+        });
+    }
+    return lista;
+}
+
+// ==================== TEMPO RELATIVO (PT-BR) ====================
+function monTempoRelativo(dataIso) {
+    if (!dataIso) return '—';
+    const t = (dataIso instanceof Date) ? dataIso.getTime() : new Date(dataIso).getTime();
+    if (isNaN(t)) return '—';
+    const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
+    if (s < 45) return 'agora';
+    const m = Math.floor(s / 60);
+    if (m < 60) return 'ha ' + m + ' min';
+    const h = Math.floor(m / 60);
+    if (h < 24) return 'ha ' + h + 'h' + (m % 60 ? ' ' + (m % 60) + 'min' : '');
+    const d = Math.floor(h / 24);
+    return 'ha ' + d + ' dia' + (d > 1 ? 's' : '');
+}
+
+// Atualiza APENAS os textos de tempo (sem re-render — anti-travamento)
+function monAtualizarTemposRelativos() {
+    const spans = document.querySelectorAll('[data-mon-tempo]');
+    for (const sp of spans) {
+        const novo = monTempoRelativo(sp.getAttribute('data-mon-tempo'));
+        if (novo !== '—' && sp.textContent !== novo) sp.textContent = novo;
+    }
+    const age = document.getElementById('mon-zabbix-problemas-age');
+    if (age && _monProblemasTs) age.textContent = 'auto ' + monTempoRelativo(new Date(_monProblemasTs).toISOString());
+}
+setInterval(function () {
+    const secao = document.getElementById('monitoramento');
+    if (secao && secao.classList.contains('hidden')) return;
+    monAtualizarTemposRelativos();
+}, 30000);
+
+// ==================== CHIPS DE SEVERIDADE + DROPDOWN DE HOST ====================
+function monRenderProbChips() {
+    const chipsEl = document.getElementById('mon-prob-chips');
+    if (!chipsEl) return;
+    const info = _monProblemasInfo || {};
+    const pSv = info.porSeveridade || {};
+    const ordem = ['5', '4', '3', '2', '1', '0'];
+    const totalVis = monProbFiltrados().length;
+    let html = '';
+    for (const s of ordem) {
+        const n = pSv[s] || 0;
+        if (n === 0 && _monProbFiltro.sev !== s) continue;
+        const sev = monSevInfo(s);
+        const ativo = _monProbFiltro.sev === s;
+        html += '<button onclick="monProbChipSev(\'' + s + '\')" title="Filtrar por severidade ' + esc(sev.label) + '"' +
+            ' style="display:inline-flex;align-items:center;gap:5px;border:1px solid ' + (ativo ? sev.cor : 'var(--border)') + ';' +
+            'background:' + (ativo ? sev.bg : 'rgba(0,0,0,0.2)') + ';color:' + (ativo ? sev.cor : 'var(--text-secondary)') + ';' +
+            'border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;cursor:pointer;' +
+            (ativo ? 'box-shadow:0 0 0 1px ' + sev.cor + ' inset;' : '') + '">' +
+            '<span style="width:8px;height:8px;border-radius:50%;background:' + sev.cor + ';display:inline-block;"></span>' +
+            esc(sev.label) + ' <b>' + n + '</b></button>';
+    }
+    html += '<span style="font-size:10px;color:var(--text-muted);margin-left:auto;align-self:center;">' +
+        totalVis + ' de ' + ((_monProblemas || []).filter(function (p) { return _monMostrarSilenciados || !p.suppressed; }).length) + ' exibido(s)</span>';
+    chipsEl.innerHTML = html;
+
+    // Popula dropdown de hosts (somente quando a lista muda)
+    const hostSel = document.getElementById('mon-prob-host');
+    if (hostSel) {
+        const hosts = {};
+        for (const p of (_monProblemas || [])) {
+            const id = String(p.hostid || '');
+            if (id && !hosts[id]) hosts[id] = p.host || id;
+        }
+        const atual = _monProbFiltro.host;
+        const opcoes = Object.keys(hosts).sort(function (a, b) { return String(hosts[a]).localeCompare(String(hosts[b])); })
+            .map(function (id) { return '<option value="' + esc(id) + '"' + (id === atual ? ' selected' : '') + '>' + esc(hosts[id]) + '</option>'; }).join('');
+        const esperado = '<option value="">Todos os hosts</option>' + opcoes;
+        if (hostSel.getAttribute('data-assinatura') !== esperado) {
+            hostSel.innerHTML = esperado;
+            hostSel.setAttribute('data-assinatura', esperado);
+        }
+    }
+}
+
 function monRenderProblemasLista(el) {
     const info = _monProblemasInfo || {};
     const todos = _monProblemas || [];
     const suprimidos = todos.filter(function (p) { return p.suppressed; }).length;
-    const visiveis = _monMostrarSilenciados ? todos : todos.filter(function (p) { return !p.suppressed; });
+    const visiveis = monProbFiltrados();
+
     // Atualiza contador/botao de silenciados
-    const cnt = document.getElementById('mon-silenciados-count');
-    if (cnt) cnt.textContent = String(suprimidos);
     const btn = document.getElementById('mon-toggle-silenciados');
     if (btn) {
         btn.style.opacity = suprimidos > 0 ? '1' : '0.55';
@@ -386,63 +509,177 @@ function monRenderProblemasLista(el) {
     const resumoEl = document.getElementById('mon-zabbix-problemas-resumo');
     if (resumoEl) {
         if (!info.conectado) resumoEl.innerHTML = '<span style="color:var(--red);"><i class="fas fa-plug-circle-xmark"></i> Zabbix desconectado</span>';
-        else resumoEl.innerHTML = '<b style="color:var(--text-primary);">' + (info.naoSuprimidos != null ? info.naoSuprimidos : visiveis.length) + '</b> aberto(s) &middot; <b style="color:var(--red);">' + (info.criticosNaoSuprimidos || 0) + '</b> critico(s) &middot; <b style="color:var(--yellow);">' + (info.naoReconhecidos || 0) + '</b> sem reconhecer';
+        else resumoEl.innerHTML = '<b style="color:var(--text-primary);">' + (info.naoSuprimidos != null ? info.naoSuprimidos : 0) + '</b> aberto(s) &middot; <b style="color:var(--red);">' + (info.criticosNaoSuprimidos || 0) + '</b> critico(s) &middot; <b style="color:var(--yellow);">' + (info.naoReconhecidos || 0) + '</b> sem reconhecer';
     }
+    // Chips + dropdown de hosts
+    try { monRenderProbChips(); } catch (e) {}
+
+    // Footer com contagem + acao em massa
+    const footer = document.getElementById('mon-prob-footer');
+    const contEl = document.getElementById('mon-prob-contagem');
+    const ackTodosBtn = document.getElementById('mon-btn-ack-todos');
+    if (footer) footer.style.display = info.conectado ? 'flex' : 'none';
+    if (contEl) contEl.textContent = 'Exibindo ' + visiveis.length + ' de ' + todos.length + ' problema(s)' +
+        (_monProbFiltro.texto || _monProbFiltro.host || _monProbFiltro.sev !== '' || _monProbFiltro.soNaoRec ? ' (filtros ativos)' : '');
+    if (ackTodosBtn) {
+        const pendentes = visiveis.filter(function (p) { return !p.reconhecido; }).length;
+        ackTodosBtn.style.display = pendentes > 0 ? 'inline-flex' : 'none';
+        ackTodosBtn.innerHTML = '<i class="fas fa-check-double" style="color:var(--green);"></i> Reconhecer todos visiveis (' + pendentes + ')';
+    }
+
     if (!info.conectado) {
         el.innerHTML = '<div style="padding:16px;"><p style="color:var(--red);font-size:13px;font-weight:600;"><i class="fas fa-plug-circle-xmark"></i> Nao foi possivel consultar o Zabbix.</p><p style="color:var(--text-muted);font-size:12px;margin-top:6px;">' + esc(info.erro || 'Erro desconhecido') + '</p><p style="color:var(--text-muted);font-size:11px;margin-top:8px;">Para restaurar: inicie o Docker Desktop e rode <code>docker compose -f docker-compose.zabbix.yml up -d</code>, depois clique em Atualizar.</p></div>';
         return;
     }
     if (!visiveis.length) {
-        el.innerHTML = '<div style="padding:22px;text-align:center;"><i class="fas fa-circle-check" style="font-size:30px;color:var(--green);opacity:0.6;"></i><p style="margin:10px 0 0;color:var(--text-secondary);font-size:13px;">Nenhum problema aberto no Zabbix.</p><p style="color:var(--text-muted);font-size:11px;">' + (suprimidos > 0 ? suprimidos + ' problema(s) silenciado(s) ocultados — use "Silenciados" abaixo para ver.' : 'Todos os triggers estao em estado OK.') + '</p></div>';
+        const filtrando = _monProbFiltro.texto || _monProbFiltro.host || _monProbFiltro.sev !== '' || _monProbFiltro.soNaoRec;
+        if (filtrando) {
+            el.innerHTML = '<div style="padding:22px;text-align:center;"><i class="fas fa-filter" style="font-size:26px;color:var(--cyan);opacity:0.55;"></i><p style="margin:10px 0 0;color:var(--text-secondary);font-size:13px;">Nenhum problema corresponde aos filtros.</p><p style="color:var(--text-muted);font-size:11px;">Ajuste a busca, host ou severidade — ou clique em "Limpar filtros".</p><button class="btn btn-ghost btn-sm" style="margin-top:10px;font-size:11px;" onclick="monProbLimparFiltros()"><i class="fas fa-eraser"></i> Limpar filtros</button></div>';
+        } else {
+            el.innerHTML = '<div style="padding:22px;text-align:center;"><i class="fas fa-circle-check" style="font-size:30px;color:var(--green);opacity:0.6;"></i><p style="margin:10px 0 0;color:var(--text-secondary);font-size:13px;">Nenhum problema aberto no Zabbix.</p><p style="color:var(--text-muted);font-size:11px;">' + (suprimidos > 0 ? suprimidos + ' problema(s) silenciado(s) ocultados — use "Silenciados" na barra.' : 'Todos os triggers estao em estado OK.') + '</p></div>';
+        }
         return;
     }
     el.innerHTML = visiveis.map(monProblemaItemHtml).join('');
+    try { monAtualizarTemposRelativos(); } catch (e) {}
 }
 
+function monProbLimparFiltros() {
+    _monProbFiltro = { texto: '', host: '', ordem: 'sev', soNaoRec: false, sev: '' };
+    const busca = document.getElementById('mon-prob-busca'); if (busca) busca.value = '';
+    const hostSel = document.getElementById('mon-prob-host'); if (hostSel) hostSel.value = '';
+    const ordem = document.getElementById('mon-prob-ordem'); if (ordem) ordem.value = 'sev';
+    const chk = document.getElementById('mon-prob-so-nao-rec'); if (chk) chk.checked = false;
+    monReRenderProblemas();
+}
+
+// Linha COMPACTA: uma linha por problema + clique abre detalhe completo
 function monProblemaItemHtml(p) {
     const sev = monSevInfo(p.severidade);
-    const inicio = p.inicio ? new Date(p.inicio).toLocaleString('pt-BR') : '—';
+    const inicio = p.inicio ? new Date(p.inicio) : null;
     const conselho = monConselhoFalha(p.trigger);
-    const zabbixUrl = monZabbixUrl(p.hostid);
-    const tags = (p.tags || []).slice(0, 6).map(function (t) {
-        return '<span class="badge badge-inativo" style="margin-right:4px;font-size:9px;">' + esc(t.tag || '') + (t.value ? '=' + esc(t.value) : '') + '</span>';
-    }).join('');
+    const tags = (p.tags || []).slice(0, 4).map(function (t) {
+        return '<span class="badge badge-inativo" style="font-size:9px;">' + esc(t.tag || '') + (t.value ? '=' + esc(t.value) : '') + '</span>';
+    }).join(' ');
     const ackBadge = p.reconhecido
-        ? '<span class="badge badge-ativo" title="Problema reconhecido no Zabbix"><i class="fas fa-check"></i> Reconhecido</span>'
-        : '<span class="badge badge-cancelada" title="Ainda nao reconhecido"><i class="fas fa-triangle-exclamation"></i> Nao reconhecido</span>';
-    const botaoAck = p.reconhecido
-        ? ''
-        : '<button class="btn btn-ghost btn-sm" style="justify-content:flex-start;" onclick="monAckProblema(\'' + monJsAttr(p.eventid) + '\')"><i class="fas fa-check-double" style="color:var(--green);"></i> Reconhecer</button>';
-    return '<div style="border:1px solid var(--border);border-left:4px solid ' + sev.cor + ';border-radius:12px;padding:12px 14px;margin-bottom:10px;background:' + sev.bg + ';">' +
-        '<div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;">' +
-            '<span style="display:inline-flex;align-items:center;gap:6px;background:' + sev.cor + ';color:#0b1020;font-size:10px;font-weight:800;letter-spacing:0.6px;text-transform:uppercase;border-radius:6px;padding:4px 9px;white-space:nowrap;margin-top:2px;">' + esc(sev.label) + '</span>' +
-            '<div style="flex:1;min-width:260px;">' +
-                '<b style="font-size:13px;color:var(--text-primary);line-height:1.4;display:block;">' + esc(p.trigger) + '</b>' +
-                '<div style="font-size:11px;color:var(--text-muted);margin-top:5px;display:flex;gap:14px;flex-wrap:wrap;">' +
-                    '<span><i class="fas fa-desktop"></i> ' + esc(p.host) + '</span>' +
-                    '<span><i class="fas fa-clock"></i> Desde ' + esc(inicio) + '</span>' +
-                    '<span><i class="fas fa-hourglass-half"></i> Ha <b style="color:var(--orange);">' + esc(p.duracaoTexto || '') + '</b></span>' +
-                    '<span><i class="fas fa-hashtag"></i> EventID ' + esc(p.eventid) + '</span>' +
-                '</div>' +
-                '<div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' + ackBadge + (tags ? '<span style="margin-left:4px;">' + tags + '</span>' : '') + '</div>' +
-                '<details style="margin-top:10px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:8px 12px;">' +
-                    '<summary style="cursor:pointer;font-size:11px;color:var(--cyan);font-weight:700;outline:none;"><i class="fas fa-stethoscope"></i> Diagnostico e como contornar</summary>' +
-                    '<div style="margin-top:8px;font-size:11px;color:var(--text-secondary);line-height:1.7;">' +
-                        '<p><b style="color:var(--text-primary);">Causa provavel:</b> ' + esc(conselho.causa) + '</p>' +
-                        '<p style="margin-top:6px;"><b style="color:var(--text-primary);">Como contornar:</b>' + conselho.contornoHtml + '</p>' +
-                        (p.opdata ? '<p style="margin-top:6px;"><b style="color:var(--text-primary);">Dados operacionais (opdata):</b> ' + esc(p.opdata) + '</p>' : '') +
-                        (p.mensagensAck ? '<p style="margin-top:6px;color:var(--text-muted);"><i class="fas fa-comment-dots"></i> ' + p.mensagensAck + ' mensagem(ns) de reconhecimento registrada(s).</p>' : '') +
-                    '</div>' +
-                '</details>' +
-            '</div>' +
-            '<div style="display:flex;flex-direction:column;gap:6px;min-width:180px;">' +
-                botaoAck +
-                '<button class="btn btn-ghost btn-sm" style="justify-content:flex-start;" onclick="monAbrirZabbixHost(\'' + monJsAttr(p.hostid || '') + '\')" title="Abrir problem view no Zabbix"><i class="fas fa-external-link-alt" style="color:var(--cyan);"></i> Abrir no Zabbix</button>' +
-                '<button class="btn btn-ghost btn-sm" style="justify-content:flex-start;" onclick="monAbrirOSFalha(\'' + monJsAttr(p.eventid) + '\')" title="Criar Ordem de Servico a partir desta falha"><i class="fas fa-clipboard-list" style="color:var(--purple);"></i> Abrir O.S.</button>' +
-                '<button class="btn btn-ghost btn-sm" style="justify-content:flex-start;" onclick="monVerInventario(\'' + monJsAttr(p.hostTecnico || p.host || '') + '\')" title="Filtrar inventario por este host"><i class="fas fa-desktop" style="color:var(--green);"></i> Localizar no Inventario</button>' +
-            '</div>' +
+        ? '<span class="badge badge-ativo" title="Problema reconhecido no Zabbix"><i class="fas fa-check"></i> Rec.</span>'
+        : '<span class="badge badge-cancelada" title="Ainda nao reconhecido"><i class="fas fa-triangle-exclamation"></i> Nao rec.</span>';
+    const supBadge = p.suppressed
+        ? '<span class="badge badge-inativo" title="Problema silenciado/suprimido no Zabbix"><i class="fas fa-eye-slash"></i> Silenciado</span>' : '';
+    const truncado = p.trigger && p.trigger.length > 110 ? p.trigger.substring(0, 110) + '…' : (p.trigger || '');
+    return '<div class="mon-prob-item" style="border:1px solid var(--border);border-left:4px solid ' + sev.cor + ';border-radius:10px;padding:8px 12px;margin-bottom:6px;background:' + sev.bg + ';cursor:pointer;transition:background 0.15s;"' +
+        ' onclick="monAbrirDetalheProblema(\'' + monJsAttr(p.eventid) + '\')"' +
+        ' onmouseover="this.style.background=\'' + sev.cor + '22\'" onmouseout="this.style.background=\'' + sev.bg + '\'">' +
+        '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">' +
+            '<span style="display:inline-flex;align-items:center;gap:5px;background:' + sev.cor + ';color:#0b1020;font-size:9px;font-weight:800;letter-spacing:0.5px;text-transform:uppercase;border-radius:5px;padding:3px 8px;white-space:nowrap;">' + esc(sev.label) + '</span>' +
+            '<b style="font-size:12px;color:var(--text-primary);flex:1;min-width:220px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + esc(p.trigger || '') + '">' + esc(truncado) + '</b>' +
+            '<span style="font-size:10px;color:var(--text-secondary);white-space:nowrap;"><i class="fas fa-desktop"></i> ' + esc(p.host || '?') + '</span>' +
+            '<span style="font-size:10px;color:var(--orange);white-space:nowrap;font-weight:600;" data-mon-tempo="' + esc(inicio ? inicio.toISOString() : '') + '" title="Inicio: ' + esc(inicio ? inicio.toLocaleString('pt-BR') : '—') + '">' + esc(monTempoRelativo(inicio)) + '</span>' +
+            ackBadge + supBadge +
+            '<span style="display:flex;gap:4px;margin-left:auto;">' +
+                (p.reconhecido ? '' : '<button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:10px;" onclick="event.stopPropagation();monAckProblema(\'' + monJsAttr(p.eventid) + '\')" title="Reconhecer no Zabbix"><i class="fas fa-check-double" style="color:var(--green);"></i></button>') +
+                '<button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:10px;" onclick="event.stopPropagation();monAbrirZabbixHost(\'' + monJsAttr(p.hostid || '') + '\')" title="Abrir problem view no Zabbix"><i class="fas fa-external-link-alt" style="color:var(--cyan);"></i></button>' +
+                '<button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:10px;" onclick="event.stopPropagation();monAbrirOSFalha(\'' + monJsAttr(p.eventid) + '\')" title="Criar Ordem de Servico"><i class="fas fa-clipboard-list" style="color:var(--purple);"></i></button>' +
+                '<button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:10px;" onclick="event.stopPropagation();monVerInventario(\'' + monJsAttr(p.hostTecnico || p.host || '') + '\')" title="Localizar no Inventario"><i class="fas fa-desktop" style="color:var(--green);"></i></button>' +
+            '</span>' +
         '</div>' +
+        (tags ? '<div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap;align-items:center;"><span style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Tags:</span>' + tags + '</div>' : '') +
     '</div>';
+}
+
+// ==================== DETALHE DO PROBLEMA (modal) ====================
+function monAbrirDetalheProblema(eventid) {
+    const p = monProblemaPorId(eventid);
+    if (!p) { if (typeof showToast === 'function') showToast('Problema nao encontrado.', 'error'); return; }
+    const sev = monSevInfo(p.severidade);
+    const conselho = monConselhoFalha(p.trigger);
+    const inicio = p.inicio ? new Date(p.inicio) : null;
+    const tags = (p.tags || []).length ? (p.tags || []).map(function (t) {
+        return '<span class="badge badge-inativo" style="font-size:10px;margin-right:4px;">' + esc(t.tag || '') + (t.value ? ' = ' + esc(t.value) : '') + '</span>';
+    }).join('') : '<span style="color:var(--text-muted);font-size:11px;">Sem tags</span>';
+    const ackMsgs = p.mensagensAck ? '<p style="margin-top:6px;font-size:11px;color:var(--text-muted);"><i class="fas fa-comment-dots"></i> ' + p.mensagensAck + ' mensagem(ns) de reconhecimento registrada(s).</p>' : '';
+    const footer =
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">' +
+        (p.reconhecido ? '' : '<button class="btn btn-ghost btn-sm" onclick="monAckProblema(\'' + monJsAttr(p.eventid) + '\');setTimeout(function(){if(typeof monFecharModalProblema===\'function\')monFecharModalProblema();},400);"><i class="fas fa-check-double" style="color:var(--green);"></i> Reconhecer</button>') +
+        '<button class="btn btn-ghost btn-sm" onclick="monAbrirZabbixHost(\'' + monJsAttr(p.hostid || '') + '\')"><i class="fas fa-external-link-alt" style="color:var(--cyan);"></i> Abrir no Zabbix</button>' +
+        '<button class="btn btn-ghost btn-sm" onclick="monAbrirOSFalha(\'' + monJsAttr(p.eventid) + '\')"><i class="fas fa-clipboard-list" style="color:var(--purple);"></i> Abrir O.S.</button>' +
+        '<button class="btn btn-ghost btn-sm" onclick="monVerInventario(\'' + monJsAttr(p.hostTecnico || p.host || '') + '\')"><i class="fas fa-desktop" style="color:var(--green);"></i> Inventario</button>' +
+        '</div>';
+    const body =
+        '<div style="padding:4px 2px;">' +
+        '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">' +
+            '<span style="display:inline-flex;align-items:center;gap:6px;background:' + sev.cor + ';color:#0b1020;font-size:10px;font-weight:800;text-transform:uppercase;border-radius:6px;padding:4px 10px;">' + esc(sev.label) + '</span>' +
+            (p.reconhecido ? '<span class="badge badge-ativo"><i class="fas fa-check"></i> Reconhecido</span>' : '<span class="badge badge-cancelada"><i class="fas fa-triangle-exclamation"></i> Nao reconhecido</span>') +
+            (p.suppressed ? '<span class="badge badge-inativo"><i class="fas fa-eye-slash"></i> Silenciado</span>' : '') +
+        '</div>' +
+        '<p style="font-size:13px;color:var(--text-primary);font-weight:700;line-height:1.5;margin:0 0 10px;">' + esc(p.trigger || '') + '</p>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-bottom:12px;">' +
+            '<div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:8px 10px;"><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Host</div><div style="font-size:12px;font-weight:600;margin-top:2px;">' + esc(p.host || '?') + '</div></div>' +
+            '<div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:8px 10px;"><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Inicio</div><div style="font-size:12px;font-weight:600;margin-top:2px;">' + esc(inicio ? inicio.toLocaleString('pt-BR') : '—') + '</div></div>' +
+            '<div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:8px 10px;"><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Duracao</div><div style="font-size:12px;font-weight:600;margin-top:2px;color:var(--orange);" data-mon-tempo="' + esc(inicio ? inicio.toISOString() : '') + '">' + esc(monTempoRelativo(inicio)) + '</div></div>' +
+            '<div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:8px 10px;"><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">EventID</div><div style="font-size:12px;font-weight:600;margin-top:2px;">' + esc(p.eventid) + '</div></div>' +
+        '</div>' +
+        '<div style="margin-bottom:10px;"><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">Tags</div>' + tags + '</div>' +
+        (p.opdata ? '<div style="margin-bottom:10px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:8px 10px;"><div style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Dados operacionais (opdata)</div><div style="font-size:12px;margin-top:3px;">' + esc(p.opdata) + '</div></div>' : '') +
+        '<div style="background:rgba(0,0,0,0.18);border:1px solid var(--border);border-radius:8px;padding:10px 12px;">' +
+            '<div style="font-size:11px;font-weight:700;color:var(--cyan);margin-bottom:6px;"><i class="fas fa-stethoscope"></i> Diagnostico e plano de acao</div>' +
+            '<p style="font-size:11px;color:var(--text-secondary);line-height:1.7;margin:0;"><b style="color:var(--text-primary);">Causa provavel:</b> ' + esc(conselho.causa) + '</p>' +
+            '<div style="font-size:11px;color:var(--text-secondary);line-height:1.7;margin-top:6px;"><b style="color:var(--text-primary);">Como contornar:</b>' + conselho.contornoHtml + '</div>' +
+            ackMsgs +
+        '</div>' +
+        '</div>';
+    if (typeof openModal === 'function') openModal('Problema #' + esc(p.eventid) + ' — ' + esc(p.host || ''), body, footer);
+}
+
+function monFecharModalProblema() {
+    if (typeof closeModal === 'function') { closeModal(); return; }
+    const m = document.getElementById('modal-overlay');
+    if (m) m.classList.remove('active');
+}
+
+// ==================== ACAO EM MASSA + URL DINAMICA NO ZABBIX ====================
+async function monAckTodosVisiveis() {
+    const pendentes = monProbFiltrados().filter(function (p) { return !p.reconhecido; });
+    if (!pendentes.length) { if (typeof showToast === 'function') showToast('Nenhum problema pendente de reconhecimento.', 'success'); return; }
+    const msg = prompt('Mensagem de reconhecimento para os ' + pendentes.length + ' problema(s) visivel(is):', 'Em analise pelo time de TI — ' + new Date().toLocaleString('pt-BR'));
+    if (msg === null) return;
+    try {
+        const r = await fetch('/api/zabbix/problemas/ack', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ eventids: pendentes.map(function (p) { return p.eventid; }), message: msg || 'Reconhecido via Inventario TI' })
+        });
+        const d = await r.json();
+        if (!r.ok || d.ok === false) throw new Error((d && d.error) || ('HTTP ' + r.status));
+        const falhas = (d.falhas || []).length;
+        if (typeof showToast === 'function') showToast((falhas ? falhas + ' falha(s), ' : '') + (d.resultados || []).length + ' problema(s) reconhecido(s) no Zabbix.', falhas ? 'error' : 'success');
+        if (typeof pushLog === 'function') pushLog('ALTERACAO', 'MONITORAMENTO', null, 'Zabbix ACK em massa: ' + pendentes.length + ' problema(s) reconhecido(s)');
+        monRenderZabbixProblemas(true);
+    } catch (e) {
+        if (typeof showToast === 'function') showToast('Falha ao reconhecer em massa: ' + e.message, 'error');
+    }
+}
+
+// Gera URL do Zabbix problem.view com os MESMOS filtros ativos aqui (dinamico, sem IP fixo)
+function monAbrirZabbixFiltrado() {
+    const f = _monProbFiltro;
+    const params = [];
+    params.push('action=problem.view');
+    params.push('show=1');
+    params.push('name=' + encodeURIComponent(f.texto || ''));
+    params.push('acknowledgement_status=' + (f.soNaoRec ? '1' : '0'));
+    if (f.host) params.push('hostids[]=' + encodeURIComponent(f.host));
+    if (f.sev !== '') params.push('severity[]=' + encodeURIComponent(f.sev));
+    params.push('show_tags=3');
+    params.push('tag_name_format=0');
+    params.push('show_timeline=1');
+    params.push('show_suppressed=' + (_monMostrarSilenciados ? '1' : '0'));
+    params.push('sort=clock');
+    params.push('sortorder=' + (f.ordem === 'recente' ? 'ASC' : 'DESC'));
+    params.push('age_state=0');
+    params.push('compact_view=1');
+    const url = monZabbixBase() + '/zabbix.php?' + params.join('&');
+    window.open(url, '_blank', 'noopener');
 }
 
 async function monAckProblema(eventid) {
@@ -717,6 +954,21 @@ function monConectarSSE() {
             } catch (err) {}
         });
 
+        // Evento: problemas Zabbix mudaram (push do servidor quando ha diferenca real)
+        _monEventSource.addEventListener('zabbix-problemas', function(e) {
+            try {
+                const d = JSON.parse(e.data);
+                _monProblemasInfo = d || { conectado: false, erro: 'Resposta vazia', total: 0, problemas: [] };
+                _monProblemas = (_monProblemasInfo && _monProblemasInfo.problemas) || [];
+                _monProblemasTs = Date.now();
+                const secao = document.getElementById('monitoramento');
+                const oculta = secao && secao.classList.contains('hidden');
+                if (oculta) { _monDirty = true; monRenderDashboardWidget(); return; }
+                monRenderProblemasLista(document.getElementById('mon-zabbix-problemas'));
+                monRenderDashboardWidget();
+            } catch (err) {}
+        });
+
         _monEventSource.addEventListener('connected', function() {
             monAtualizar();
         });
@@ -755,6 +1007,17 @@ if (typeof document !== 'undefined' && document.addEventListener) {
         window.monAbrirOSFalha = monAbrirOSFalha;
         window.monVerInventario = monVerInventario;
         window.monGerarRelatorioFalhas = monGerarRelatorioFalhas;
+        window.monAbrirDetalheProblema = monAbrirDetalheProblema;
+        window.monFecharModalProblema = monFecharModalProblema;
+        window.monProbFiltroTexto = monProbFiltroTexto;
+        window.monProbFiltroHost = monProbFiltroHost;
+        window.monProbOrdem = monProbOrdem;
+        window.monProbSoNaoRec = monProbSoNaoRec;
+        window.monProbChipSev = monProbChipSev;
+        window.monProbLimparFiltros = monProbLimparFiltros;
+        window.monAckTodosVisiveis = monAckTodosVisiveis;
+        window.monAbrirZabbixFiltrado = monAbrirZabbixFiltrado;
+        window.monToggleSilenciados = monToggleSilenciados;
     });
 }
 

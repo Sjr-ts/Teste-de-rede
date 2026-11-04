@@ -767,49 +767,91 @@ app.get('/api/zabbix/monitoramento', async (req, res) => {
 // ---- Zabbix: incidentes abertos enriquecidos (para a aba Monitoramento) ----
 // Cache curto (10s) para nao martelar a API do Zabbix a cada refresh do painel.
 let _zbProblemasCache = { ts: 0, data: null };
+
+// Monta o payload de problemas (usado pelo endpoint REST e pelo push SSE — fonte unica)
+async function montarPayloadProblemas(hostid) {
+    const agora = Date.now();
+    if (!hostid && _zbProblemasCache.data && (agora - _zbProblemasCache.ts) < 10000) {
+        return _zbProblemasCache.data;
+    }
+    const zb = require('./monitor/zabbix-bridge');
+    const problemas = await zb.listarProblemasDetalhado(hostid || undefined);
+    const porSeveridade = { '0': 0, '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
+    for (const p of problemas) porSeveridade[p.severidade] = (porSeveridade[p.severidade] || 0) + 1;
+    const payload = {
+        conectado: true,
+        total: problemas.length,
+        criticos: (porSeveridade['4'] || 0) + (porSeveridade['5'] || 0),
+        naoReconhecidos: problemas.filter(p => !p.reconhecido).length,
+        naoSuprimidos: problemas.filter(p => !p.suppressed).length,
+        criticosNaoSuprimidos: problemas.filter(p => (p.severidade === '4' || p.severidade === '5') && !p.suppressed).length,
+        suprimidos: problemas.filter(p => p.suppressed).length,
+        porSeveridade,
+        problemas,
+        atualizadoEm: new Date().toISOString()
+    };
+    if (!hostid) _zbProblemasCache = { ts: agora, data: payload };
+    return payload;
+}
+
 app.get('/api/zabbix/problemas', async (req, res) => {
     try {
         const hostid = (req.query.hostid || '').trim();
-        const agora = Date.now();
-        // Cache so para a consulta global (sem filtro por host)
-        if (!hostid && _zbProblemasCache.data && (agora - _zbProblemasCache.ts) < 10000) {
-            return res.json(_zbProblemasCache.data);
-        }
-        const zb = require('./monitor/zabbix-bridge');
-        const problemas = await zb.listarProblemasDetalhado(hostid || undefined);
-        const porSeveridade = { '0': 0, '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
-        for (const p of problemas) porSeveridade[p.severidade] = (porSeveridade[p.severidade] || 0) + 1;
-        const payload = {
-            conectado: true,
-            total: problemas.length,
-            criticos: (porSeveridade['4'] || 0) + (porSeveridade['5'] || 0),
-            naoReconhecidos: problemas.filter(p => !p.reconhecido).length,
-            naoSuprimidos: problemas.filter(p => !p.suppressed).length,
-            criticosNaoSuprimidos: problemas.filter(p => (p.severidade === '4' || p.severidade === '5') && !p.suppressed).length,
-            suprimidos: problemas.filter(p => p.suppressed).length,
-            porSeveridade,
-            problemas,
-            atualizadoEm: new Date().toISOString()
-        };
-        if (!hostid) _zbProblemasCache = { ts: agora, data: payload };
-        res.json(payload);
+        res.json(await montarPayloadProblemas(hostid || undefined));
     } catch (e) {
         res.json({ conectado: false, erro: e.message, total: 0, criticos: 0, problemas: [], atualizadoEm: new Date().toISOString() });
     }
 });
 
-// ---- Zabbix: reconhecer problema (acknowledge) ----
+// ---- SSE: push de problemas Zabbix quando algo muda (max 1x a cada 30s) ----
+// Assinatura: eventid + reconhecido + suprimido — so envia quando ha diferenca real
+let _zbProbSseTs = 0;
+let _zbProbSseAssinatura = '';
+setInterval(async () => {
+    if (sseClients.size === 0) return;
+    const agora = Date.now();
+    if (agora - _zbProbSseTs < 30000) return;
+    _zbProbSseTs = agora;
+    try {
+        const payload = await montarPayloadProblemas();
+        const assinatura = payload.problemas.map(p => p.eventid + ':' + (p.reconhecido ? 1 : 0) + ':' + (p.suppressed ? 1 : 0)).join('|') + '#' + payload.total;
+        if (assinatura !== _zbProbSseAssinatura) {
+            _zbProbSseAssinatura = assinatura;
+            sseBroadcast('zabbix-problemas', payload);
+        }
+    } catch (e) {}
+}, 10000);
+
+// ---- Zabbix: reconhecer problema (acknowledge) — aceita eventid unico ou eventids[] (massa) ----
 app.post('/api/zabbix/problemas/ack', async (req, res) => {
     try {
         const body = req.body || {};
-        const eventid = body.eventid != null ? String(body.eventid) : '';
-        if (!eventid) return res.status(400).json({ ok: false, error: 'eventid obrigatorio' });
+        // Normaliza para lista: eventids[] (massa) ou eventid (unico)
+        const eventids = Array.isArray(body.eventids)
+            ? body.eventids.map(String).filter(Boolean)
+            : (body.eventid != null && String(body.eventid) ? [String(body.eventid)] : []);
+        if (!eventids.length) return res.status(400).json({ ok: false, error: 'eventid ou eventids obrigatorio' });
+        if (eventids.length > 50) return res.status(400).json({ ok: false, error: 'maximo de 50 por chamada' });
         const mensagem = (body.message || 'Reconhecido via Inventario TI').toString().slice(0, 2000);
         const zb = require('./monitor/zabbix-bridge');
-        const resultado = await zb.reconhecerProblema(eventid, mensagem);
+        const resultados = [];
+        const falhas = [];
+        for (const id of eventids) {
+            try {
+                resultados.push({ eventid: id, ok: true, resultado: await zb.reconhecerProblema(id, mensagem) });
+            } catch (e) {
+                falhas.push({ eventid: id, erro: e.message });
+            }
+        }
         // Invalida o cache de problemas para o painel refletir o ack na hora
         _zbProblemasCache = { ts: 0, data: null };
-        res.json({ ok: true, resultado });
+        // Push imediato do novo estado (nao espera o ciclo de 30s)
+        try {
+            const payload = await montarPayloadProblemas();
+            _zbProbSseAssinatura = payload.problemas.map(p => p.eventid + ':' + (p.reconhecido ? 1 : 0) + ':' + (p.suppressed ? 1 : 0)).join('|') + '#' + payload.total;
+            sseBroadcast('zabbix-problemas', payload);
+        } catch (e) {}
+        res.json({ ok: falhas.length === 0, resultados, falhas });
     } catch (e) {
         res.status(500).json({ ok: false, error: e.message });
     }

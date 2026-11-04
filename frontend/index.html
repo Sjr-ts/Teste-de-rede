@@ -875,21 +875,55 @@
                     <h3><i class="fas fa-triangle-exclamation"></i> Problemas Zabbix (Abertos)</h3>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;">
                         <span id="mon-zabbix-problemas-resumo" style="font-size:11px;color:var(--text-muted);align-self:center;"></span>
+                        <span id="mon-zabbix-problemas-age" style="font-size:10px;color:var(--text-muted);align-self:center;opacity:0.7;" title="Ultima atualizacao do painel de problemas"></span>
                         <button onclick="monGerarRelatorioFalhas()" class="btn btn-ghost btn-sm" title="Relatorio profissional de falhas (nova aba, pronto para PDF)">
                             <i class="fas fa-file-pdf"></i> Relatorio de Falhas
                         </button>
-                        <button onclick="monRenderZabbixProblemas()" class="btn btn-ghost btn-sm" title="Atualizar problemas">
+                        <button onclick="monRenderZabbixProblemas(true)" class="btn btn-ghost btn-sm" title="Atualizar agora (tambem atualiza sozinho em tempo real)">
                             <i class="fas fa-rotate"></i> Atualizar
                         </button>
                     </div>
                 </div>
-                <div id="mon-zabbix-problemas" style="padding:12px;">
-                    <p style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px;">Carregando problemas Zabbix...</p>
-                </div>
-                <div style="padding:0 12px 12px;display:flex;justify-content:flex-end;">
+                <!-- Toolbar de filtros dinamicos (estilo Zabbix problem view) -->
+                <div id="mon-prob-toolbar" style="padding:10px 12px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                    <div style="position:relative;flex:1;min-width:190px;">
+                        <i class="fas fa-search" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:11px;"></i>
+                        <input id="mon-prob-busca" type="text" placeholder="Buscar por trigger, host ou tag..."
+                            style="width:100%;padding:6px 8px 6px 28px;font-size:11px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);outline:none;"
+                            oninput="monProbFiltroTexto(this.value)">
+                    </div>
+                    <select id="mon-prob-host" onchange="monProbFiltroHost(this.value)"
+                        style="padding:6px 8px;font-size:11px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);outline:none;max-width:200px;">
+                        <option value="">Todos os hosts</option>
+                    </select>
+                    <select id="mon-prob-ordem" onchange="monProbOrdem(this.value)"
+                        style="padding:6px 8px;font-size:11px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);outline:none;">
+                        <option value="sev">Severidade (maior)</option>
+                        <option value="recente">Mais recente</option>
+                        <option value="antigo">Mais antigo</option>
+                    </select>
+                    <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-secondary);cursor:pointer;user-select:none;" title="Mostrar apenas problemas ainda nao reconhecidos">
+                        <input type="checkbox" id="mon-prob-so-nao-rec" onchange="monProbSoNaoRec(this.checked)" style="accent-color:var(--cyan);"> Nao reconhecidos
+                    </label>
                     <button onclick="monToggleSilenciados()" id="mon-toggle-silenciados" class="btn btn-ghost btn-sm" style="font-size:10px;" title="Mostrar/ocultar problemas silenciados no Zabbix">
                         <i class="fas fa-eye-slash"></i> Silenciados: <span id="mon-silenciados-count">0</span>
                     </button>
+                    <button onclick="monAbrirZabbixFiltrado()" class="btn btn-ghost btn-sm" style="font-size:10px;" title="Abrir o Zabbix Web com exatamente estes filtros aplicados">
+                        <i class="fas fa-external-link-alt"></i> Ver no Zabbix
+                    </button>
+                </div>
+                <!-- Chips de severidade (contadores clicaveis) -->
+                <div id="mon-prob-chips" style="padding:8px 12px 4px;display:flex;gap:6px;flex-wrap:wrap;"></div>
+                <div id="mon-zabbix-problemas" style="padding:8px 12px 12px;">
+                    <p style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px;">Carregando problemas Zabbix...</p>
+                </div>
+                <div id="mon-prob-footer" style="padding:0 12px 12px;display:none;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center;">
+                    <span id="mon-prob-contagem" style="font-size:10px;color:var(--text-muted);"></span>
+                    <div style="display:flex;gap:8px;">
+                        <button onclick="monAckTodosVisiveis()" id="mon-btn-ack-todos" class="btn btn-ghost btn-sm" style="font-size:10px;" title="Reconhecer todos os problemas visiveis com a mensagem padrao">
+                            <i class="fas fa-check-double" style="color:var(--green);"></i> Reconhecer todos visiveis
+                        </button>
+                    </div>
                 </div>
             </div>
             <div class="glass-panel" style="margin-top:16px;">
@@ -999,7 +1033,7 @@
     <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="js/app.js?v=4600-deep-zabbix"></script>
-<script src="js/monitor.js?v=6600-deep-zabbix"></script>
+<script src="js/app.js?v=4700-problem-view"></script>
+<script src="js/monitor.js?v=6700-problem-view"></script>
 </body>
 </html>

@@ -344,6 +344,7 @@ async function listarProblemasDetalhado(hostid) {
             duracaoTexto: formatarDuracao(dur),
             reconhecido: ackViaFlag || ackViaMensagens,
             supresso: p.suppressed === '1' || p.suppressed === 1 || p.suppressed === true,
+            suppressed: p.suppressed === '1' || p.suppressed === 1 || p.suppressed === true,
             opdata: p.opdata || '',
             tags: Array.isArray(p.tags) ? p.tags.map(function (t) { return { tag: t.tag, value: t.value }; }) : [],
             mensagensAck: Array.isArray(p.acknowledges) ? p.acknowledges.length : 0
