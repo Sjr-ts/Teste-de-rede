@@ -193,6 +193,36 @@ Dashboard **"Inventario TI"** (id 401) com 4 widgets, idempotente:
 `problems` (ao vivo, grupo Inventario TI), `problemsbysv`, `hostavail` e
 `url` apontando para o próprio painel (`urlPainel` enviado pelo request).
 
+## Acesso simplificado (2026-11-04)
+
+O menu lateral do Zabbix mostra ~40 itens administrativos — a maioria nunca
+usada. Foi criada uma **role restrita para o dia a dia**, via API:
+
+- **Role "Inventário TI — Operador"** (id 6, tipo Super admin — as permissões
+  de host não mudam), com quase tudo **revogado**:
+  - Ficam visíveis: **Dashboards** (o "Inventário TI" aparece lá), **Problems**,
+    **Hosts**, **Latest data**, **Inventory** (Overview/Hosts) e **Availability
+    report**.
+  - Esconde: Maps, Discovery, Services/SLA, Data collection, Alerts, Users,
+    Administration (Geral, Proxies, Housekeeping, Filas, Macros...) e tudo mais.
+  - Ações permitidas: reconhecer/suprimir/fechar problemas e comentar — nada de
+    editar dashboards, scripts, manutenção, SLA, severity ou API tokens.
+  - `*.default_access = 0` (UI/API/ações/módulos): **upgrades futuros do Zabbix
+    não reintroduzem itens novos** na conta do dia a dia.
+  - **API totalmente desabilitada** (`api.access=0`) — a UI funciona normalmente;
+    chamadas de API são recusadas (o painel usa a conta `Admin`, fora da role).
+- **Usuário `inventario`** (userid 3, grupo *Zabbix administrators*) — login do
+  dia a dia. Senha forte em **`monitor/zabbix-inventario.txt`** (fora do git).
+- **`Admin` continua completo** para manutenção/integração — não foi alterado.
+- Amostra **"Local network"** (map padrão vazio, id 1) foi removida.
+- Verificado ao vivo: login OK; `dashboard.get`/`authentication.get`/`user.get`/
+  `map.delete` via API → **negados**; Admin inalterado.
+
+### Antes/depois
+- Antes: Admin/zabbix com 40+ itens de menu (Administration, Alerts, Users,
+  Filas, Housekeeping...).
+- Agora: `inventario` vê só o essencial; `Admin` intacto para manutenção.
+
 ### Frontend
 - Botão **Sincronizar** agora usa o sync completo e mostra relatório detalhado
   (criados/atualizados/inalterados/sem IP/sem vínculo + manutenções).

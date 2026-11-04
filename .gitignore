@@ -33,4 +33,5 @@ desktop.ini
 # Copie de monitor/*.example.json e preencha a senha localmente
 monitor/config.json
 monitor/zabbix-config.json
+monitor/zabbix-inventario.txt
 *.bak-*
