@@ -25,6 +25,9 @@ let _monChartAtual = null;
 let _monChartExpandido = false;
 let _monCpuTempoReal = null; // valor atual da CPU em tempo real
 let _monGpuTempoReal = null; // valor atual da GPU em tempo real
+let _monCpuTs = 0;           // epoch ms da ultima CPU
+let _monGpuTs = 0;           // epoch ms da ultima GPU
+let _monGpuNome = null;      // nome da GPU (Intel Iris Xe etc.)
 let _monGpuHist = []; // histórico de GPU para gráficos
 
 // ==================== INICIALIZACAO ====================
@@ -64,23 +67,40 @@ async function monPollCpuTempoReal() {
         // CPU
         if (cpuRes && cpuRes.cpu != null) {
             _monCpuTempoReal = cpuRes.cpu;
+            _monCpuTs = cpuRes.ts || Date.now();
             // Adiciona ao histórico (mantém últimos 60 pontos)
             _monCpuHist.push(cpuRes.cpu);
             if (_monCpuHist.length > 60) _monCpuHist.shift();
             monAtualizarCpuNaTabela(cpuRes.cpu, cpuRes.ts);
             monAtualizarKpiCpu(cpuRes.cpu, cpuRes.ts);
         }
-        
+
         // GPU
         if (gpuRes && gpuRes.gpu != null) {
             _monGpuTempoReal = gpuRes.gpu;
+            _monGpuTs = gpuRes.ts || Date.now();
+            if (gpuRes.nome) _monGpuNome = gpuRes.nome;
             // Adiciona ao histórico (mantém últimos 60 pontos)
             _monGpuHist.push(gpuRes.gpu);
             if (_monGpuHist.length > 60) _monGpuHist.shift();
-            monAtualizarGpuNaTabela(gpuRes.gpu, gpuRes.nome, gpuRes.ts);
-            monAtualizarKpiGpu(gpuRes.gpu, gpuRes.nome, gpuRes.ts);
+            monAtualizarGpuNaTabela(gpuRes.gpu, gpuRes.nome || _monGpuNome, gpuRes.ts);
+            monAtualizarKpiGpu(gpuRes.gpu, gpuRes.nome || _monGpuNome, gpuRes.ts);
         }
     } catch (e) {}
+}
+
+// Linha do PC local (este servidor) na tabela — match robusto via data-local
+function monLinhaLocalTabela(tabela) {
+    return tabela.querySelector('tr[data-local="1"]');
+}
+
+// Rotulo de idade honesta: "agora" (<2s) | "ha Ns" — nunca mostra dado velho como novo
+function monIdadeHtml(ts) {
+    if (!ts) return '<span style="font-size:9px;color:var(--green);">TEMPO REAL</span>';
+    const seg = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+    const cor = seg <= 2 ? 'var(--green)' : seg <= 6 ? 'var(--yellow)' : 'var(--orange)';
+    const txt = seg <= 2 ? 'agora' : 'ha ' + seg + 's';
+    return '<span style="font-size:9px;color:' + cor + ';">' + txt + '</span>';
 }
 
 // Atualiza a celula de CPU do MEU-PC na tabela
@@ -89,22 +109,14 @@ function monAtualizarCpuNaTabela(cpu, ts) {
     if (!tabela) return;
     const tbody = tabela.querySelector('tbody');
     if (!tbody) return;
-    // Procura a linha de ESTE PC (IP resolvido dinamicamente)
-    const linhas = tbody.querySelectorAll('tr');
-    for (const tr of linhas) {
-        const ipCell = tr.querySelector('td:first-child');
-        if (ipCell && ipCell.textContent.includes(_monLocalIp)) {
-            // Encontra a coluna CPU (indice 5)
-            const tds = tr.querySelectorAll('td');
-            if (tds.length >= 6) {
-                const cpuCell = tds[5];
-                const idade = ts ? Math.round((Date.now() - ts) / 1000) : null;
-                const idadeHtml = idade != null ? '<br><span style="font-size:9px;color:var(--green);">agora</span>' : '';
-                cpuCell.innerHTML = '<span style="color:var(--cyan);font-weight:600;">' + cpu.toFixed(1) + '%</span>' +
-                    '<br><span style="font-size:9px;color:var(--green);">TEMPO REAL</span>' + idadeHtml;
-            }
-            break;
-        }
+    const tr = monLinhaLocalTabela(tbody);
+    if (!tr) return;
+    const tds = tr.querySelectorAll('td');
+    if (tds.length >= 6) {
+        const cpuCell = tds[5];
+        cpuCell.innerHTML = '<span style="color:var(--cyan);font-weight:600;">' + cpu.toFixed(1) + '%</span>' +
+            '<br><span style="font-size:9px;color:var(--text-muted);" title="Contador &apos;% Processor Utility&apos; — o mesmo exibido no Gerenciador de Tarefas">TEMPO REAL</span>' +
+            '<br>' + monIdadeHtml(ts);
     }
 }
 
@@ -114,20 +126,15 @@ function monAtualizarGpuNaTabela(gpu, nome, ts) {
     if (!tabela) return;
     const tbody = tabela.querySelector('tbody');
     if (!tbody) return;
-    const linhas = tbody.querySelectorAll('tr');
-    for (const tr of linhas) {
-        const ipCell = tr.querySelector('td:first-child');
-        if (ipCell && ipCell.textContent.includes(_monLocalIp)) {
-            const tds = tr.querySelectorAll('td');
-            if (tds.length >= 7) {
-                const gpuCell = tds[6];
-                const cor = gpu > 80 ? 'var(--red)' : gpu > 60 ? 'var(--yellow)' : 'var(--cyan)';
-                gpuCell.innerHTML = '<span style="color:' + cor + ';font-weight:600;">' + gpu.toFixed(1) + '%</span>' +
-                    '<br><span style="font-size:9px;color:var(--text-muted);">' + (nome || 'GPU') + '</span>' +
-                    '<br><span style="font-size:9px;color:var(--green);">TEMPO REAL</span>';
-            }
-            break;
-        }
+    const tr = monLinhaLocalTabela(tbody);
+    if (!tr) return;
+    const tds = tr.querySelectorAll('td');
+    if (tds.length >= 7) {
+        const gpuCell = tds[6];
+        const cor = gpu > 80 ? 'var(--red)' : gpu > 60 ? 'var(--yellow)' : 'var(--cyan)';
+        gpuCell.innerHTML = '<span style="color:' + cor + ';font-weight:600;">' + gpu.toFixed(1) + '%</span>' +
+            '<br><span style="font-size:9px;color:var(--text-muted);">' + esc(nome || 'GPU') + '</span>' +
+            '<br>' + monIdadeHtml(ts);
     }
 }
 
@@ -137,7 +144,7 @@ function monAtualizarKpiCpu(cpu, ts) {
     if (!el) {
         const kpiGrid = document.getElementById('mon-kpis');
         if (kpiGrid) {
-            const cpuKpi = monKpiCard('fa-microchip', 'cyan', cpu.toFixed(1) + '%', 'CPU Tempo Real', 'Coleta a cada 3s', 'mon-kpi-cpu-tempo-real',
+            const cpuKpi = monKpiCard('fa-microchip', 'cyan', cpu.toFixed(1) + '%', 'CPU Tempo Real', 'ao vivo · 1s', 'mon-kpi-cpu-tempo-real',
                 '<span style="font-size:10px;color:var(--green);"><i class="fas fa-circle" style="font-size:6px;"></i> AO VIVO</span>');
             kpiGrid.insertAdjacentHTML('afterbegin', cpuKpi);
         }
@@ -155,7 +162,7 @@ function monAtualizarKpiGpu(gpu, nome, ts) {
     if (!el) {
         const kpiGrid = document.getElementById('mon-kpis');
         if (kpiGrid) {
-            const gpuKpi = monKpiCard('fa-tv', 'purple', gpu.toFixed(1) + '%', 'GPU Tempo Real', nome || 'Coleta a cada 3s', 'mon-kpi-gpu-tempo-real',
+            const gpuKpi = monKpiCard('fa-tv', 'purple', gpu.toFixed(1) + '%', 'GPU Tempo Real', nome || 'ao vivo · 1s', 'mon-kpi-gpu-tempo-real',
                 '<span style="font-size:10px;color:var(--green);"><i class="fas fa-circle" style="font-size:6px;"></i> AO VIVO</span>');
             kpiGrid.insertAdjacentHTML('afterbegin', gpuKpi);
         }
@@ -958,7 +965,32 @@ function monConectarSSE() {
             }
         });
 
-        // Evento: metricas do PC local (RAM/CPU/Disco) — a cada 10s
+        // Evento: metricas EM TEMPO REAL do PC local (push por amostra, ~1s)
+        _monEventSource.addEventListener('metricas-tempo-real', function(e) {
+            try {
+                const d = JSON.parse(e.data);
+                const secao = document.getElementById('monitoramento');
+                if (secao && secao.classList.contains('hidden')) return; // oculto: nao atualiza DOM
+                if (typeof d.cpu === 'number') {
+                    _monCpuTempoReal = d.cpu;
+                    _monCpuTs = d.ts || Date.now();
+                    _monCpuHist.push(d.cpu);
+                    if (_monCpuHist.length > 60) _monCpuHist.shift();
+                    monAtualizarCpuNaTabela(d.cpu, d.ts);
+                    monAtualizarKpiCpu(d.cpu, d.ts);
+                }
+                if (typeof d.gpu === 'number') {
+                    _monGpuTempoReal = d.gpu;
+                    _monGpuTs = d.gpuTs || Date.now();
+                    _monGpuHist.push(d.gpu);
+                    if (_monGpuHist.length > 60) _monGpuHist.shift();
+                    monAtualizarGpuNaTabela(d.gpu, _monGpuNome || 'GPU', d.gpuTs);
+                    monAtualizarKpiGpu(d.gpu, _monGpuNome || 'GPU', d.gpuTs);
+                }
+            } catch (err) {}
+        });
+
+        // Evento: metricas do PC local (RAM/CPU/Disco) — a cada 3s
         _monEventSource.addEventListener('sistema', function(e) {
             try {
                 const s = JSON.parse(e.data);
@@ -1495,7 +1527,7 @@ function monKpiDefs(p) {
     const cpuCor = _monCpuTempoReal != null ? (_monCpuTempoReal > 80 ? 'red' : _monCpuTempoReal > 60 ? 'yellow' : 'green') : 'cyan';
     const dispCor = pctDisponivel >= 90 ? 'green' : pctDisponivel >= 70 ? 'yellow' : 'red';
     return [
-        { icon: 'fa-microchip', cor: cpuCor, valor: cpuReal, label: 'CPU Tempo Real', sub: 'Coleta a cada 3s', key: 'mon-kpi-cpu-tempo-real',
+        { icon: 'fa-microchip', cor: cpuCor, valor: cpuReal, label: 'CPU Tempo Real', sub: 'ao vivo · 1s', key: 'mon-kpi-cpu-tempo-real',
           extra: '<span style="font-size:10px;color:var(--green);"><i class="fas fa-circle" style="font-size:6px;"></i> AO VIVO</span>' },
         { icon: 'fa-chart-pie', cor: dispCor, valor: pctDisponivel + '%', label: 'Disponibilidade', sub: r.acessiveis + ' de ' + r.totalAlvos + ' respondendo', key: 'mon-kpi-disponibilidade',
           extra: '<div style="width:60px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;"><div style="width:' + pctDisponivel + '%;height:100%;background:var(--' + dispCor + ');"></div></div>' },
@@ -1901,7 +1933,7 @@ function monRenderTabela(p) {
             idadeInfo = '<span style="font-size:9px;color:var(--green);" title="Última coleta há ' + segundosDesdeUltima + 's">✓ ' + segundosDesdeUltima + 's</span>';
         }
 
-        return '<tr>' +
+        return '<tr data-local="' + (l.local ? '1' : '0') + '">' +
             '<td><b style="color:var(--text-primary);">' + esc(l.nome || '-') + '</b><br><span style="font-size:11px;color:var(--text-muted);font-family:monospace;">' + esc(l.ip) + '</span></td>' +
             '<td style="font-size:11px;">' + esc(l.setor || '-') + '</td>' +
             '<td>' + estadoBadge + '</td>' +
@@ -1918,6 +1950,11 @@ function monRenderTabela(p) {
     }).join('');
 
     monAtualizarStamp(p);
+
+    // A tabela pode ter sido recriada agora (assinatura mudou) — reaplica as
+    // celulas EM TEMPO REAL em cima dos valores-base (senao volta ao velho)
+    if (_monCpuTempoReal != null) monAtualizarCpuNaTabela(_monCpuTempoReal, _monCpuTs);
+    if (_monGpuTempoReal != null) monAtualizarGpuNaTabela(_monGpuTempoReal, _monGpuNome || 'GPU', _monGpuTs);
 }
 
 function monEstadoBadge(estado) {

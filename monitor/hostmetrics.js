@@ -6,7 +6,44 @@
  */
 const os = require('os');
 const { exec, execFile } = require('child_process');
+const tempoReal = require('./tempo-real');
 
+// Categorias de contador de CPU, em ordem de preferencia.
+// 'Processor Information\% Processor Utility' e o contador que o GERENCIADOR
+// DE TAREFAS usa em CPUs hibridas (i7-1255U P+E): '% Processor Time' le
+// systematicamente mais baixo nesse tipo de CPU (medido: painel 28-54% x
+// Task Manager 34-84%). Diagnosticado em 04/11/2026.
+const CONTADORES_CPU = [
+    ['Processor Information', '% Processor Utility'],
+    ['Processor', '% Processor Time']
+];
+
+function montarScriptCpu(categoria, contador, msAmostra) {
+    // execFile (sem shell): o caractere '%' de '% Processor Time' nao pode ser
+    // interpretado pelo cmd.exe (bug antigo: falhava e caia no fallback).
+    return [
+        "$pc = New-Object System.Diagnostics.PerformanceCounter('" + categoria + "','" + contador + "','_Total');",
+        "$pc.NextValue() | Out-Null;",
+        "Start-Sleep -Milliseconds " + msAmostra + ";",
+        "$v = $pc.NextValue();",
+        "Write-Output $v;"
+    ].join(' ');
+}
+
+function lerContadorCpu(indice, msAmostra, resolve) {
+    if (indice >= CONTADORES_CPU.length) return resolve(null);
+    const [categoria, contador] = CONTADORES_CPU[indice];
+    execFile('powershell', ['-NoProfile', '-Command', montarScriptCpu(categoria, contador, msAmostra)],
+        { timeout: 8000, windowsHide: true }, (err, stdout) => {
+            if (!err) {
+                const raw = (stdout || '').trim().replace(',', '.');
+                const val = parseFloat(raw);
+                if (!isNaN(val)) return resolve(Math.round(Math.min(100, Math.max(0, val)) * 10) / 10);
+            }
+            // Categoria indisponivel nesta maquina -> tenta a proxima
+            lerContadorCpu(indice + 1, msAmostra, resolve);
+        });
+}
 
 function cpuPorNucleo() {
     const cpus = os.cpus();
@@ -29,43 +66,29 @@ function cpuPorNucleo() {
 
 function cpuUsoPct() {
     return new Promise((resolve) => {
-        // Amostragem de 1 segundo: captura a media real do intervalo (compativel com Task Manager).
-        // IMPORTANTE: usamos execFile (sem shell) para que o caractere '%' de '% Processor Time'
-        // nao seja interpretado/expandido pelo cmd.exe (bug anterior: comando falhava e caia no fallback).
-        const script = [
-            "$pc = New-Object System.Diagnostics.PerformanceCounter('Processor', '% Processor Time', '_Total');",
-            "$pc.NextValue() | Out-Null;",
-            "Start-Sleep -Milliseconds 1000;",
-            "$v = $pc.NextValue();",
-            "Write-Output $v;"
-        ].join(' ');
-        execFile('powershell', ['-NoProfile', '-Command', script], { timeout: 8000, windowsHide: true }, (err, stdout) => {
-            if (err) { resolve(cpuUsoPctFallback()); return; }
-            const raw = (stdout || '').trim().replace(',', '.');
-            const val = parseFloat(raw);
-            if (isNaN(val)) { resolve(cpuUsoPctFallback()); return; }
-            resolve(Math.round(Math.min(100, Math.max(0, val)) * 10) / 10);
+        // 1) Amostrador persistente (1 amostra/s, contador do Task Manager)
+        const s = tempoReal.obter();
+        if (s.cpu != null && s.cpuIdadeMs != null && s.cpuIdadeMs < 3000) {
+            return resolve(s.cpu);
+        }
+        // 2) Contador direto (chained: utility -> time) com 1s de amostra
+        lerContadorCpu(0, 1000, (val) => {
+            if (val != null) return resolve(val);
+            resolve(cpuUsoPctFallback());
         });
     });
 }
 
-/** Coleta APENAS a CPU (rapido, 1s de amostra) — para endpoint de tempo real. */
+/** Coleta APENAS a CPU (rapido) — para endpoint de tempo real. */
 function coletarCpuApenas() {
     return new Promise((resolve) => {
-        const script = [
-            "$pc = New-Object System.Diagnostics.PerformanceCounter('Processor', '% Processor Time', '_Total');",
-            "$pc.NextValue() | Out-Null;",
-            "Start-Sleep -Milliseconds 800;",
-            "$v = $pc.NextValue();",
-            "Write-Output $v;"
-        ].join(' ');
-        execFile('powershell', ['-NoProfile', '-Command', script], { timeout: 5000, windowsHide: true }, (err, stdout) => {
-            if (err) { resolve(null); return; }
-            const raw = (stdout || '').trim().replace(',', '.');
-            const val = parseFloat(raw);
-            if (isNaN(val)) { resolve(null); return; }
-            resolve(Math.round(Math.min(100, Math.max(0, val)) * 10) / 10);
-        });
+        // 1) Amostrador persistente: resposta instantanea (sem spawn de PS)
+        const s = tempoReal.obter();
+        if (s.cpu != null && s.cpuIdadeMs != null && s.cpuIdadeMs < 3000) {
+            return resolve(s.cpu);
+        }
+        // 2) Contador direto com 800ms de amostra
+        lerContadorCpu(0, 800, (val) => resolve(val));
     });
 }
 
@@ -105,7 +128,13 @@ function memoria() {
     };
 }
 
+/** Disco via WMI/PowerShell. Cache de 30s: disco muda devagar e isso evita
+ *  um spawn de PowerShell (~1.5s) a cada coleta de ciclo (anti-latenca). */
+let _discoCache = { ts: 0, dados: null };
 function disco() {
+    if (_discoCache.dados && (Date.now() - _discoCache.ts) < 30000) {
+        return Promise.resolve(_discoCache.dados);
+    }
     return new Promise((resolve) => {
         const cmd = 'powershell -NoProfile -Command "Get-CimInstance Win32_LogicalDisk -Filter \\"DriveType=3\\" | Select-Object DeviceID,@{n=\'TotalGB\';e={[math]::Round($_.Size/1GB,2)}},@{n=\'FreeGB\';e={[math]::Round($_.FreeSpace/1GB,2)}},@{n=\'UsedGB\';e={[math]::Round(($_.Size-$_.FreeSpace)/1GB,2)}},@{n=\'UsagePct\';e={[math]::Round(($_.Size-$_.FreeSpace)/$_.Size*100,1)}} | ConvertTo-Json"';
         exec(cmd, { timeout: 10000, windowsHide: true }, (err, stdout) => {
@@ -115,13 +144,15 @@ function disco() {
                 if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
                 let d = JSON.parse(raw);
                 if (!Array.isArray(d)) d = [d];
-                resolve({ discos: d.map(x => ({
+                const dados = { discos: d.map(x => ({
                     letra: x.DeviceID,
                     totalGb: x.TotalGB,
                     usadoGb: x.UsedGB,
                     livreGb: x.FreeGB,
                     usoPct: x.UsagePct
-                })) });
+                })) };
+                _discoCache = { ts: Date.now(), dados };
+                resolve(dados);
             } catch (e) {
                 resolve({ indisponivel: 'Saida do PowerShell ilegivel para disco.' });
             }
@@ -129,10 +160,23 @@ function disco() {
     });
 }
 
-/** GPU: tenta nvidia-smi (NVIDIA), depois Get-Counter (Windows GPU Engine) com amostragem. */
+/** GPU: primeiro o amostrador persistente (ja em loop); senao nvidia-smi / Get-Counter. */
+let _gpuNomeCache = null; // nome resolvido 1x via WMI (evita WMI a cada coleta)
 function gpu() {
     return new Promise((resolve) => {
-        // 1) nvidia-smi (NVIDIA)
+        // 1) Amostrador persistente: ja coleta GPU a cada 2s, sem custo de spawn
+        const s = tempoReal.obter();
+        if (s.gpu != null && s.gpuIdadeMs != null && s.gpuIdadeMs < 6000) {
+            const fonte = s.gpuFonte === 'nvidia' ? 'nvidia-smi' : 'performance-counter';
+            const base = { fonte, gpus: [{ nome: _gpuNomeCache || 'GPU local', usoPct: s.gpu }], amostraMs: s.gpuIdadeMs };
+            if (_gpuNomeCache) return resolve(base);
+            return resolverNomeGpu().then(nome => {
+                base.gpus[0].nome = nome || 'GPU local';
+                resolve(base);
+            });
+        }
+
+        // 2) nvidia-smi (NVIDIA)
         exec('nvidia-smi --query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu --format=csv,noheader,nounits', { timeout: 8000, windowsHide: true }, (errNv, outNv) => {
             if (!errNv && outNv && outNv.trim()) {
                 const linhas = outNv.trim().split('\n');
@@ -166,12 +210,25 @@ function gpu() {
                 if (err2) return resolve({ indisponivel: 'Sem nvidia-smi e sem contador GPU (WMI/Performance Counter).' });
                 const val = parseFloat((out2 || '').trim());
                 if (isNaN(val)) return resolve({ indisponivel: 'Contador GPU sem dados (GPU ociosa ou driver sem contador).' });
-                // Nome da GPU via WMI
+                // Nome da GPU via WMI (cacheado — resolvido 1x)
                 exec('powershell -NoProfile -Command "(Get-CimInstance Win32_VideoController | Select-Object -First 1).Name"', { timeout: 8000, windowsHide: true }, (err3, out3) => {
                     const nome = (out3 || '').trim() || 'GPU desconhecida';
+                    _gpuNomeCache = nome;
                     resolve({ fonte: 'performance-counter', gpus: [{ nome, usoPct: Math.min(100, val) }] });
                 });
             });
+        });
+    });
+}
+
+/** Resolve o nome da GPU via WMI (1x; depois fica em cache). */
+function resolverNomeGpu() {
+    if (_gpuNomeCache) return Promise.resolve(_gpuNomeCache);
+    return new Promise((resolve) => {
+        exec('powershell -NoProfile -Command "(Get-CimInstance Win32_VideoController | Select-Object -First 1).Name"', { timeout: 8000, windowsHide: true }, (err, out) => {
+            const nome = (!err && (out || '').trim()) || null;
+            if (nome) _gpuNomeCache = nome;
+            resolve(nome);
         });
     });
 }
@@ -222,10 +279,16 @@ function infoBase() {
     };
 }
 
-/** Coleta completa (CPU na 2a chamada em diante). estadoAnterior guarda cpu/uptime da coleta passada. */
+/** Coleta completa. CPU/GPU vem do amostrador persistente quando fresco;
+ *  senao coleta sob demanda (PowerShell). Retorna tambem a FONTE real de cada
+ *  metrica para o painel rotular honestamente. */
 async function coletar(estadoAnterior) {
     const ant = estadoAnterior || {};
-    const cpuPct = await cpuUsoPct();
+    const t0 = Date.now();
+    const s = tempoReal.obter();
+    const cpuFresca = s.cpu != null && s.cpuIdadeMs != null && s.cpuIdadeMs < 3000;
+
+    const cpuPct = cpuFresca ? s.cpu : await cpuUsoPct();
     const mem = memoria();
     const up = uptimeEstado(ant.uptime);
     const [discos, gpuInfo] = await Promise.all([disco(), gpu()]);
@@ -234,16 +297,28 @@ async function coletar(estadoAnterior) {
         hostname: os.hostname(),
         info: infoBase(),
         cpu: cpuPct != null
-            ? { usoPct: cpuPct, nucleos: os.cpus().length, modelo: (os.cpus()[0] && os.cpus()[0].model || '').trim() }
+            ? {
+                usoPct: cpuPct,
+                fonte: cpuFresca ? s.cpuFonte : 'contador-direto',
+                amostraMs: cpuFresca ? s.cpuIdadeMs : null,
+                nucleos: os.cpus().length,
+                modelo: (os.cpus()[0] && os.cpus()[0].model || '').trim()
+            }
             : { indisponivel: 'Primeira amostra ainda sem delta de tempo — disponivel na proxima coleta.', nucleos: os.cpus().length, modelo: (os.cpus()[0] && os.cpus()[0].model || '').trim() },
         gpu: gpuInfo,
         memoria: mem,
         disco: discos,
         uptime: up,
         rede: rede(),
+        _coletaMs: Date.now() - t0,
         // snapshot para comparacao no proximo ciclo
         _snapshot: { uptime: { uptimeSeg: up.uptimeSeg }, cpuPct }
     };
 }
 
-module.exports = { coletar, rede, infoBase, memoria, coletarCpuApenas };
+/** Nome da GPU cacheado (ou null se ainda nao resolvido). */
+function gpuNome() {
+    return _gpuNomeCache;
+}
+
+module.exports = { coletar, rede, infoBase, memoria, coletarCpuApenas, gpuNome, resolverNomeGpu };

@@ -205,7 +205,7 @@ async function enriquecerPainelComZabbix(painel) {
     return painel;
 }
 
-// ---- SSE: push automatico de metricas do PC local a cada 10s ----
+// ---- SSE: push automatico de metricas do PC local a cada 3s ----
 setInterval(async () => {
     if (sseClients.size === 0) return;
     try {
@@ -217,6 +217,18 @@ setInterval(async () => {
         });
     } catch (e) {}
 }, 3000);
+
+// ---- SSE: push das metricas EM TEMPO REAL do PC local (CPU/GPU) ----
+// O amostrador persistente dispara a cada amostra (~1s de CPU, ~2s de GPU);
+// aqui so encaminhamos ao navegador — sem polling e sem spawn de PowerShell.
+// (antes: o frontend fazia poll a cada 3s em endpoints que spawnavam PS novo,
+//  e a GPU chamava a coleta COMPLETA de ~7s -> dado sempre atrasado)
+const tempoRealMonitor = require('./monitor/tempo-real');
+tempoRealMonitor.iniciar();
+tempoRealMonitor.aoAtualizar((estado) => {
+    if (sseClients.size === 0) return;
+    sseBroadcast('metricas-tempo-real', estado);
+});
 
 // ---- SSE: push do painel real (Zabbix + local) a cada 15s ----
 setInterval(async () => {
@@ -487,47 +499,50 @@ app.get('/api/monitor/sistema', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ==================== CPU EM TEMPO REAL (polling rapido) ====================
-// Coleta CPU a cada chamada (1s de amostra) — o frontend pode pollar a cada 2-3s
-let _cpuRealtimeCache = { valor: null, ts: 0 };
+// ==================== CPU EM TEMPO REAL ====================
+// Le do AMOSTRADOR PERSISTENTE (1 amostra/s, contador do Task Manager).
+// Antes spawnavam um PowerShell novo por chamada (~2s) -> valor sempre velho.
 app.get('/api/monitor/cpu-tempo-real', async (req, res) => {
     try {
-        const agora = Date.now();
-        // Se a cache tem menos de 1.5s, retorna cache (evita overload)
-        if (_cpuRealtimeCache.valor != null && (agora - _cpuRealtimeCache.ts) < 1500) {
-            return res.json({ cpu: _cpuRealtimeCache.valor, ts: _cpuRealtimeCache.ts, fonte: 'cache' });
+        const s = tempoRealMonitor.obter();
+        if (s.cpu != null && s.cpuIdadeMs != null && s.cpuIdadeMs < 4000) {
+            return res.json({
+                cpu: s.cpu, ts: s.ts, idadeMs: s.cpuIdadeMs,
+                fonte: s.cpuFonte, contador: 'Processor Information / % Processor Utility (o mesmo do Task Manager)'
+            });
         }
+        // Fallback pontual: contador direto (ainda assim com a cadeia correta)
         const hostmetrics = require('./monitor/hostmetrics');
         const cpu = await hostmetrics.coletarCpuApenas();
-        if (cpu != null) {
-            _cpuRealtimeCache = { valor: cpu, ts: Date.now() };
-            res.json({ cpu, ts: _cpuRealtimeCache.ts, fonte: 'realtime' });
-        } else {
-            // Fallback: retorna a última coleta completa
-            const m = monitor.obterMetricasLocais();
-            res.json({ cpu: m && m.cpu ? m.cpu.usoPct : null, ts: m ? new Date(m.quando).getTime() : 0, fonte: 'fallback' });
-        }
+        if (cpu != null) return res.json({ cpu, ts: Date.now(), idadeMs: 0, fonte: 'contador-direto' });
+        res.json({ cpu: s.cpu, ts: s.ts, idadeMs: s.cpuIdadeMs, fonte: s.cpuFonte, semDados: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ==================== GPU EM TEMPO REAL ====================
-let _gpuRealtimeCache = { valor: null, nome: null, ts: 0 };
+// Le do AMOSTRADOR (GPU a cada 2s, sem custo). Antes chamava hostmetrics.coletar()
+// — a coleta COMPLETA de ~6.9s (disco+WMI+3 amostras de GPU) -> GPU sempre atrasada.
 app.get('/api/monitor/gpu-tempo-real', async (req, res) => {
     try {
-        const agora = Date.now();
-        // Cache de 3s (GPU é mais pesada de coletar)
-        if (_gpuRealtimeCache.valor != null && (agora - _gpuRealtimeCache.ts) < 3000) {
-            return res.json({ gpu: _gpuRealtimeCache.valor, nome: _gpuRealtimeCache.nome, ts: _gpuRealtimeCache.ts, fonte: 'cache' });
-        }
         const hostmetrics = require('./monitor/hostmetrics');
-        const m = await hostmetrics.coletar(null);
-        if (m && m.gpu && m.gpu.gpus && m.gpu.gpus.length) {
-            const g = m.gpu.gpus[0];
-            _gpuRealtimeCache = { valor: g.usoPct, nome: g.nome, ts: Date.now() };
-            res.json({ gpu: g.usoPct, nome: g.nome, ts: _gpuRealtimeCache.ts, fonte: 'realtime' });
-        } else {
-            res.json({ gpu: null, nome: null, ts: 0, fonte: 'unavailable', motivo: m && m.gpu ? m.gpu.indisponivel : 'Sem dados' });
+        const s = tempoRealMonitor.obter();
+        if (s.gpu != null && s.gpuIdadeMs != null && s.gpuIdadeMs < 8000) {
+            // Nome: responde com cache; se nunca foi resolvido, dispara em
+            // background (nao bloqueia o request — nome aparece na proxima).
+            let nome = hostmetrics.gpuNome();
+            if (!nome) { hostmetrics.resolverNomeGpu().catch(() => {}); }
+            return res.json({
+                gpu: s.gpu, nome: nome || 'GPU local', ts: s.gpuTs, idadeMs: s.gpuIdadeMs,
+                fonte: s.gpuFonte, amostra: 'GPU Engine Utilization (amostrador a cada 2s)'
+            });
         }
+        // Fallback raro: GPU sem amostra fresca -> resolve nome+coleta sob demanda
+        const m2 = await hostmetrics.coletar(null);
+        if (m2 && m2.gpu && m2.gpu.gpus && m2.gpu.gpus.length) {
+            const g = m2.gpu.gpus[0];
+            return res.json({ gpu: g.usoPct, nome: g.nome, ts: Date.now(), idadeMs: 0, fonte: m2.gpu.fonte });
+        }
+        res.json({ gpu: null, nome: null, ts: 0, idadeMs: null, fonte: 'indisponivel', motivo: m2 && m2.gpu ? m2.gpu.indisponivel : 'Sem dados' });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
