@@ -256,6 +256,33 @@ function monZabbixBase() {
 function monZabbixUrl(hostid) {
     return monZabbixBase() + '/zabbix.php?action=problem.view&hostids[]=' + encodeURIComponent(hostid || '');
 }
+// Deep-link para a lista de hosts do Zabbix (host.view) — filtro por nome/grupo, dinamico
+function monZabbixHostViewUrl(opts) {
+    const params = ['action=host.view'];
+    if (opts && opts.nome) params.push('name=' + encodeURIComponent(opts.nome));
+    if (opts && opts.grupo) params.push('groupids[]=' + encodeURIComponent(opts.grupo));
+    if (opts && opts.status !== undefined && opts.status !== null && opts.status !== '') {
+        params.push('status=' + encodeURIComponent(opts.status));
+    }
+    params.push('sort=name');
+    params.push('sortorder=ASC');
+    return monZabbixBase() + '/zabbix.php?' + params.join('&');
+}
+// Dashboard "Inventario TI" no Zabbix
+function monAbrirDashboardZabbix() {
+    fetch('/api/zabbix/dashboard').then(r => r.json()).then(d => {
+        const id = d && d.dashboardid;
+        const url = monZabbixBase() + (id
+            ? '/zabbix.php?action=dashboard.view&dashboardid=' + encodeURIComponent(id)
+            : '/zabbix.php?action=dashboard.view');
+        window.open(url, '_blank', 'noopener');
+    }).catch(() => window.open(monZabbixBase() + '/zabbix.php?action=dashboard.view', '_blank', 'noopener'));
+}
+// Abre a lista de hosts no Zabbix ja filtrada pela pesquisa atual do painel
+function monAbrirHostsZabbixFiltrado() {
+    const q = (document.getElementById('mon-zabbix-busca') || {}).value || '';
+    window.open(monZabbixHostViewUrl({ nome: q.trim(), grupo: '22' }), '_blank', 'noopener');
+}
 
 // ==================== PROBLEMAS ZABBIX (painel integrado) ====================
 const MON_SEV_INFO = {
@@ -2019,7 +2046,7 @@ async function monRenderZabbixHosts(forcar) {
             return;
         }
         monSetHtmlSeMudou(el, '<div style="overflow-x:auto;"><table class="data-table" style="font-size:11px;"><thead><tr>' +
-            '<th>Hostname</th><th>Nome</th><th>IP</th><th>Status Agente</th><th>Templates</th><th>Erro</th>' +
+            '<th>Hostname</th><th>Nome</th><th>IP</th><th>Status Agente</th><th>Templates</th><th>Erro</th><th>Ações</th>' +
             '</tr></thead><tbody>' +
             hosts.map(h => {
                 const iface = (h.interfaces || [])[0] || {};
@@ -2029,6 +2056,8 @@ async function monRenderZabbixHosts(forcar) {
                 else if (avail === '2') { statusBadge = '<span class="badge badge-cancelada">Sem Agente</span>'; }
                 else { statusBadge = '<span class="badge badge-pendente">Aguardando</span>'; }
                 const templates = (h.parentTemplates || []).map(t => t.name).join(', ');
+                // Link host.view ja filtrado pelo nome visivel do host
+                const urlHost = monZabbixHostViewUrl({ nome: h.name || h.host, status: 0 });
                 return '<tr>' +
                     '<td><code>' + esc(h.host) + '</code></td>' +
                     '<td>' + esc(h.name || '-') + '</td>' +
@@ -2036,6 +2065,10 @@ async function monRenderZabbixHosts(forcar) {
                     '<td>' + statusBadge + '</td>' +
                     '<td style="font-size:10px;">' + esc(templates) + '</td>' +
                     '<td style="font-size:10px;color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="' + esc(iface.error || '') + '">' + esc((iface.error || '—').substring(0, 60)) + '</td>' +
+                    '<td style="white-space:nowrap;">' +
+                        '<a href="' + esc(urlHost) + '" target="_blank" rel="noopener" title="Ver host no Zabbix" style="color:var(--cyan);margin-right:8px;"><i class="fas fa-external-link-alt"></i></a>' +
+                        '<a href="' + esc(monZabbixUrl(h.hostid)) + '" target="_blank" rel="noopener" title="Ver problemas do host" style="color:var(--yellow);"><i class="fas fa-exclamation-triangle"></i></a>' +
+                    '</td>' +
                     '</tr>';
             }).join('') +
             '</tbody></table></div>');
@@ -2045,18 +2078,57 @@ async function monRenderZabbixHosts(forcar) {
 }
 
 async function monSyncZabbix() {
+    const btn = document.querySelector('[onclick*="monSyncZabbix"]');
     try {
-        const btn = document.querySelector('#mon-zabbix-hosts') && document.querySelector('.glass-panel-header .btn-ghost');
-        const r = await fetch('/api/zabbix/sincronizar', { method: 'POST' }).then(r => r.json());
-        if (r.ok) {
-            if (typeof showToast === 'function') showToast('Sincronizado: ' + (r.criados || 0) + ' hosts criados, ' + (r.atualizados || 0) + ' atualizados.', 'success');
-            if (typeof pushLog === 'function') pushLog('ALTERACAO', 'MONITORAMENTO', null, 'Sincronizacao Zabbix: ' + (r.criados || 0) + ' criados, ' + (r.atualizados || 0) + ' atualizados');
-            monRenderZabbixHosts(true);
-        } else {
-            if (typeof showToast === 'function') showToast('Erro: ' + (r.erro || 'desconhecido'), 'error');
+        if (btn) { btn.disabled = true; btn.style.opacity = 0.6; }
+        const r = await fetch('/api/zabbix/sincronizar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        }).then(x => x.json());
+        if (!r.ok) throw new Error(r.error || 'erro desconhecido');
+
+        const h = r.hosts || {};
+        const m = r.manutencoes || null;
+        const partes = [];
+        partes.push((h.criados || 0) + ' host(s) criado(s)');
+        partes.push((h.atualizados || 0) + ' atualizado(s)');
+        partes.push((h.inalterados || 0) + ' inalterado(s)');
+        if (h.semIp) partes.push(h.semIp + ' sem IP');
+        if (h.semVinculo) partes.push(h.semVinculo + ' host(s) sem vinculo');
+        if (m) {
+            partes.push('manutencoes: ' + (m.criadas || 0) + ' criada(s), ' + (m.atualizadas || 0) + ' atualizada(s), ' + (m.removidas || 0) + ' vencida(s) limpa(s)');
+            if (m.semVinculo) partes.push(m.semVinculo + ' manutencao(s) sem host vinculado');
         }
+        const erros = [...(h.erros || []), ...((m && m.erros) || [])];
+        const msg = 'Sincronizado (' + (r.computadores || 0) + ' computadores): ' + partes.join(', ') + '.';
+        if (typeof showToast === 'function') showToast(erros.length ? msg + ' ' + erros.length + ' erro(s): ' + erros[0] : msg, erros.length ? 'error' : 'success');
+        if (typeof pushLog === 'function') pushLog('ALTERACAO', 'MONITORAMENTO', null, 'Sincronizacao Zabbix: ' + partes.join('; '));
+        monRenderZabbixHosts(true);
     } catch (e) {
         if (typeof showToast === 'function') showToast('Erro ao sincronizar: ' + e.message, 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.style.opacity = 1; }
+    }
+}
+
+// Garante/abre o dashboard "Inventario TI" no Zabbix
+async function monCriarDashboardZabbix() {
+    try {
+        const url = 'http://' + window.location.hostname + ':5903/index.html';
+        const r = await fetch('/api/zabbix/dashboard', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ urlPainel: url })
+        }).then(x => x.json());
+        if (r.error) throw new Error(r.error);
+        if (typeof showToast === 'function') {
+            showToast(r.criado ? 'Dashboard "Inventario TI" criado no Zabbix.' : 'Dashboard "Inventario TI" atualizado no Zabbix.', 'success');
+        }
+        if (typeof pushLog === 'function') pushLog('ALTERACAO', 'MONITORAMENTO', null, 'Dashboard Zabbix Inventario TI: ' + (r.criado ? 'criado' : 'atualizado') + ' (id ' + r.dashboardid + ')');
+        monAbrirDashboardZabbix();
+    } catch (e) {
+        if (typeof showToast === 'function') showToast('Erro no dashboard: ' + e.message, 'error');
     }
 }
 

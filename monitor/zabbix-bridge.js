@@ -740,12 +740,138 @@ function getConfigStatus() {
     };
 }
 
+// ==================== SINCRONIZACAO INVENTARIO <-> ZABBIX (smart sync) ====================
+// Inspirado em TheNetworkGuy/netbox-zabbix-sync: o Inventario de TI e a fonte da
+// verdade; atualiza APENAS o que mudou (smart update), preserva tags nao gerenciadas
+// e nunca apaga dados escritos manualmente no Zabbix.
+
+/** Normaliza nome para comparacao (minusculas, sem espacos/simbolos). */
+function normalizarNome(s) {
+    return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
 /**
- * Sincroniza hosts do inventario para o Zabbix (cria se nao existir).
- * Usa template "ICMP Ping" (agentless) e grupo "Inventario TI".
+ * Monta o objeto de inventario do Zabbix a partir de um registro do Inventario de TI.
+ * Campos oficiais do host inventory (Zabbix 7.0): name, os, serialno_a, hardware,
+ * software, contact, location, notes, model, vendor, deployment_status, asset_tag,
+ * date_hw_purchase, date_hw_install... Só retorna campos com valor (nunca apaga).
+ */
+function montarInventario(comp) {
+    const inv = {};
+    if (comp.nomePc) inv.name = String(comp.nomePc).slice(0, 200);
+    if (comp.sistemaOperacional) inv.os = String(comp.sistemaOperacional).slice(0, 200);
+    if (comp.numeroSerie) inv.serialno_a = String(comp.numeroSerie).slice(0, 200);
+    if (comp.modeloMarca) inv.model = String(comp.modeloMarca).slice(0, 200);
+    const hw = [comp.processador, comp.memoriaRam, comp.armazenamento].filter(Boolean).join(' | ');
+    if (hw) inv.hardware = String(hw).slice(0, 2000);
+    if (comp.usuarioDesignado) inv.contact = String(comp.usuarioDesignado).slice(0, 200);
+    const loc = [comp.departamento, comp.localizacao].filter(Boolean).join(' / ');
+    if (loc) inv.location = String(loc).slice(0, 200);
+    if (comp.softwareInstalado) inv.software = String(comp.softwareInstalado).slice(0, 2000);
+    if (comp.notas) inv.notes = String(comp.notas).slice(0, 2000);
+    if (comp.fornecedor) inv.vendor = String(comp.fornecedor).slice(0, 200);
+    if (comp.status) inv.deployment_status = String(comp.status).slice(0, 200);
+    if (comp.id) inv.asset_tag = 'INV-' + comp.id;
+    const d = (v) => { const x = new Date(v); return isNaN(x) ? null : x.toISOString().slice(0, 10); };
+    if (comp.dataAquisicao && d(comp.dataAquisicao)) inv.date_hw_purchase = d(comp.dataAquisicao);
+    if (comp.dataInicioCiclo && d(comp.dataInicioCiclo)) inv.date_hw_install = d(comp.dataInicioCiclo);
+    return inv;
+}
+
+/** Tags gerenciadas pelo sync (as demais sao preservadas como estiverem no Zabbix). */
+function montarTagsGerenciadas(comp) {
+    const tags = {};
+    if (comp.id) tags['inventario_id'] = String(comp.id);
+    const setor = comp.departamento || comp.setor;
+    if (setor) tags['setor'] = String(setor).slice(0, 200);
+    if (comp.usuarioDesignado) tags['usuario'] = String(comp.usuarioDesignado).slice(0, 200);
+    return tags;
+}
+
+/**
+ * Indexa os hosts do Zabbix para vinculo com o Inventario de TI.
+ * Chaves de match (nesta ordem de prioridade): tag inventario_id, IP da interface, nome normalizado.
+ */
+async function indexarHostsParaVinculo() {
+    const hosts = await authCall('host.get', {
+        output: ['hostid', 'host', 'name', 'status', 'inventory_mode'],
+        selectInterfaces: ['ip'],
+        selectTags: 'extend',
+        selectInventory: 'extend',
+        filter: { status: '0' }
+    });
+    const porId = {}, porIp = {}, porNome = {};
+    for (const h of hosts) {
+        const tagId = (h.tags || []).find(t => t.tag === 'inventario_id' && t.value);
+        if (tagId && !porId[tagId.value]) porId[tagId.value] = h;
+        const ip = h.interfaces && h.interfaces[0] && h.interfaces[0].ip;
+        if (ip && !porIp[ip]) porIp[ip] = h;
+        const n = normalizarNome(h.name || h.host);
+        if (n && !porNome[n]) porNome[n] = h;
+    }
+    return { hosts, porId, porIp, porNome };
+}
+
+/** Resolve o host Zabbix correspondente a um computador do Inventario de TI. */
+function vincularHost(comp, idx) {
+    if (comp.id && idx.porId[String(comp.id)]) return idx.porId[String(comp.id)];
+    const ip = comp.ipAddress || comp.ip;
+    if (ip && idx.porIp[ip]) return idx.porIp[ip];
+    const n = normalizarNome(comp.nomePc || comp.nome);
+    if (n && idx.porNome[n]) return idx.porNome[n];
+    return null;
+}
+
+/**
+ * Smart update: preenche inventario + tags do host no Zabbix SEMPRE que houver
+ * diferenca real em relacao ao Inventario de TI. Preserva campos/tags nao
+ * gerenciados. Retorna true se chamou host.update.
+ */
+async function atualizarHostDoInventario(host, comp) {
+    const invDesejado = montarInventario(comp);
+    const tagsGerenciadas = montarTagsGerenciadas(comp);
+
+    // inventory volta [] quando inventory_mode=-1 (desabilitado) -> trata como vazio
+    const invAtual = (host.inventory && !Array.isArray(host.inventory)) ? host.inventory : {};
+    const invMudou = Object.keys(invDesejado).some(k => String(invAtual[k] || '') !== String(invDesejado[k]));
+
+    // Merge de tags: preserva as nao gerenciadas, sobrescreve as gerenciadas
+    const atuais = host.tags || [];
+    const naoGerenciadas = atuais.filter(t => !(t.tag in tagsGerenciadas));
+    const desejadas = Object.keys(tagsGerenciadas).map(v => ({ tag: v, value: tagsGerenciadas[v] }));
+    const tagsMudou = JSON.stringify(naoGerenciadas.map(t => [t.tag, t.value]).sort()) !==
+        JSON.stringify(atuais.filter(t => !(t.tag in tagsGerenciadas)).map(t => [t.tag, t.value]).sort()) ||
+        desejadas.some(d => {
+            const a = atuais.find(t => t.tag === d.tag);
+            return !a || a.value !== d.value;
+        });
+
+    // inventory_mode: -1 (desabilitado) atrapalha o sync de inventario; usa 0 (manual)
+    const modoMudou = String(host.inventory_mode) === '-1';
+
+    if (!invMudou && !tagsMudou && !modoMudou) return false;
+
+    const params = { hostid: host.hostid };
+    if (invMudou || modoMudou) {
+        params.inventory_mode = 0; // manual: Inventario de TI e a fonte da verdade
+        params.inventory = invDesejado;
+    }
+    if (tagsMudou) params.tags = naoGerenciadas.concat(desejadas);
+    await authCall('host.update', params);
+    return true;
+}
+
+/**
+ * Sincroniza hosts do Inventario de TI com o Zabbix:
+ *  - cria host (ICMP agentless) quando o registro TEM IP e ainda nao existe;
+ *  - atualiza inventario, tags e vinculo dos hosts existentes (smart update);
+ *  - relata registros SEM IP e hosts SEM vinculo (sem inventar dado nenhum).
+ * Usa template "ICMP Ping" e grupo "Inventario TI".
  */
 async function sincronizarHostsInventario(computadores) {
-    const resultado = { criados: 0, existentes: 0, erros: [] };
+    const resultado = { criados: 0, atualizados: 0, inalterados: 0, semIp: 0, semVinculo: 0, erros: [], vinculos: [] };
+    if (!Array.isArray(computadores)) computadores = [];
+
     // Busca template e grupo
     let templateId = null, groupId = null;
     try {
@@ -763,41 +889,265 @@ async function sincronizarHostsInventario(computadores) {
         } catch (e) { resultado.erros.push('Grupo: ' + e.message); return resultado; }
     }
 
+    let idx = await indexarHostsParaVinculo();
+
     for (const comp of computadores) {
-        const ip = comp.ipAddress || comp.ip;
-        if (!ip) continue;
-        const hostname = (comp.nomePc || comp.nome || 'PC-' + comp.id).replace(/[^a-zA-Z0-9._-]/g, '_');
         try {
-            const existentes = await authCall('host.get', {
-                output: ['hostid'],
-                filter: { host: hostname }
-            });
-            if (existentes.length) { resultado.existentes++; continue; }
+            const vinculado = vincularHost(comp, idx);
+            if (vinculado) {
+                const mudou = await atualizarHostDoInventario(vinculado, comp);
+                if (mudou) {
+                    resultado.atualizados++;
+                    resultado.vinculos.push({ inventario_id: comp.id, hostid: vinculado.hostid, acao: 'atualizado' });
+                    // reindexa para refletir o update (proximos computadores veem estado fresco)
+                    idx = await indexarHostsParaVinculo();
+                } else {
+                    resultado.inalterados++;
+                }
+                continue;
+            }
+
+            // Sem vinculo: so cria se o registro tiver IP (sem IP nao ha o que monitorar)
+            const ip = comp.ipAddress || comp.ip;
+            if (!ip) { resultado.semIp++; continue; }
+
+            const hostname = (comp.nomePc || comp.nome || 'PC-' + comp.id).replace(/[^a-zA-Z0-9._-]/g, '_');
             const params = {
                 host: hostname,
                 name: comp.nomePc || comp.nome || hostname,
                 groups: [{ groupid: groupId }],
-                interfaces: [{
-                    type: 1,
-                    main: 1,
-                    useip: 1,
-                    ip: ip,
-                    dns: '',
-                    port: '10050'
-                }],
-                tags: [
-                    { tag: 'setor', value: comp.departamento || comp.setor || '' },
-                    { tag: 'inventario_id', value: String(comp.id || '') }
-                ]
+                inventory_mode: 0,
+                inventory: montarInventario(comp),
+                interfaces: [{ type: 1, main: 1, useip: 1, ip: ip, dns: '', port: '10050' }],
+                tags: Object.keys(montarTagsGerenciadas(comp)).map(k => ({ tag: k, value: montarTagsGerenciadas(comp)[k] }))
             };
             if (templateId) params.templates = [{ templateid: templateId }];
             await authCall('host.create', params);
             resultado.criados++;
+            idx = await indexarHostsParaVinculo();
         } catch (e) {
-            resultado.erros.push(hostname + ': ' + e.message);
+            resultado.erros.push((comp.nomePc || comp.id || '?') + ': ' + e.message);
         }
     }
+
+    // Hosts monitorados sem vinculo com nenhum registro (informativo, nao mexe neles)
+    resultado.semVinculo = idx.hosts.filter(h => {
+        const tagId = (h.tags || []).find(t => t.tag === 'inventario_id');
+        return !tagId;
+    }).length;
+
     return resultado;
+}
+
+/**
+ * Sincroniza manutencoes do Inventario de TI para o Zabbix (maintenance.create):
+ *  - proximaManutencao futura de cada computador VINCULADO -> janela de manutencao no dia;
+ *  - ordens de servico abertas com dataPrevisao futura -> janela no dia previsto;
+ *  - limpa janelas "InvTI" ja vencidas (idempotente, sem lixo acumulado).
+ * Sem vinculo host<->computador, a janela e ignorada e reportada (nunca inventa host).
+ */
+async function sincronizarManutencoes(computadores, ordens) {
+    const resultado = { criadas: 0, atualizadas: 0, removidas: 0, semVinculo: 0, ignoradas: 0, janelas: [], erros: [] };
+    if (!Array.isArray(computadores)) computadores = [];
+    if (!Array.isArray(ordens)) ordens = [];
+
+    const idx = await indexarHostsParaVinculo();
+    const porIdComp = {};
+    for (const c of computadores) porIdComp[String(c.id)] = c;
+
+    const fimDoDia = (d) => { const x = new Date(d); x.setHours(23, 59, 59, 999); return x; };
+    const inicioDoDia = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+    const agora = Date.now();
+    const janelas = []; // {name, hostid, active_since, active_till, descricao}
+
+    // 1) proximaManutencao de computadores vinculados
+    for (const comp of computadores) {
+        if (!comp.proximaManutencao) continue;
+        const ini = new Date(comp.proximaManutencao);
+        if (isNaN(ini)) continue;
+        const vinculado = vincularHost(comp, idx);
+        if (!vinculado) { resultado.semVinculo++; continue; }
+        if (ini.getTime() < agora) { resultado.ignoradas++; continue; } // janela ja venceu
+        janelas.push({
+            name: 'InvTI Manutencao ' + (comp.nomePc || comp.id) + ' ' + ini.toISOString().slice(0, 10),
+            hostid: vinculado.hostid,
+            active_since: inicioDoDia(ini).getTime(),
+            active_till: fimDoDia(ini).getTime(),
+            descricao: 'Manutencao preventiva programada no Inventario de TI (' + (comp.nomePc || comp.id) + ')'
+        });
+    }
+
+    // 2) Ordens de servico abertas com previsao futura
+    for (const os of ordens) {
+        if (['CONCLUIDA', 'CANCELADA'].includes(String(os.status || '').toUpperCase())) continue;
+        if (!os.dataPrevisao) continue;
+        const ini = new Date(os.dataPrevisao);
+        if (isNaN(ini) || ini.getTime() < agora) { resultado.ignoradas++; continue; }
+        const comp = porIdComp[String(os.computadorId)];
+        const vinculado = comp ? vincularHost(comp, idx) : null;
+        if (!vinculado) { resultado.semVinculo++; continue; }
+        janelas.push({
+            name: 'InvTI OS' + os.id + ' ' + (os.computadorNome || comp.nomePc || ''),
+            hostid: vinculado.hostid,
+            active_since: inicioDoDia(ini).getTime(),
+            active_till: fimDoDia(ini).getTime(),
+            descricao: 'Ordem de servico #' + os.id + ': ' + (os.titulo || os.descricao || '').slice(0, 180)
+        });
+    }
+
+    // Janelas existentes gerenciadas por nos (prefixo "InvTI ")
+    let existentes = [];
+    try {
+        const todas = await authCall('maintenance.get', { output: ['maintenanceid', 'name', 'active_till'] });
+        existentes = todas.filter(m => String(m.name || '').startsWith('InvTI '));
+    } catch (e) { resultado.erros.push('maintenance.get: ' + e.message); return resultado; }
+
+    const porNomeExistente = {};
+    for (const m of existentes) porNomeExistente[m.name] = m;
+
+    // 3) cria/atualiza janelas desejadas
+    for (const j of janelas) {
+        const periodo = {
+            timeperiod_type: 0, // one-time
+            start_date: Math.floor(j.active_since / 1000),
+            period: Math.max(60, Math.ceil((j.active_till - j.active_since) / 1000)) + 's'
+        };
+        try {
+            if (porNomeExistente[j.name]) {
+                await authCall('maintenance.update', {
+                    maintenanceid: porNomeExistente[j.name].maintenanceid,
+                    active_since: Math.floor(j.active_since / 1000),
+                    active_till: Math.floor(j.active_till / 1000),
+                    description: j.descricao,
+                    hosts: [{ hostid: j.hostid }],
+                    timeperiods: [periodo]
+                });
+                resultado.atualizadas++;
+            } else {
+                await authCall('maintenance.create', {
+                    name: j.name,
+                    active_since: Math.floor(j.active_since / 1000),
+                    active_till: Math.floor(j.active_till / 1000),
+                    description: j.descricao,
+                    maintenance_type: 0, // one-time
+                    hosts: [{ hostid: j.hostid }],
+                    timeperiods: [periodo]
+                });
+                resultado.criadas++;
+            }
+            resultado.janelas.push(j.name);
+        } catch (e) { resultado.erros.push(j.name + ': ' + e.message); }
+    }
+
+    // 4) limpa janelas InvTI vencidas ou que perderam o vinculo
+    const desejadas = janelas.map(j => j.name);
+    for (const m of existentes) {
+        if (desejadas.includes(m.name)) continue;
+        if (parseInt(m.active_till, 10) * 1000 < agora) {
+            try {
+                await authCall('maintenance.delete', [m.maintenanceid]);
+                resultado.removidas++;
+            } catch (e) { resultado.erros.push('remover ' + m.name + ': ' + e.message); }
+        }
+    }
+
+    return resultado;
+}
+
+/**
+ * Garante o dashboard "Inventario TI" no Zabbix com widgets uteis:
+ * problemas (ao vivo), problemas por severidade, disponibilidade dos hosts e
+ * um widget URL apontando para o proprio painel do Inventario de TI.
+ * Idempotente: cria se nao existir, atualiza os widgets se existir.
+ * Retorna { dashboardid, criado, atualizado }.
+ */
+async function garantirDashboardInventario(urlPainel) {
+    // Grupo "Inventario TI" (para os widgets de disponibilidade/severidade)
+    let groupId = null;
+    try {
+        const g = await authCall('hostgroup.get', { output: ['groupid'], filter: { name: 'Inventario TI' } });
+        if (g.length) groupId = g[0].groupid;
+    } catch (e) {}
+    if (!groupId) {
+        const novo = await authCall('hostgroup.create', { name: 'Inventario TI' });
+        groupId = novo.groupids[0];
+    }
+
+    const widgets = [
+        {
+            type: 'problems', name: 'Problemas - Inventario TI', x: 0, y: 0, width: 40, height: 12, view_mode: 0,
+            fields: [
+                { type: 0, name: 'rf_rate', value: 60 },
+                { type: 0, name: 'show', value: 1 },
+                { type: 2, name: 'groupids.0', value: groupId },
+                { type: 0, name: 'show_tags', value: 3 },
+                { type: 0, name: 'tag_name_format', value: 1 },
+                { type: 0, name: 'show_suppressed', value: 1 },
+                { type: 0, name: 'show_lines', value: 25 }
+            ]
+        },
+        {
+            type: 'problemsbysv', name: 'Problemas por severidade', x: 40, y: 0, width: 32, height: 6, view_mode: 0,
+            fields: [
+                { type: 0, name: 'rf_rate', value: 60 },
+                { type: 2, name: 'groupids.0', value: groupId },
+                { type: 0, name: 'show_type', value: 1 },
+                { type: 0, name: 'show_suppressed', value: 1 },
+                { type: 1, name: 'reference', value: 'SVINV' }
+            ]
+        },
+        {
+            type: 'hostavail', name: 'Disponibilidade dos hosts', x: 40, y: 6, width: 16, height: 6, view_mode: 0,
+            fields: [
+                { type: 0, name: 'rf_rate', value: 60 },
+                { type: 2, name: 'groupids.0', value: groupId },
+                { type: 0, name: 'layout', value: 1 }
+            ]
+        },
+        {
+            type: 'url', name: 'Painel Inventario TI', x: 56, y: 6, width: 16, height: 6, view_mode: 0,
+            fields: [
+                { type: 1, name: 'url', value: urlPainel || 'http://localhost:5903/index.html' },
+                { type: 0, name: 'rf_rate', value: 60 }
+            ]
+        }
+    ];
+
+    const existentes = await authCall('dashboard.get', {
+        output: ['dashboardid', 'name'],
+        filter: { name: 'Inventario TI' },
+        editable: true
+    });
+
+    if (!existentes.length) {
+        const r = await authCall('dashboard.create', {
+            name: 'Inventario TI',
+            display_period: 30,
+            auto_start: 1,
+            pages: [{ widgets: widgets }]
+        });
+        return { dashboardid: r.dashboardids[0], criado: true, atualizado: false };
+    }
+
+    await authCall('dashboard.update', {
+        dashboardid: existentes[0].dashboardid,
+        display_period: 30,
+        auto_start: 1,
+        pages: [{ widgets: widgets }]
+    });
+    return { dashboardid: existentes[0].dashboardid, criado: false, atualizado: true };
+}
+
+/** Retorna o dashboardid do "Inventario TI" se existir (para links do painel). */
+async function obterDashboardInventario() {
+    try {
+        const r = await authCall('dashboard.get', {
+            output: ['dashboardid', 'name'],
+            filter: { name: 'Inventario TI' },
+            editable: true
+        });
+        return r.length ? { dashboardid: r[0].dashboardid } : null;
+    } catch (e) { return null; }
 }
 
 /**
@@ -1005,6 +1355,9 @@ module.exports = {
     authCall,
     dadosCompletosZabbix,
     sincronizarHostsInventario,
+    sincronizarManutencoes,
+    garantirDashboardInventario,
+    obterDashboardInventario,
     dadosMonitoramentoZabbix,
     apiCall,
     testarConexao,

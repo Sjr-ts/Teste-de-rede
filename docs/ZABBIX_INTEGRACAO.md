@@ -158,3 +158,53 @@ Para reativar: `status: 0`.
 - Problemas abertos reais: 4 (rede) + 0 de ruído.
 - Métricas: sem valores falsos; stale >5 min = INDISPONIVEL.
 - Auto-monitoramento do servidor: OK via 127.0.0.1.
+
+## Sincronização inteligente Inventário ↔ Zabbix (2026-11-04)
+
+Implementada em `monitor/zabbix-bridge.js` (estilo *netbox-zabbix-sync*), com
+endpoints novos no `server.cjs`.
+
+### Como funciona o vínculo host ↔ computador
+Match nesta ordem de prioridade (nunca inventa dado):
+1. tag `inventario_id` no host;
+2. IP da interface do host;
+3. nome normalizado (minúsculas, sem pontuação).
+
+### Sync de hosts — `POST /api/zabbix/sincronizar`
+- Lê `data.json` (computadores + ordens) no servidor.
+- **Smart update**: só chama `host.update` quando há diferença real de inventário,
+  tags ou `inventory_mode`; preserva tags/campos não gerenciados.
+- Cria host (template *ICMP Ping*, grupo *Inventario TI*) só quando o registro
+  **tem IP**; registros sem IP são reportados (`semIp`) — sem vínculo, sem criação.
+- Inventário preenchido: `name, os, serialno_a, model, hardware, contact,
+  location, software, notes, vendor, deployment_status, asset_tag (INV-<id>),
+  date_hw_purchase, date_hw_install`. `inventory_mode` forçado para `0` (manual),
+  porque `selectInventory` devolve `[]` quando está `-1`.
+- Relata `semVinculo` (hosts monitorados sem tag `inventario_id`) — informativo.
+
+### Sync de manutenções — `POST /api/zabbix/sincronizar-manutencoes`
+- `proximaManutencao` futura do computador **vinculado** → janela one-time no dia;
+- ordens abertas com `dataPrevisao` futura → janela no dia previsto;
+- limpa janelas `InvTI` já vencidas (idempotente, sem lixo);
+- sem vínculo → reporta `semVinculo` (nunca cria host fantasma).
+
+### Dashboard — `POST /api/zabbix/dashboard` (garante) e `GET /api/zabbix/dashboard`
+Dashboard **"Inventario TI"** (id 401) com 4 widgets, idempotente:
+`problems` (ao vivo, grupo Inventario TI), `problemsbysv`, `hostavail` e
+`url` apontando para o próprio painel (`urlPainel` enviado pelo request).
+
+### Frontend
+- Botão **Sincronizar** agora usa o sync completo e mostra relatório detalhado
+  (criados/atualizados/inalterados/sem IP/sem vínculo + manutenções).
+- Botão **Ver no Zabbix**: deep-link `host.view` dinâmico (`name`, `groupids[]=22`,
+  `status=0`, `sort=name`) — sem IP fixo no código.
+- Botão **Dashboard**: cria/atualiza e abre o dashboard no Zabbix.
+- Linha de cada host ganhou ações: abrir host no Zabbix (`host.view`) e ver
+  problemas (`problem.view` por `hostids[]`).
+
+### Estado dos dados (2026-11-04)
+- 101 computadores **sem IP** em `data.json` → `semIp: 101`, nenhum host criado.
+- 2 hosts sem tag `inventario_id` → `semVinculo: 2` (informativo).
+- Manutenções: `semVinculo: 101`, `ignoradas: 3` (sem host correspondente).
+- Dashboard 401 atualizado com os 4 widgets.
+

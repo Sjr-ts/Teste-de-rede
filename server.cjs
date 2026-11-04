@@ -714,11 +714,22 @@ app.get('/api/zabbix/hosts', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Sincronizacao COMPLETA: hosts + manutencoes (le o data.json do servidor).
+// Corrige o bug antigo que chamava zb.sincronizarHosts() (funcao inexistente).
 app.post('/api/zabbix/sincronizar', async (req, res) => {
     try {
         const zb = require('./monitor/zabbix-bridge');
-        const resultado = await zb.sincronizarHosts();
-        res.json(resultado);
+        const db = carregarDados();
+        const computadores = Array.isArray(db.computadores) ? db.computadores : [];
+        const ordens = Array.isArray(db.ordensServico) ? db.ordensServico
+            : (Array.isArray(db.ordens) ? db.ordens : []);
+        const hosts = await zb.sincronizarHostsInventario(computadores);
+        let manutencoes = null;
+        if (!req.body || req.body.manutencoes !== false) {
+            try { manutencoes = await zb.sincronizarManutencoes(computadores, ordens); }
+            catch (e) { manutencoes = { erros: [e.message] }; }
+        }
+        res.json({ ok: true, computadores: computadores.length, hosts, manutencoes, atualizadoEm: new Date().toISOString() });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -749,9 +760,41 @@ app.post('/api/zabbix/config', (req, res) => {
 app.post('/api/zabbix/sincronizar-inventario', async (req, res) => {
     try {
         const zb = require('./monitor/zabbix-bridge');
-        const dados = req.body && Array.isArray(req.body.computadores) ? req.body.computadores : [];
+        const dados = req.body && Array.isArray(req.body.computadores)
+            ? req.body.computadores
+            : (carregarDados().computadores || []);
         const r = await zb.sincronizarHostsInventario(dados);
         res.json(r);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ---- Zabbix: sincronizar manutencoes (proximaManutencao + ordens abertas) ----
+app.post('/api/zabbix/sincronizar-manutencoes', async (req, res) => {
+    try {
+        const zb = require('./monitor/zabbix-bridge');
+        const db = carregarDados();
+        const r = await zb.sincronizarManutencoes(
+            Array.isArray(db.computadores) ? db.computadores : [],
+            Array.isArray(db.ordens) ? db.ordens : []
+        );
+        res.json(r);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ---- Zabbix: garantir dashboard "Inventario TI" (idempotente) ----
+app.post('/api/zabbix/dashboard', async (req, res) => {
+    try {
+        const zb = require('./monitor/zabbix-bridge');
+        const urlPainel = (req.body && req.body.urlPainel) || `http://${req.hostname}:5903/index.html`;
+        const r = await zb.garantirDashboardInventario(urlPainel);
+        res.json(r);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/zabbix/dashboard', async (req, res) => {
+    try {
+        const zb = require('./monitor/zabbix-bridge');
+        res.json(await zb.obterDashboardInventario());
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
