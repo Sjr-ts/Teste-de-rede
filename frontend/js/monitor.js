@@ -2523,12 +2523,23 @@ async function monVerDetalhe(ip) {
             html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">';
             html += monDetailItem('Hostname Zabbix', esc(h.hostname));
             html += monDetailItem('Disponivel', h.disponivel === null ? 'Desconhecido' : (h.disponivel ? '<span class="badge badge-ativo">Sim</span>' : '<span class="badge badge-cancelada">Nao</span>'));
+            if (zbx.desativado) {
+                html += '<div style="margin:8px 0;padding:10px;border-left:3px solid var(--yellow);background:rgba(255,255,255,0.03);border-radius:6px;font-size:11px;color:var(--yellow);"><i class="fas fa-pause-circle"></i> ' + esc(zbx.nota || 'Host DESATIVADO no Zabbix — a coleta de dados parou.') + '</div>';
+            }
+            // Dados antigos (>5min ou nunca coletados): nunca exibidos como validos
+            function _semDados(item) {
+                return item && item.stale
+                    ? '<span style="color:var(--yellow);">SEM DADOS RECENTES' + (item.idadeSeg != null ? ' (ha ' + Math.max(1, Math.round(item.idadeSeg / 60)) + ' min)' : ' (nunca coletado)') + '</span>'
+                    : null;
+            }
             // CPU
             const cpu = zbx.metricas && zbx.metricas.cpu;
             if (cpu && cpu.valor) {
                 const cpuVal = parseFloat(cpu.valor.valor);
                 const cpuStr = isNaN(cpuVal) ? cpu.valor.valor : (Math.round(cpuVal * 10) / 10) + '%';
                 html += monDetailItem('CPU', cpuStr + ' <span style="color:var(--text-muted);font-size:10px;">(' + (cpu.valor.nome || '') + ')</span>');
+            } else if (cpu && cpu.stale) {
+                html += monDetailItem('CPU', _semDados(cpu));
             } else if (cpu && cpu.indisponivel) {
                 html += monDetailItem('CPU', '<span style="color:var(--text-muted);">' + esc(cpu.indisponivel) + '</span>');
             }
@@ -2538,6 +2549,8 @@ async function monVerDetalhe(ip) {
                 const gpuVal = parseFloat(gpu.valor.valor);
                 const gpuStr = isNaN(gpuVal) ? gpu.valor.valor : (Math.round(gpuVal * 10) / 10) + '%';
                 html += monDetailItem('GPU', gpuStr + ' <span style="color:var(--text-muted);font-size:10px;">(' + (gpu.valor.nome || '') + ')</span>');
+            } else if (gpu && gpu.stale) {
+                html += monDetailItem('GPU', _semDados(gpu));
             } else if (gpu && gpu.indisponivel) {
                 html += monDetailItem('GPU', '<span style="color:var(--text-muted);">' + esc(gpu.indisponivel) + '</span>');
             }
@@ -2547,6 +2560,8 @@ async function monVerDetalhe(ip) {
                 const ramVal = parseFloat(ram.valor.valor);
                 const ramStr = isNaN(ramVal) ? ram.valor.valor : (Math.round(ramVal * 10) / 10) + '%';
                 html += monDetailItem('RAM', ramStr + ' <span style="color:var(--text-muted);font-size:10px;">(' + (ram.valor.nome || '') + ')</span>');
+            } else if (ram && ram.stale) {
+                html += monDetailItem('RAM', _semDados(ram));
             } else if (ram && ram.indisponivel) {
                 html += monDetailItem('RAM', '<span style="color:var(--text-muted);">' + esc(ram.indisponivel) + '</span>');
             }
@@ -2561,6 +2576,8 @@ async function monVerDetalhe(ip) {
                 } else {
                     html += monDetailItem('Uptime', esc(uptime.valor.valor));
                 }
+            } else if (uptime && uptime.stale) {
+                html += monDetailItem('Uptime', _semDados(uptime));
             }
             html += '</div>';
             // Triggers

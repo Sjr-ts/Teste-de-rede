@@ -208,3 +208,18 @@ Dashboard **"Inventario TI"** (id 401) com 4 widgets, idempotente:
 - Manutenções: `semVinculo: 101`, `ignoradas: 3` (sem host correspondente).
 - Dashboard 401 atualizado com os 4 widgets.
 
+## Integridade dos dados no detalhe do host (2026-11-04)
+Correção pós-revisão profunda: dados do Zabbix nunca são exibidos como válidos
+quando estão velhos.
+- `buscarHostPorIp` prefere hosts **habilitados** (`status=0`); antes,
+  `host/127.0.0.1` devolvia o "Zabbix server" (10084, desativado) pelo IP.
+- Todo valor consultado passa pela checagem de `lastclock`:
+  `lastclock=0` (item nunca coletou) ou **mais velho que 5 min** → `stale:true`,
+  `valor:null`, `idadeSeg` medida. Nunca mais exibe `1970-01-01` nem 0% falso.
+- O detalhe do host no painel mostra:
+  - badge amarelo **"SEM DADOS RECENTES (há N min)"** para métricas antigas;
+  - aviso **"Host DESATIVADO no Zabbix"** quando o host está com coleta parada.
+- Verificado ao vivo: TERM-COMPRAS10 com agente sem dados há ~8 min →
+  `stale:true`/`valor:null` (antes: 0% "válido"); MEU_PC/servidor-monitoramento
+  com dados de há ~20s → valor real exibido.
+

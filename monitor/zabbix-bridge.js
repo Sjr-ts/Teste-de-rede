@@ -259,14 +259,13 @@ async function enriquecerDisponibilidade(hosts) {
 /** Busca host por IP ou nome. */
 async function buscarHostPorIp(ip) {
     const hosts = await authCall('host.get', {
-        output: ['hostid', 'host', 'name'],
-        selectInterfaces: ['ip', 'available', 'error'],
-        filter: {}
+        output: ['hostid', 'host', 'name', 'status'],
+        selectInterfaces: ['ip', 'available', 'error']
     });
-    for (const h of hosts) {
-        if (h.interfaces && h.interfaces.some(i => i.ip === ip)) return h;
-    }
-    return null;
+    const match = hosts.filter(h => h.interfaces && h.interfaces.some(i => i.ip === ip));
+    // Prefere hosts HABILITADOS (status=0); se so houver desabilitados,
+    // retorna o desabilitado e quem decide e o chamador (badge "desativado").
+    return match.find(h => String(h.status) === '0') || match[0] || null;
 }
 
 /** Busca problemas (triggers em estado PROBLEM) de um host ou todos. */
@@ -656,22 +655,36 @@ async function monitoramentoHost(ip) {
         }
 
         const valoresMap = {};
+        const agoraSeg = Math.floor(Date.now() / 1000);
         for (const v of valores) {
+            const lastclock = parseInt(v.lastclock, 10) || 0;
+            // lastclock=0 (item criado, nunca coletou) ou coleta mais velha
+            // que 5 min -> SEM DADOS RECENTES (nunca exibir epoch 1970)
+            const idadeSeg = lastclock > 0 ? agoraSeg - lastclock : null;
+            const stale = idadeSeg == null || idadeSeg > 300;
+            const horario = lastclock > 0 ? new Date(lastclock * 1000).toISOString() : null;
             valoresMap[v.key_] = {
-                valor: v.lastvalue,
-                horario: new Date(parseInt(v.lastclock) * 1000).toISOString(),
+                valor: stale ? null : v.lastvalue,
+                horario,
                 unidade: v.units,
-                nome: v.name
+                nome: v.name,
+                stale,
+                idadeSeg
             };
         }
 
         return {
             encontrado: true,
             ip,
+            desativado: String(host.status) === '1',
+            nota: String(host.status) === '1'
+                ? 'Host DESATIVADO no Zabbix (decisao do usuario) — metricas antigas nao sao exibidas; dados frescos exigem reativar o host.'
+                : undefined,
             host: {
                 hostid: host.hostid,
                 hostname: host.host,
                 nome: host.name,
+                status: String(host.status),
                 disponivel: (function() {
                     const iface = host.interfaces && host.interfaces[0];
                     if (!iface) return null;

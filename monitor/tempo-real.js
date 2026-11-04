@@ -18,8 +18,9 @@
 const { spawn } = require('child_process');
 const os = require('os');
 
-// Marcador unico no script: usado para matar processos orfaos de execucoes
-// anteriores (evita que varios amostradores fiquem rodando apos restart).
+// Marcador informativo do script (aparece como comentario no .ps1 e ajuda
+// debugging interativo). NAO ha "kill por marcador" — o amostrador se
+// auto-termina pelo check de pai no proprio loop.
 const MARCADOR = 'inventario-ti-amostrador';
 
 // Script PS: CPU 1x/s (contador do Task Manager), GPU a cada 2s (Get-Counter e
@@ -158,6 +159,7 @@ function processarLinha(linha) {
 function ligar() {
     if (parado) return;
     saudeTs = Date.now();
+    buf = ''; // linha parcial do processo anterior nao pode vazar para o novo
     try {
         proc = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', montarScriptPs()], {
             windowsHide: true,

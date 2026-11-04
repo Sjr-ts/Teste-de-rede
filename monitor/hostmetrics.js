@@ -128,17 +128,22 @@ function memoria() {
     };
 }
 
-/** Disco via WMI/PowerShell. Cache de 30s: disco muda devagar e isso evita
- *  um spawn de PowerShell (~1.5s) a cada coleta de ciclo (anti-latenca). */
+/** Disco via WMI/PowerShell. Cache de 30s para sucesso e de 15s para FALHA:
+ *  disco muda devagar e isto evita spawn de PS a cada coleta — inclusive
+ *  repeticoes de coletas que falharam (anti-tempestade de processos). */
 let _discoCache = { ts: 0, dados: null };
+let _discoFalhaTs = 0;
 function disco() {
     if (_discoCache.dados && (Date.now() - _discoCache.ts) < 30000) {
         return Promise.resolve(_discoCache.dados);
     }
+    if (!_discoCache.dados && _discoFalhaTs && (Date.now() - _discoFalhaTs) < 15000) {
+        return Promise.resolve({ indisponivel: 'Falha recente ao consultar discos (nova tentativa em ate 15s).' });
+    }
     return new Promise((resolve) => {
         const cmd = 'powershell -NoProfile -Command "Get-CimInstance Win32_LogicalDisk -Filter \\"DriveType=3\\" | Select-Object DeviceID,@{n=\'TotalGB\';e={[math]::Round($_.Size/1GB,2)}},@{n=\'FreeGB\';e={[math]::Round($_.FreeSpace/1GB,2)}},@{n=\'UsedGB\';e={[math]::Round(($_.Size-$_.FreeSpace)/1GB,2)}},@{n=\'UsagePct\';e={[math]::Round(($_.Size-$_.FreeSpace)/$_.Size*100,1)}} | ConvertTo-Json"';
         exec(cmd, { timeout: 10000, windowsHide: true }, (err, stdout) => {
-            if (err) return resolve({ indisponivel: 'Falha ao consultar discos (WMI/PowerShell).' });
+            if (err) { _discoFalhaTs = Date.now(); return resolve({ indisponivel: 'Falha ao consultar discos (WMI/PowerShell).' }); }
             try {
                 let raw = stdout.trim();
                 if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
@@ -154,6 +159,7 @@ function disco() {
                 _discoCache = { ts: Date.now(), dados };
                 resolve(dados);
             } catch (e) {
+                _discoFalhaTs = Date.now();
                 resolve({ indisponivel: 'Saida do PowerShell ilegivel para disco.' });
             }
         });
