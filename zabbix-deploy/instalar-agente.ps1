@@ -1,10 +1,15 @@
 # =============================================================================
 # Instalacao remota do Zabbix Agent 2 em computadores Windows
-# Uso: .\instalar-agente.ps1 -ServidorZabbix "192.168.0.94" -Computadores "PC1","PC2"
+# Uso: .\instalar-agente.ps1 -ServidorZabbix "192.168.0.186" -Computadores "PC1","PC2"
+#      .\instalar-agente.ps1 -Usuario "ADMINISTRADOR" -Senha "***" -Computadores "192.168.0.131"
 # Requer: credenciais administrativas nos alvos, compartilhamento ADMIN$ acessivel
+# Obs: sem -Usuario/-Senha usa a conta logada nesta maquina; contas sem senha
+#      NAO conseguem logar na rede (Windows bloqueia) -> informe as credenciais.
 # =============================================================================
 param(
-    [string]$ServidorZabbix = "192.168.0.94",
+    [string]$ServidorZabbix = "192.168.0.186",
+    [string]$Usuario = "",
+    [string]$Senha = "",
     [string]$PSKIdentity = "",
     [string]$PSKKey = "",
     [string[]]$Computadores = @(),
@@ -27,6 +32,73 @@ function Log($msg) {
     Add-Content -Path $LogFile -Value $line
 }
 
+# --- Helpers de acesso remoto com credenciais opcionais ---
+function ConectarShare($alvo) {
+    if (!$Usuario) {
+        # Sem credenciais explicitas: usa a conta logada (falha se ela for sem senha)
+        try {
+            Get-ChildItem "\\$alvo\C$" -ErrorAction Stop | Select-Object -First 1 | Out-Null
+            return $true
+        } catch {
+            Log "  FALHA: sem acesso a \\$alvo\C$ com a conta atual. Use -Usuario/-Senha com administrador do alvo."
+            return $false
+        }
+    }
+    cmd /c "net use \\$alvo\C$ /delete /y" >$null 2>&1
+    & net.exe use "\\$alvo\C$" "/user:$Usuario" $Senha >$null 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Log "  FALHA: sem acesso ao share \\$alvo\C$ com as credenciais informadas"
+        return $false
+    }
+    return $true
+}
+
+function DesconectarShare($alvo) {
+    if ($Usuario) { cmd /c "net use \\$alvo\C$ /delete /y" >$null 2>&1 }
+}
+
+# Estado do servico do agente: 'Running'/'Stopped'/... ou $null se inexiste/sem acesso
+function ObterServico($alvo) {
+    if ($Usuario) {
+        $cred = New-Object System.Management.Automation.PSCredential(
+            $Usuario, (ConvertTo-SecureString $Senha -AsPlainText -Force))
+        try {
+            $w = Get-WmiObject -ComputerName $alvo -Credential $cred -Class Win32_Service `
+                -Filter "Name='Zabbix Agent 2'" -ErrorAction Stop
+            if ($w) { return ($w | Select-Object -First 1) }
+            return $null
+        } catch { return $null }
+    }
+    return (Get-Service -ComputerName $alvo -Name "Zabbix Agent 2" -ErrorAction SilentlyContinue)
+}
+
+# Reinicia o servico do agente no alvo (com credenciais via tarefa agendada)
+function ReiniciarServico($alvo) {
+    if ($Usuario) {
+        $tr = 'cmd /c net stop "Zabbix Agent 2" & timeout /t 2 & net start "Zabbix Agent 2"'
+        & schtasks.exe "\\$alvo" /create /u $Usuario /p $Senha /ru SYSTEM /sc once /st 00:00 `
+            /tn "zbx-restart" /tr $tr /f >$null 2>&1
+        & schtasks.exe "\\$alvo" /run /u $Usuario /p $Senha /tn "zbx-restart" >$null 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Start-Sleep -Seconds 8
+            & schtasks.exe "\\$alvo" /delete /u $Usuario /p $Senha /tn "zbx-restart" /f >$null 2>&1
+            return $true
+        }
+        return $false
+    }
+    try {
+        Invoke-Command -ComputerName $alvo -ScriptBlock {
+            Restart-Service -Name "Zabbix Agent 2" -Force
+        } -ErrorAction Stop
+        return $true
+    } catch {
+        & sc.exe "\\$alvo" stop "Zabbix Agent 2" 2>&1 | Out-Null
+        Start-Sleep -Seconds 2
+        & sc.exe "\\$alvo" start "Zabbix Agent 2" 2>&1 | Out-Null
+        return $true
+    }
+}
+
 # Carrega lista de alvos
 $alvos = @()
 if ($ListaCSV -and (Test-Path $ListaCSV)) {
@@ -34,6 +106,8 @@ if ($ListaCSV -and (Test-Path $ListaCSV)) {
 } elseif ($Computadores.Count) {
     $alvos = $Computadores
 }
+# Aceita lista separada por virgula tambem (ex.: -Computadores "192.168.0.131,192.168.0.108")
+$alvos = @($alvos | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 
 if (!$alvos.Count) {
     Log "ERRO: nenhum computador informado. Use -Computadores ou -ListaCSV"
@@ -61,10 +135,43 @@ foreach ($alvo in $alvos) {
             continue
         }
 
+        # Conecta no share ADMIN$ (credenciais opcionais -Usuario/-Senha)
+        if (!(ConectarShare $alvo)) { continue }
+
         # Verifica se ja tem o agente instalado
-        $svc = Get-Service -ComputerName $alvo -Name "Zabbix Agent 2" -ErrorAction SilentlyContinue
+        $svc = ObterServico $alvo
         if ($svc -and !$Forcar) {
-            Log "  PULADO: agente ja instalado (status: $($svc.Status)). Use -Forcar para reinstalar."
+            $estado = if ($svc.State) { $svc.State } else { "$($svc.Status)" }
+            Log "  Agente ja instalado (status: $estado). Atualizando conf para servidor $ServidorZabbix..."
+            try {
+                $confRemoto = "\\$alvo\C$\Program Files\Zabbix Agent 2\zabbix_agent2.conf"
+                if (Test-Path $confRemoto) {
+                    $conteudo = [System.IO.File]::ReadAllText($confRemoto)
+                    $origem = $conteudo
+                    # Server/ServerActive -> servidor atual (IPs antigos quebram a coleta)
+                    $conteudo = [regex]::Replace($conteudo, '(?im)^[ \t]*Server[ \t]*=.*$', "Server=$ServidorZabbix")
+                    $conteudo = [regex]::Replace($conteudo, '(?im)^[ \t]*ServerActive[ \t]*=.*$', "ServerActive=$ServidorZabbix")
+                    # HostMetadata -> habilita o auto-registro/IP adaptativo
+                    if ($conteudo -match '(?im)^[ \t]*HostMetadata[ \t]*=') {
+                        $conteudo = [regex]::Replace($conteudo, '(?im)^[ \t]*HostMetadata[ \t]*=.*$', 'HostMetadata=inventario-ti')
+                    } else {
+                        $conteudo = $conteudo.TrimEnd() + "`r`nHostMetadata=inventario-ti`r`n"
+                    }
+                    if ($conteudo -ne $origem) {
+                        Copy-Item -Path $confRemoto -Destination "$confRemoto.bak-$(Get-Date -Format yyyyMMddHHmm)" -Force
+                        [System.IO.File]::WriteAllText($confRemoto, $conteudo)
+                        Log "  conf atualizado (Server/ServerActive=$ServidorZabbix, HostMetadata=inventario-ti)"
+                        if (ReiniciarServico $alvo) { Log "  servico reiniciado" }
+                        else { Log "  AVISO: conf atualizado, mas o servico nao foi reiniciado (reinicie manualmente)" }
+                    } else {
+                        Log "  conf ja estava atualizado"
+                    }
+                } else {
+                    Log "  AVISO: conf remoto nao encontrado ($confRemoto)"
+                }
+            } catch {
+                Log "  ERRO ao atualizar conf de $alvo : $($_.Exception.Message)"
+            }
             continue
         }
 
@@ -82,6 +189,7 @@ foreach ($alvo in $alvos) {
             "SERVER=$ServidorZabbix",
             "SERVERACTIVE=$ServidorZabbix",
             "HOSTNAME=$alvo",
+            "HOSTMETADATA=inventario-ti",
             "LISTENPORT=$Porta"
         )
 
@@ -130,20 +238,30 @@ foreach ($alvo in $alvos) {
         if ($installOk) {
             # Aguarda servico subir
             Start-Sleep -Seconds 5
-            $svc = Get-Service -ComputerName $alvo -Name "Zabbix Agent 2" -ErrorAction SilentlyContinue
+            $svc = ObterServico $alvo
             if ($svc) {
-                Log "  Servico 'Zabbix Agent 2' status: $($svc.Status)"
-                if ($svc.Status -ne 'Running') {
+                $estado = if ($svc.State) { $svc.State } else { "$($svc.Status)" }
+                Log "  Servico 'Zabbix Agent 2' status: $estado"
+                if ($estado -ne 'Running') {
                     Log "  Tentando iniciar servico..."
-                    Invoke-Command -ComputerName $alvo -ScriptBlock {
-                        Start-Service "Zabbix Agent 2"
-                    } -ErrorAction SilentlyContinue
+                    if ($Usuario) {
+                        if (ReiniciarServico $alvo) { Log "  servico iniciado" }
+                        else { Log "  AVISO: nao foi possivel iniciar o servico" }
+                    } else {
+                        Invoke-Command -ComputerName $alvo -ScriptBlock {
+                            Start-Service "Zabbix Agent 2"
+                        } -ErrorAction SilentlyContinue
+                    }
                 }
+            } else {
+                Log "  AVISO: nao foi possivel consultar o servico do agente"
             }
             Log "  DEPLOY OK: $alvo"
         }
     } catch {
         Log "  ERRO em $alvo : $($_.Exception.Message)"
+    } finally {
+        DesconectarShare $alvo
     }
 }
 

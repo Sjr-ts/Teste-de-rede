@@ -5,15 +5,23 @@
 # =============================================================================
 
 # --- Identificacao ---
-# HOSTNAME deve corresponder ao host cadastrado no Zabbix (ou use hostname do SO)
+# HOSTNAME: nome tecnico do host no Zabbix. Se o host ja existe, o Zabbix usa o
+# nome para CASAR e atualizar a interface (IP adaptativo) sem duplicar host.
+# Se nao existir, o host e criado automaticamente com este nome.
 Hostname=PC-AJUSTAR
+
+# --- Auto-registro / IP adaptativo (obrigatorio) ---
+# O valor precisa conter "inventario-ti" para a action
+# "Inventario TI - Auto-registro de agentes" aceitar o registro.
+# Assim, se o IP do PC muder, o Zabbix atualiza a interface sozinho.
+HostMetadata=inventario-ti
 
 # --- Comunicacao com o servidor ---
 # IP ou nome do Zabbix Server (ou Proxy)
-Server=192.168.0.94
+Server=192.168.0.186
 
 # Modo ativo: o agente conecta ao servidor e envia metricas (recomendado)
-ServerActive=192.168.0.94
+ServerActive=192.168.0.186
 
 # --- Portas ---
 # Porta para verificacoes passivas (desabilite se usar apenas modo ativo)

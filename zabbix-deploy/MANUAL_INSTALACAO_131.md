@@ -9,7 +9,7 @@
 
 ## Passo 1 — Copiar arquivos para o PC 131
 
-Neste computador (192.168.0.216), abra o PowerShell **como Administrador** e copie:
+Neste computador (192.168.0.186), abra o PowerShell **como Administrador** e copie:
 
 ```powershell
 # Cria pasta no PC destino (precisa credenciais admin do .131)
@@ -32,14 +32,18 @@ Abra **Prompt como Administrador** no PC 131:
 
 ```cmd
 cd C:\
-zabbix_agent2-7.0-latest-windows-amd64-openssl.msi /qn SERVER=192.168.0.216 SERVERACTIVE=192.168.0.216 HOSTNAME=pc-131 ENABLEPATH=1 ALLOWKEY=system.run[*]
+zabbix_agent2-7.0-latest-windows-amd64-openssl.msi /qn SERVER=192.168.0.186 SERVERACTIVE=192.168.0.186 HOSTNAME=pc-131 HOSTMETADATA=inventario-ti ENABLEPATH=1 ALLOWKEY=system.run[*]
 ```
+
+> `HOSTMETADATA=inventario-ti` é **obrigatório**: é o que a action
+> "Inventario TI - Auto-registro de agentes" usa para aceitar o PC e manter o
+> IP da interface atualizado automaticamente quando ele mudar.
 
 **OU** instalação interativa:
 1. Execute o `.msi`
 2. Next → Next → Next
-3. Em **Server address**: `192.168.0.216`
-4. Em **Server active**: `192.168.0.216`
+3. Em **Server address**: `192.168.0.186`
+4. Em **Server active**: `192.168.0.186`
 5. Finish
 
 ---
@@ -93,7 +97,7 @@ No PC 131:
 
 Deve retornar: `agent.version=7.0.x`
 
-No PC 192.168.0.216 (este), teste a conectividade:
+No PC 192.168.0.186 (este), teste a conectividade:
 ```powershell
 Test-NetConnection -ComputerName 192.168.0.131 -Port 10050
 ```
@@ -102,7 +106,7 @@ Test-NetConnection -ComputerName 192.168.0.131 -Port 10050
 
 ## Passo 7 — Ver no Zabbix
 
-1. Abra http://localhost:8081 (ou http://192.168.0.216:8081)
+1. Abra http://localhost:8081 (ou http://192.168.0.186:8081)
 2. Login: `Admin` / `zabbix`
 3. Vá em **Monitoring → Hosts**
 4. Procure por `pc-131` — deve aparecer com availability verde (ZBX)

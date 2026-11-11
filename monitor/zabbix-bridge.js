@@ -821,7 +821,7 @@ function montarTagsGerenciadas(comp) {
 async function indexarHostsParaVinculo() {
     const hosts = await authCall('host.get', {
         output: ['hostid', 'host', 'name', 'status', 'inventory_mode'],
-        selectInterfaces: ['ip'],
+        selectInterfaces: ['interfaceid', 'ip', 'dns', 'useip', 'main', 'type', 'port'],
         selectTags: 'extend',
         selectInventory: 'extend',
         filter: { status: '0' }
@@ -851,7 +851,9 @@ function vincularHost(comp, idx) {
 /**
  * Smart update: preenche inventario + tags do host no Zabbix SEMPRE que houver
  * diferenca real em relacao ao Inventario de TI. Preserva campos/tags nao
- * gerenciados. Retorna true se chamou host.update.
+ * gerenciados. Se o IP do computador mudou, atualiza a interface do host
+ * (IP adaptativo: o Zabbix passa a monitorar o IP novo).
+ * Retorna { mudou, ip } indicando se houve atualizacao (e se foi de IP).
  */
 async function atualizarHostDoInventario(host, comp) {
     const invDesejado = montarInventario(comp);
@@ -875,7 +877,14 @@ async function atualizarHostDoInventario(host, comp) {
     // inventory_mode: -1 (desabilitado) atrapalha o sync de inventario; usa 0 (manual)
     const modoMudou = String(host.inventory_mode) === '-1';
 
-    if (!invMudou && !tagsMudou && !modoMudou) return false;
+    // IP adaptativo: IP novo no Inventario de TI -> interface do host acompanha.
+    // Sem IP no registro nao mexe na interface (nunca apaga o que existe).
+    const ipDesejado = comp.ipAddress || comp.ip;
+    const ifaces = host.interfaces || [];
+    const iface = ifaces.find(i => String(i.main) === '1') || ifaces[0];
+    const ipMudou = !!(ipDesejado && iface && iface.interfaceid && String(iface.ip || '') !== String(ipDesejado));
+
+    if (!invMudou && !tagsMudou && !modoMudou && !ipMudou) return { mudou: false, ip: false };
 
     const params = { hostid: host.hostid };
     if (invMudou || modoMudou) {
@@ -883,19 +892,28 @@ async function atualizarHostDoInventario(host, comp) {
         params.inventory = invDesejado;
     }
     if (tagsMudou) params.tags = naoGerenciadas.concat(desejadas);
-    await authCall('host.update', params);
-    return true;
+    if (Object.keys(params).length > 1) await authCall('host.update', params);
+    if (ipMudou) {
+        await authCall('hostinterface.update', {
+            interfaceid: iface.interfaceid,
+            ip: String(ipDesejado),
+            dns: '',
+            useip: 1
+        });
+    }
+    return { mudou: true, ip: ipMudou };
 }
 
 /**
  * Sincroniza hosts do Inventario de TI com o Zabbix:
  *  - cria host (ICMP agentless) quando o registro TEM IP e ainda nao existe;
- *  - atualiza inventario, tags e vinculo dos hosts existentes (smart update);
+ *  - atualiza inventario, tags e vinculo dos hosts existentes (smart update),
+ *    incluindo a INTERFACE do host quando o IP do computador muda (IP adaptativo);
  *  - relata registros SEM IP e hosts SEM vinculo (sem inventar dado nenhum).
  * Usa template "ICMP Ping" e grupo "Inventario TI".
  */
 async function sincronizarHostsInventario(computadores) {
-    const resultado = { criados: 0, atualizados: 0, inalterados: 0, semIp: 0, semVinculo: 0, erros: [], vinculos: [] };
+    const resultado = { criados: 0, atualizados: 0, ipsAtualizados: 0, inalterados: 0, semIp: 0, semVinculo: 0, erros: [], vinculos: [] };
     if (!Array.isArray(computadores)) computadores = [];
 
     // Busca template e grupo
@@ -921,9 +939,10 @@ async function sincronizarHostsInventario(computadores) {
         try {
             const vinculado = vincularHost(comp, idx);
             if (vinculado) {
-                const mudou = await atualizarHostDoInventario(vinculado, comp);
-                if (mudou) {
+                const r = await atualizarHostDoInventario(vinculado, comp);
+                if (r.mudou) {
                     resultado.atualizados++;
+                    if (r.ip) resultado.ipsAtualizados++;
                     resultado.vinculos.push({ inventario_id: comp.id, hostid: vinculado.hostid, acao: 'atualizado' });
                     // reindexa para refletir o update (proximos computadores veem estado fresco)
                     idx = await indexarHostsParaVinculo();

@@ -303,3 +303,104 @@ quando estão velhos.
   `NUNCA` coletados. Ação necessária na máquina: reiniciar o serviço
   "Zabbix Agent".
 
+## Simplificação da UI + IP adaptativo (2026-11-11)
+
+Pedido do usuário: *"ta muito complexo só pra pesquisar — tira o que é
+inútil"* e *"se o IP do PC mudar, o sistema reconhece e muda pro IP novo"*.
+
+### 1. Menu enxuto no Admin
+
+A conta usada no dia a dia é a **`Admin`** (userid 1), que estava na role
+built-in `Super admin role` (roleid 3) mostrando ~40 itens de menu. Como essa
+role é `readonly` na API, o flag foi aberto direto no banco, as regras foram
+aplicadas via API e o flag foi devolvido para `1`:
+
+```bash
+docker exec zbx-postgres psql -U zabbix -d zabbix -c "UPDATE role SET readonly = 0 WHERE roleid = 3"
+node scripts/zabbix-setup-diario.cjs --menu
+docker exec zbx-postgres psql -U zabbix -d zabbix -c "UPDATE role SET readonly = 1 WHERE roleid = 3"
+```
+
+Regras aplicadas na role 3 (`role.update` do Zabbix faz **MERGE** — por isso
+todos os 36 elementos fora da lista são zerados **explicitamente**):
+
+- **Visíveis**: Dashboards, Monitoring (Problems, Hosts, Latest data, Maps),
+  Inventory (Overview/Hosts), Reports → Availability report.
+- **Ocultos** (36 elementos): Data collection, Alerts, Users, Administration
+  (Geral, Proxies, Housekeeping, Fila, Macros, Tokens...), Services/SLA,
+  Discovery, Reports de suporte, Configuration (templates, actions, manutenção) etc.
+- `ui.default_access = 0` → upgrades do Zabbix **não reintroduzem** itens novos.
+- `api.access = 1` → o painel Inventário TI continua usando o Admin via API.
+- `actions.default_access = 1` → reconhecer/suprimir/fechar problemas e editar
+  dashboards/mapas continuam liberados.
+
+Verificado ao vivo: login como Admin → menu lateral só com Dashboards /
+Monitoring (4 itens) / Inventory / Reports; busca global
+(`action=search`) funcionando; **login cai direto no dashboard
+"Inventario TI"** (`users.url = zabbix.php?action=dashboard.view&dashboardid=401`).
+
+> Para voltar ao menu completo em manutenção: repetir o fluxo acima com
+> `ui.default_access = 1` e removendo as regras `ui.*` zeradas (ou restaurar
+> o dump da role 3 no banco).
+
+### 2. Limpeza de "lixo" do Zabbix
+
+- Removidas **5 ações padrão desativadas** (actionids 2–6) — nunca usadas.
+- Removida a discovery rule de exemplo **"Local network"** (druleid 2).
+- Estado final: **2 actions** (webhook + autoregistro), **8 hosts**,
+  **1 mapa**, **0 discovery rules**, 8 host groups (7 defaults do Zabbix +
+  "Inventario TI").
+- Setup reprodutível/idempotente: `node scripts/zabbix-setup-diario.cjs`
+  (roda de novo sem duplicar nada).
+
+### 3. IP adaptativo — duas vias (testadas ao vivo)
+
+**Via 1 — sync do Inventario TI** (`monitor/zabbix-bridge.js`):
+`atualizarHostDoInventario` agora detecta mudança de IP do computador e chama
+`hostinterface.update` (IP novo → interface do host acompanha, sem duplicar).
+O relatório do sync ganhou o contador `ipsAtualizados`
+("N IP(s) atualizado(s)" no painel).
+
+- Teste: host temporário com IP `1.1.1.1` → sync com IP `2.2.2.2` → interface
+  atualizada; 2ª execução → `inalterados=1` (idempotente). **PASS**
+
+**Via 2 — auto-registro do agente** (actionid 8, eventsource 2):
+action *"Inventario TI - Auto-registro de agentes (IP adaptativo)"* com condição
+`HostMetadata contains 'inventario-ti'` (conditiontype 24, operator 2 —
+`formulaid` **não** é aceito no create) e operações: adicionar host + grupo
+22 "Inventario TI" + tag `inventario_origem=autoreg`. Se o host já existe com
+o mesmo nome, o servidor Zabbix **atualiza a interface existente** (não duplica)
+— documentado na doc oficial de autoregistro (`HostInterface`).
+
+- Teste: agente real em container com `HostMetadata=inventario-ti` → host criado
+  no grupo com a tag; reiniciado com `HostInterface=10.99.88.77` → mesmo host
+  atualizado de `172.22.0.3` → `10.99.88.77` sem duplicar. **PASS**
+
+### 4. Conf do agente corrigida (IP do servidor)
+
+Os arquivos de deploy apontavam para o servidor **antigo** (`192.168.0.94` /
+`192.168.0.216`) — provável causa dos "agent is not available". Corrigidos para
+`192.168.0.186` + `HostMetadata=inventario-ti` em:
+
+- `zabbix-deploy/zabbix_agent2.conf.template` e `zabbix_agent2.conf`
+- `instalar-agente.ps1` (MSI `HOSTMETADATA=inventario-ti`)
+- `MANUAL_INSTALACAO_131.md`
+
+**`instalar-agente.ps1` aprimorado**: para agente já instalado, agora **reescreve
+`Server`/`ServerActive`/`HostMetadata`** no conf remoto (com backup `.bak-*`) e
+reinicia o serviço — em vez de só pular. Novos parâmetros `-Usuario`/`-Senha`
+(`net use` + WMI + `schtasks`) porque conta local **sem senha** é bloqueada pelo
+Windows para logon de rede ("senhas em branco não são permitidas"). Sem
+credenciais → falha graciosa orientando o uso de `-Usuario/-Senha`.
+
+### Pendências (ação manual)
+
+1. **Trocar a senha do `admin/admin123`** do painel Inventário TI.
+2. Pedir `Ctrl+F5` ao usuário após deploys do frontend.
+3. **TERM-COMPRAS10 (192.168.0.108)**: reiniciar o serviço "Zabbix Agent" na
+   máquina, ou rodar
+   `.\instalar-agente.ps1 -Usuario ADMIN -Senha "***" -Computadores 192.168.0.108`.
+4. Demais agentes com conf antiga precisam passar pelo `instalar-agente.ps1`.
+5. 101 computadores seguem **sem IP** no `data.json` (relatado, não inventado).
+
+

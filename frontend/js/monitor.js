@@ -2129,6 +2129,7 @@ async function monSyncZabbix() {
         const partes = [];
         partes.push((h.criados || 0) + ' host(s) criado(s)');
         partes.push((h.atualizados || 0) + ' atualizado(s)');
+        if (h.ipsAtualizados) partes.push(h.ipsAtualizados + ' IP(s) atualizado(s)');
         partes.push((h.inalterados || 0) + ' inalterado(s)');
         if (h.semIp) partes.push(h.semIp + ' sem IP');
         if (h.semVinculo) partes.push(h.semVinculo + ' host(s) sem vinculo');

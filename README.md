@@ -116,9 +116,12 @@ test/                   Testes (node:test)
 - **Credenciais nunca são commitadas** (`monitor/config.json`, `zabbix-config.json`,
   `users.json`, `auth-secret.json`, `webhook-secret.json`, `api-tokens.json`,
   chaves PSK) — veja `.gitignore`.
-- Acesso diário ao Zabbix via conta **`inventario`** (role restrita "Inventário TI —
-  Operador"; senha em `monitor/zabbix-inventario.txt`). A conta **`Admin`** fica
-  reservada para manutenção/integração.
+- Acesso diário ao Zabbix: a conta **`Admin`** (usada de fato) tem **menu enxuto**
+  (só Dashboards, Problems, Hosts, Latest data, Maps, Inventory e Availability
+  report — 36 itens administrativos ocultos) e cai direto no dashboard
+  "Inventario TI"; a role built-in foi ajustada via `scripts/zabbix-setup-diario.cjs --menu`.
+  A conta **`inventario`** (senha em `monitor/zabbix-inventario.txt`) também
+  segue restrita para quem preferir.
 - Headers de resposta: `X-Content-Type-Options`, `X-Frame-Options`,
   `Referrer-Policy`, sem `X-Powered-By`; respostas em gzip; vendor com cache
   imutável. **O app roda 100% offline** (libs/fontes locais em `frontend/vendor/`).
