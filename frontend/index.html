@@ -8,13 +8,12 @@
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>Inventario de TI</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230a1628'/%3E%3Ctext x='16' y='22' text-anchor='middle' fill='%23ffd700' font-size='14' font-weight='bold' font-family='Arial'%3ETI%3C/text%3E%3C/svg%3E">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <!-- Dependencias vendorizadas localmente: app funciona 100% offline na LAN -->
+    <link rel="stylesheet" href="vendor/vendor.css">
+    <script src="vendor/chart.umd.min.js"></script>
 
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="css/style.css?v=3578-local">
+    <link rel="stylesheet" href="vendor/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css?v=3579-auth">
     <style>
         .print-header, .print-footer { display: none; }
     </style>
@@ -1037,11 +1036,9 @@
         <img id="lightbox-img" src="" alt="Foto ampliada">
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="js/app.js?v=4700-problem-view"></script>
-<script src="js/monitor.js?v=6700-problem-view"></script>
+    <script src="vendor/jspdf.umd.min.js"></script>
+    <script src="vendor/jspdf.plugin.autotable.min.js"></script>
+<script src="js/app.js?v=4702-auth"></script>
+<script src="js/monitor.js?v=6702-auth"></script>
 </body>
 </html>

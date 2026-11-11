@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const compression = require('compression');
 const { ping, tcpCheck } = require('./monitor/pinger');
 const store = require('./monitor/storage');
 const monitor = require('./monitor/service');
@@ -9,6 +10,19 @@ const mockEngine = require('./monitor/mock-engine');
 
 const app = express();
 const PORT = 5903;
+
+// Seguranca basica e profissional: nao expor stack, protecao MIME/clickjacking
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'same-origin');
+    next();
+});
+// Compressao gzip/deflate — nunca no stream SSE (bufferizaria o push ao vivo)
+app.use(compression({
+    filter: (req) => req.path !== '/api/monitor/stream'
+}));
 
 // Protecao global: nao deixa o servidor cair com unhandled rejection
 process.on('unhandledRejection', (err) => {
@@ -23,6 +37,113 @@ app.use(express.urlencoded({ extended: true }));
 
 // ---- Health check ----
 app.get('/actuator/health', (req, res) => res.json({ status: 'UP' }));
+
+// ---- Zabbix webhook: recebe alertas do action → painel (publico, protegido por TOKEN) ----
+// O Zabbix nao tem sessao — autenticamos por segredo compartilhado no header.
+// (Antes da autenticacao este endpoint era aberto; depois do login de verdade,
+//  ficou de fora do portão mas exige o token.)
+const WEBHOOK_SECRET = (() => {
+    try {
+        return String(JSON.parse(fs.readFileSync(path.join(__dirname, 'monitor', 'webhook-secret.json'), 'utf8')).webhookToken || '');
+    } catch (e) { return process.env.ZABBIX_WEBHOOK_TOKEN || ''; }
+})();
+const alertasWebhook = [];
+app.post('/api/zabbix/webhook', (req, res) => {
+    const token = String(req.headers['x-webhook-token'] || '');
+    if (!WEBHOOK_SECRET || token !== WEBHOOK_SECRET) {
+        console.warn('[zabbix-webhook] rejeitado: token invalido');
+        return res.status(401).json({ error: 'Token invalido ou webhook nao configurado (monitor/webhook-secret.json).' });
+    }
+    try {
+        const body = req.body || {};
+        const alerta = {
+            id: Date.now(),
+            recebidoEm: new Date().toISOString(),
+            status: body.status || 'PROBLEM',
+            severidade: body.severity || 'Unknown',
+            trigger: body.trigger || '',
+            host: body.host || '',
+            mensagem: body.message || '',
+            hora: body.time || ''
+        };
+        alertasWebhook.unshift(alerta);
+        if (alertasWebhook.length > 500) alertasWebhook.length = 500;
+        // Broadcast SSE para todos os clientes conectados
+        sseBroadcast('alerta', alerta);
+        console.log('[zabbix-webhook]', alerta.status, alerta.trigger, '@', alerta.host);
+        res.json({ ok: true });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ==================== AUTENTICACAO (sessao HttpOnly assinada) ====================
+// Publico: apenas /api/auth/login e o health check. TODO o resto de /api exige sessao.
+const authMw = require('./monitor/auth');
+
+// Rate limit simples de login (por IP): 10 falhas em 10 min -> 429
+const _loginTentativas = new Map();
+function _registrarFalhaLogin(ip) {
+    const agora = Date.now();
+    const e = _loginTentativas.get(ip) || { n: 0, primeiro: agora };
+    if (agora - e.primeiro > 10 * 60 * 1000) { e.n = 0; e.primeiro = agora; }
+    e.n += 1;
+    _loginTentativas.set(ip, e);
+}
+
+app.post('/api/auth/login', (req, res) => {
+    const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?');
+    const bloqueio = _loginTentativas.get(ip);
+    if (bloqueio && bloqueio.n >= 10 && (Date.now() - bloqueio.primeiro) < 10 * 60 * 1000) {
+        return res.status(429).json({ error: 'Muitas tentativas. Aguarde 10 minutos.' });
+    }
+    const username = String((req.body && req.body.username) || '').trim();
+    const senha = String((req.body && req.body.senha) || '');
+    const u = authMw.buscarUsuario(username);
+    if (!u || !authMw.verificarSenha(senha, u.senhaHash)) {
+        _registrarFalhaLogin(ip);
+        return res.status(401).json({ error: 'Credenciais invalidas.' });
+    }
+    _loginTentativas.delete(ip);
+    const token = authMw.assinarSessao(u);
+    authMw.setCookieSessao(res, token);
+    res.json({ ok: true, username: u.username, nome: u.nome, perfil: u.perfil, expiresIn: authMw.SESSAO_HORAS * 3600 });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+    authMw.limparCookieSessao(res);
+    res.json({ ok: true });
+});
+
+// Tudo em /api daqui para baixo exige sessao (cookie HttpOnly — imune a roubo via XSS)
+function requireAuthApi(req, res, next) {
+    const u = authMw.sessaoDeReq(req);
+    if (!u) return res.status(401).json({ error: 'Nao autenticado. Faca login.' });
+    req.usuario = u;
+    next();
+}
+function requireAdminApi(req, res, next) {
+    const u = authMw.sessaoDeReq(req);
+    if (!u) return res.status(401).json({ error: 'Nao autenticado. Faca login.' });
+    if (u.perfil !== 'ADMIN') return res.status(403).json({ error: 'Restrito a administradores (ADMIN).' });
+    req.usuario = u;
+    next();
+}
+app.use('/api', requireAuthApi);
+
+app.get('/api/auth/me', (req, res) => {
+    res.json({ username: req.usuario.username, nome: req.usuario.nome, perfil: req.usuario.perfil });
+});
+
+// Criar usuario — SOMENTE administradores logados (o registro publico era falso e ficou aberto)
+app.post('/api/auth/register', requireAdminApi, (req, res) => {
+    const r = authMw.criarUsuario({
+        username: req.body && req.body.username,
+        senha: req.body && req.body.senha,
+        nome: req.body && req.body.nome,
+        perfil: req.body && req.body.perfil
+    });
+    if (r.erro) return res.status(400).json({ error: r.erro });
+    res.json(r);
+});
 
 // ---- SSE: atualizacao em tempo real do monitoramento ----
 const sseClients = new Set();
@@ -556,8 +677,8 @@ app.post('/api/monitor/ciclo', async (req, res) => {
     catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/monitor/config', (req, res) => res.json(monitor.getConfig()));
-app.post('/api/monitor/config', (req, res) => {
+app.get('/api/monitor/config', requireAdminApi, (req, res) => res.json(monitor.getConfig()));
+app.post('/api/monitor/config', requireAdminApi, (req, res) => {
     try {
         const CONFIG_PATH = path.join(__dirname, 'monitor', 'config.json');
         fs.writeFileSync(CONFIG_PATH, JSON.stringify(req.body, null, 2), 'utf8');
@@ -748,7 +869,7 @@ app.post('/api/zabbix/sincronizar', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get('/api/zabbix/config', (req, res) => {
+app.get('/api/zabbix/config', requireAdminApi, (req, res) => {
     try {
         const zb = require('./monitor/zabbix-bridge');
         // Timeout de 5s para nao travar quando Zabbix/Docker offline
@@ -761,7 +882,7 @@ app.get('/api/zabbix/config', (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post('/api/zabbix/config', (req, res) => {
+app.post('/api/zabbix/config', requireAdminApi, (req, res) => {
     try {
         const CONFIG_PATH = path.join(__dirname, 'monitor', 'zabbix-config.json');
         fs.writeFileSync(CONFIG_PATH, JSON.stringify(req.body, null, 2), 'utf8');
@@ -915,29 +1036,6 @@ app.post('/api/zabbix/problemas/ack', async (req, res) => {
     }
 });
 
-// ---- Zabbix webhook: notificacoes push (action → nosso servidor → SSE) ----
-const alertasWebhook = [];
-app.post('/api/zabbix/webhook', (req, res) => {
-    try {
-        const body = req.body || {};
-        const alerta = {
-            id: Date.now(),
-            recebidoEm: new Date().toISOString(),
-            status: body.status || 'PROBLEM',
-            severidade: body.severity || 'Unknown',
-            trigger: body.trigger || '',
-            host: body.host || '',
-            mensagem: body.message || '',
-            hora: body.time || ''
-        };
-        alertasWebhook.unshift(alerta);
-        if (alertasWebhook.length > 500) alertasWebhook.length = 500;
-        // Broadcast SSE para todos os clientes conectados
-        sseBroadcast('alerta', alerta);
-        console.log('[zabbix-webhook]', alerta.status, alerta.trigger, '@', alerta.host);
-        res.json({ ok: true });
-    } catch (e) { res.status(500).json({ error: e.message }); }
-});
 app.get('/api/zabbix/webhook', (req, res) => {
     res.json(alertasWebhook.slice(0, 50));
 });
@@ -1038,8 +1136,15 @@ app.get('/api/monitor/local', (req, res) => {
 app.get('/api/monitor/status', (req, res) => res.json({ rodando: monitor.isRodando() }));
 
 // ---- Static ----
-app.use('/uploads', express.static('uploads'));
-app.use(express.static('frontend'));
+// Fotos de equipamentos: somente usuarios logados (sao dados internos)
+app.use('/uploads', requireAuthApi, express.static('uploads'));
+// Assets vendorizados (libs/fontes locais): imutaveis, cache longo
+// Assets vendorizados (libs/fontes locais): imutaveis, cache de 90 dias.
+// (maxAge do express.static e em MILISSEGUNDOS: 90*24*3600*1000 = 7776000000)
+// Se atualizar uma lib do vendor/, troque a URL (ex.: ?v=novo) nos HTMLs.
+app.use('/vendor', express.static('frontend/vendor', { maxAge: 7776000000, immutable: true }));
+// Demais arquivos estaticos: ETag do Express + sem cache longo (front anda rapido)
+app.use(express.static('frontend', { maxAge: 0 }));
 
 app.listen(PORT, () => {
     console.log('Servidor rodando em http://localhost:' + PORT + ' (acesso externo: http://<IP-desta-maquina>:' + PORT + ')');

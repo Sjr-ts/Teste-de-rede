@@ -253,3 +253,53 @@ quando estão velhos.
   `stale:true`/`valor:null` (antes: 0% "válido"); MEU_PC/servidor-monitoramento
   com dados de há ~20s → valor real exibido.
 
+## Segurança, webhook e mapa (2026-11-11)
+
+### Login real do painel (fecha o acesso "fake")
+- Antes: credenciais fixas no JS público (`admin/admin123`...) e qualquer um
+  da rede entrava; registro fingia criar conta e não criava nada.
+- Agora: `monitor/auth.js` — senhas **scrypt**, sessão em **cookie HttpOnly
+  assinado** (HMAC-SHA256, 8 h), rate-limit de login (10 falhas/10 min → 429).
+- Rotas `/api/*` exigem sessão; `/api/monitor/config` e `/api/zabbix/config`
+  exigem perfil **ADMIN**; `/uploads` (fotos) exige login.
+- Registro (`registro.html`) virou **criação de usuário só para ADMIN**
+  (`POST /api/auth/register` exige ADMIN). Usuários: `monitor/users.json`
+  (fora do git); criar via UI ou `scripts/criar-usuario.cjs`.
+- **Tokens de automação** para agentes/scripts: `Authorization: Bearer agt_...`
+  (ou `X-Api-Token`) — `scripts/criar-token.cjs`, arquivo
+  `monitor/api-tokens.json`, revogável apagando a entrada.
+- Logout agora chama `POST /api/auth/logout` (invalida o cookie no servidor).
+
+### Webhook autenticado (corrige "Upstream request failed")
+- O portão de auth de 11/11 bloqueou o POST do Zabbix (401) → UI do Zabbix
+  reportava *"Upstream request failed: Endpoint is unavailable"*.
+- Solução: `POST /api/zabbix/webhook` exige header **`X-Webhook-Token`**
+  (segredo aleatório em `monitor/webhook-secret.json`, fora do git).
+- Media type **72** atualizado via API: script envia o header e o parâmetro
+  `webhook_token`. Testado **de dentro do container `zbx-web`** → `{"ok":true}`;
+  sem token → `401`.
+
+### Mapa de rede no sysmaps (Zabbix 7.0 API — pegadinhas)
+- Criado o mapa **"Rede - Inventario TI"** (sysmapid 1) com 7 hosts e 6 links
+  (gateway → PCs/servidor; MEU_PC → internet; servidor → loopback).
+- A API 7.0 renomeou coisas: id é **`sysmapid`** (não `mapid`) e o elemento
+  aceita **`elements: [{hostid}]`** (não `elementid` direto) + `iconid_off`
+  obrigatório. `map.delete` nesta versão se comporta mal via API (o mapa de
+  teste foi aproveitado como final).
+
+### Desempenho
+- Sessão do Zabbix em cache no bridge (antes: um `user.login` **por chamada**,
+  ~2× o custo); TTL 55 min + relogin automático 1× se a sessão cair.
+- `compression` gzip no Express (exceto no SSE), vendor com
+  `max-age=1 ano, immutable`, `X-Powered-By` desligado.
+- Modo mock removido do fluxo do `app.js`: servidor fora → erro explícito,
+  **nunca dados falsos**.
+
+### Estado da conexão verificado (11/11)
+- ICMP do Zabbix **100%**: Gateway, MEU_PC, DNS_Google e Loopback coletando a
+  cada 60 s (`icmpping=1`, loss 0%). `fping` OK dentro do container.
+- **TERM-COMPRAS10 (192.168.0.108) está vivo** (ping <1 ms) mas **porta 10050
+  fechada — o agente Zabbix parou de rodar** na máquina: todos os itens
+  `NUNCA` coletados. Ação necessária na máquina: reiniciar o serviço
+  "Zabbix Agent".
+

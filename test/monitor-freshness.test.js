@@ -23,9 +23,28 @@ test('fresh host remains current and not stale', () => {
   assert.equal(monitor.isHostStale(freshState, now), false);
 });
 
-test('host list merges inventory IPs with custom targets without losing active entries', () => {
+test('host list merges inventory IPs with custom targets without losing entries', () => {
+  const fs = require('fs');
+  const path = require('path');
   const alvos = monitor.obterAlvos();
-  assert.ok(alvos.some(a => a.ip === '192.168.0.186'));
-  assert.ok(alvos.some(a => a.ip === '192.168.0.108'));
-  assert.ok(alvos.length >= 2);
+  assert.ok(Array.isArray(alvos));
+
+  // Nenhum target configurado pelo usuario pode sumir na mescla
+  let targets = [];
+  try {
+    targets = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'monitor', 'data', 'targets.json'), 'utf8'));
+  } catch { targets = []; }
+  for (const t of targets) {
+    assert.ok(alvos.some(a => a.ip === (t.ipAddress || t.ip)), 'target perdido na mescla: ' + (t.ipAddress || t.ip));
+  }
+
+  // Sem IPs duplicados na lista final
+  const ips = alvos.map(a => a.ip);
+  assert.equal(new Set(ips).size, ips.length, 'IPs duplicados na lista de alvos');
+
+  // Todo alvo tem o minimo para virar linha no painel
+  for (const a of alvos) {
+    assert.ok(a.ip, 'alvo sem IP');
+    assert.ok(a.nome, 'alvo sem nome: ' + (a.ip || '?'));
+  }
 });

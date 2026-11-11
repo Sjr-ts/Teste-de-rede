@@ -34,4 +34,17 @@ desktop.ini
 monitor/config.json
 monitor/zabbix-config.json
 monitor/zabbix-inventario.txt
+monitor/users.json
+monitor/auth-secret.json
+monitor/webhook-secret.json
+monitor/api-tokens.json
+
+# ===================== DADOS DE RUNTIME (gerados pelo monitor) =====================
+# Telemetria em tempo real — nao e conteudo do repositorio
+monitor/data/state.json
+monitor/data/alerts.json
+monitor/data/agg/
+monitor/data/raw/
+monitor/data/targets.json.bak-*
+api-data-dump.json
 *.bak-*

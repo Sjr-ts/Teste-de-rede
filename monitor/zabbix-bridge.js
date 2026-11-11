@@ -86,23 +86,23 @@ function apiCall(method, params, auth) {
     });
 }
 
-/** Login e retorna token de autenticacao. */
-async function login() {
-    const cfg = loadConfig();
-    if (!cfg || !cfg.apiToken && (!cfg.usuario || !cfg.senha)) {
-        throw new Error('Credenciais Zabbix nao configuradas');
-    }
+// Sessao do Zabbix reutilizada (user.login a cada chamada era ~2x o custo da API).
+// Expira em 55 min por seguranca; se o servidor recusar (sessao caiu), reloga 1x.
+let _sessao = { token: null, ts: 0, cfgKey: null };
+const SESSAO_TTL_MS = 55 * 60 * 1000;
 
-    // Se usar API token (Zabbix 6.4+), envia no header
-    if (cfg.apiToken) {
-        return { token: cfg.apiToken, useHeader: true };
+async function obterToken(cfg) {
+    const agora = Date.now();
+    const chave = String(cfg.url || '') + '|' + String(cfg.usuario || '');
+    if (_sessao.token && _sessao.cfgKey === chave && (agora - _sessao.ts) < SESSAO_TTL_MS) {
+        return _sessao.token;
     }
-
-    const result = await apiCall('user.login', {
+    const token = await apiCall('user.login', {
         username: cfg.usuario,
         password: cfg.senha
     });
-    return { token: result, useHeader: false };
+    _sessao = { token, ts: agora, cfgKey: chave };
+    return token;
 }
 
 /** Chamada autenticada. */
@@ -114,9 +114,22 @@ async function authCall(method, params) {
         // API token: envia no header Authorization
         return apiCallWithToken(method, params, cfg.apiToken);
     }
+    if (!cfg.usuario || !cfg.senha) {
+        throw new Error('Credenciais Zabbix nao configuradas');
+    }
 
-    const sess = await login();
-    return apiCall(method, params, sess.token);
+    const token = await obterToken(cfg);
+    try {
+        return await apiCall(method, params, token);
+    } catch (e) {
+        const msg = String(e && e.message || '');
+        if (/not authorized|session|auten/i.test(msg)) {
+            // Sessao caiu no servidor -> reloga uma vez e repete
+            _sessao = { token: null, ts: 0, cfgKey: null };
+            return apiCall(method, params, await obterToken(cfg));
+        }
+        throw e;
+    }
 }
 
 function apiCallWithToken(method, params, token) {

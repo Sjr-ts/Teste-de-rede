@@ -5,10 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Inventario de TI - Login</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23080c18'/%3E%3Ctext x='16' y='22' text-anchor='middle' fill='%2300e5c7' font-size='14' font-weight='bold' font-family='Arial'%3ETI%3C/text%3E%3C/svg%3E">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="vendor/vendor.css">
+    <link rel="stylesheet" href="vendor/css/all.min.css">
     <style>
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -416,9 +414,7 @@
                 </button>
             </form>
 
-            <div class="login-footer">
-                <a href="registro.html"><i class="fas fa-user-plus"></i> Criar conta</a>
-            </div>
+            <!-- Sem cadastro publico: contas sao criadas por um administrador (perfil ADMIN) -->
         </div>
     </div>
 
@@ -454,32 +450,31 @@
             const senha = senhaInput.value;
             if (!username || !senha) { showError('Preencha todos os campos.'); return; }
             setLoading(true);
-            const MOCK_CREDS = {
-                admin: { senha: 'admin123', perfil: 'ADMIN', nome: 'Administrador' },
-                tecnico: { senha: '123456', perfil: 'TECNICO', nome: 'Tecnico de TI' },
-                usuario: { senha: '123456', perfil: 'USUARIO', nome: 'Usuario Comum' },
-                'joao.silva': { senha: '123456', perfil: 'USUARIO', nome: 'Joao Silva' },
-                'maria.santos': { senha: '123456', perfil: 'USUARIO', nome: 'Maria Santos' },
-                'pedro.costa': { senha: '123456', perfil: 'TECNICO', nome: 'Pedro Costa' },
-                'ana.oliveira': { senha: '123456', perfil: 'USUARIO', nome: 'Ana Oliveira' },
-                'carlos.pereira': { senha: '123456', perfil: 'TECNICO', nome: 'Carlos Pereira' },
-                'lucia.ferreira': { senha: '123456', perfil: 'USUARIO', nome: 'Lucia Ferreira' }
-            };
-            setTimeout(() => {
-                const cred = MOCK_CREDS[username];
-                if (!cred || cred.senha !== senha) {
-                    showError('Credenciais invalidas.');
+            try {
+                const r = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, senha })
+                });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    showError(data.error || 'Credenciais invalidas.');
                     setLoading(false);
                     return;
                 }
-                localStorage.setItem('authToken', 'mock-token-' + username + '-' + Date.now());
-                localStorage.setItem('userName', cred.nome);
-                localStorage.setItem('userPerfil', cred.perfil);
+                // Sessao real fica no cookie HttpOnly (o JS nunca ve o token).
+                // Guardamos apenas dados de exibicao.
+                localStorage.setItem('authToken', 'session');
+                localStorage.setItem('userName', data.nome || data.username);
+                localStorage.setItem('userPerfil', data.perfil || 'USUARIO');
                 if (rememberMe.checked) { localStorage.setItem('rememberedUser', username); }
                 else { localStorage.removeItem('rememberedUser'); }
                 loginBtn.innerHTML = '<span><i class="fas fa-check"></i> <span class="btn-text">Sucesso!</span></span>';
-                setTimeout(function() { window.location.href = 'index.html'; }, 600);
-            }, 400);
+                setTimeout(function() { window.location.href = 'index.html'; }, 500);
+            } catch (err) {
+                showError('Servidor indisponivel. Verifique a rede ou tente novamente.');
+                setLoading(false);
+            }
         });
 
         function showError(msg) {

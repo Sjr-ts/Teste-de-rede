@@ -1,16 +1,27 @@
 {
-  "name": "cadastro-computadores-v3",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "inventario-ti",
+  "version": "1.1.0",
+  "description": "Inventário de TI + monitoramento integrado com Zabbix (rede local, métricas em tempo real)",
+  "main": "server.cjs",
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.cjs",
+    "test": "node --test \"test/**/*.test.js\""
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "inventario",
+    "zabbix",
+    "monitoramento",
+    "ti"
+  ],
+  "author": "SRJR — Suporte TI",
+  "license": "UNLICENSED",
   "type": "commonjs",
   "dependencies": {
+    "compression": "^1.8.2",
     "express": "^5.3.0"
   }
 }

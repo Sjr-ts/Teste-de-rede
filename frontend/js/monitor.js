@@ -853,8 +853,7 @@ async function monGerarRelatorioFalhas() {
     const doc = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">' +
         '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
         '<title>Relatorio de Falhas Zabbix — Inventario TI</title>' +
-        '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
-        '<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">' +
+        '<link rel="stylesheet" href="/vendor/vendor.css">' +
         '<style>' +
         ':root{--navy:#0d1b2a;--teal:#0e8a7d;--teal2:#12b5a5;--ink:#1c2b3a;--mut:#5b6b7d;--line:#dfe6ee;--red:#c0392b;--amber:#b45309;}' +
         '*{margin:0;padding:0;box-sizing:border-box;}' +
@@ -2812,8 +2811,8 @@ function monAbrirGraficoNovaAba(titulo, htmlConteudo) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${esc(titulo)} — Inventario TI</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/vendor/css/all.min.css">
+    <link rel="stylesheet" href="/vendor/vendor.css">
     <style>
         :root {
             --primary: #00e5c7;

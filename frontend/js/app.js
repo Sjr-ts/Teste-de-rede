@@ -17,9 +17,6 @@ let _photoUploading = false;
 let _ramalPhotoUploading = false;
 let _manPhotoUploading = false;
 let _manFilters = { status: '', termo: '', showConcluidas: false };
-let _wsClient = null;
-let _wsConnected = false;
-let _wsReconnectTimer = null;
 if (typeof Chart !== 'undefined') {
     Chart.defaults.color = '#606070';
     Chart.defaults.borderColor = 'rgba(255,255,255,0.04)';
@@ -1222,14 +1219,9 @@ async function apiFetch(url, opts) {
             return data;
         } catch (e) {
             if (e.name === 'TypeError' && e.message === 'Failed to fetch') {
-                if (!USE_MOCK) {
-                    USE_MOCK = true;
-                    setTimeout(function() {
-                        if (USE_MOCK && getToken()) {
-                            apiFetch('/api/auth/me').then(function() { USE_MOCK = false; }).catch(function() {});
-                        }
-                    }, 30000);
-                }
+                // Servidor caiu: NUNCA serve dados mock (valores falsos).
+                // Falha explicita — o usuario ve o motivo real.
+                throw new Error('Servidor indisponível. Verifique se o serviço está rodando e recarregue a página.');
             } else { throw e; }
         }
     }
@@ -1238,7 +1230,12 @@ async function apiFetch(url, opts) {
     return mockResult;
 }
 
-function handleLogout() { disconnectWs(); try { localStorage.clear(); } catch(e) {} window.location.href = 'login.html'; }
+function handleLogout() {
+    // Invalida a sessao no servidor (cookie HttpOnly) antes de sair
+    try { fetch('/api/auth/logout', { method: 'POST', keepalive: true }).catch(function() {}); } catch(e) {}
+    try { localStorage.clear(); } catch(e) {}
+    window.location.href = 'login.html';
+}
 
 // ==========================================
 // HEADER: Notificacoes / Configuracoes / Plano de Fundo
@@ -1414,111 +1411,9 @@ function checkAuth() {
     if (el('header-user-name')) el('header-user-name').textContent = n;
     var adminBtn = document.querySelector('[data-section="admin"]');
     if (adminBtn) adminBtn.style.display = (p === 'ADMIN') ? '' : 'none';
-    connectWs();
+    // Push entre clientes e feito por polling /api/rev (ver checkRemoteRev) — nao ha WebSocket neste app
 }
 
-// ==========================================
-// WEBSOCKET (STOMP over SockJS)
-// ==========================================
-function connectWs() {
-    if (_wsConnected || USE_MOCK) return;
-    try {
-        var ws = new SockJS('/ws');
-        _wsClient = Stomp.over(ws);
-        _wsClient.debug = null;
-        _wsClient.connect({}, function() {
-            _wsConnected = true;
-            if (_wsReconnectTimer) { clearTimeout(_wsReconnectTimer); _wsReconnectTimer = null; }
-
-            _wsClient.subscribe('/topic/computadores', function(msg) { try { handleWsEvent(JSON.parse(msg.body)); } catch(e) { console.warn('[WS] Erro parse:', e); } });
-            _wsClient.subscribe('/topic/manutencoes', function(msg) { try { handleWsEvent(JSON.parse(msg.body)); } catch(e) { console.warn('[WS] Erro parse:', e); } });
-            _wsClient.subscribe('/topic/ordens-servico', function(msg) { try { handleWsEvent(JSON.parse(msg.body)); } catch(e) { console.warn('[WS] Erro parse:', e); } });
-            _wsClient.subscribe('/topic/checkin-checkout', function(msg) { try { handleWsEvent(JSON.parse(msg.body)); } catch(e) { console.warn('[WS] Erro parse:', e); } });
-            _wsClient.subscribe('/topic/departamentos', function(msg) { try { handleWsEvent(JSON.parse(msg.body)); } catch(e) { console.warn('[WS] Erro parse:', e); } });
-            _wsClient.subscribe('/topic/usuarios', function(msg) { try { handleWsEvent(JSON.parse(msg.body)); } catch(e) { console.warn('[WS] Erro parse:', e); } });
-            _wsClient.subscribe('/topic/logs', function(msg) { try { handleWsEvent(JSON.parse(msg.body)); } catch(e) { console.warn('[WS] Erro parse:', e); } });
-            _wsClient.subscribe('/topic/software-licencas', function(msg) { try { handleWsEvent(JSON.parse(msg.body)); } catch(e) { console.warn('[WS] Erro parse software-licencas:', e); } });
-        }, function() {
-            _wsConnected = false;
-            console.warn('[WS] Desconectado. Reconectando em 5s...');
-            scheduleReconnect();
-        });
-    } catch (e) {
-        console.warn('[WS] Erro ao conectar:', e.message);
-        scheduleReconnect();
-    }
-}
-
-function disconnectWs() {
-    if (_wsClient) {
-        try { _wsClient.disconnect(); } catch(e) {}
-        _wsClient = null;
-    }
-    _wsConnected = false;
-    if (_wsReconnectTimer) { clearTimeout(_wsReconnectTimer); _wsReconnectTimer = null; }
-}
-
-function scheduleReconnect() {
-    if (_wsReconnectTimer) return;
-    _wsReconnectTimer = setTimeout(function() {
-        _wsReconnectTimer = null;
-        if (getToken()) connectWs();
-    }, 5000);
-}
-
-function handleWsEvent(event) {
-    if (!event || !event.acao) return;
-    var tipo = event.tipo;
-    var acao = event.acao;
-    var dados = event.dados || {};
-    var toastMsg = '';
-    var toastType = 'info';
-
-    if (tipo === 'COMPUTADOR') {
-        if (acao === 'CRIACAO') { toastMsg = 'Novo computador: ' + (dados.nomePc || ''); toastType = 'success'; }
-        else if (acao === 'ALTERACAO') { toastMsg = 'Computador atualizado por outro usuario: ' + (dados.nomePc || ''); toastType = 'info'; }
-        else if (acao === 'EXCLUSAO') { toastMsg = 'Computador removido (ID: ' + (dados.id || '') + ')'; toastType = 'warning'; }
-        else if (acao === 'ALTERACAO_EM_MASSA') { toastMsg = (dados.total || 0) + ' computadores atualizados em massa'; toastType = 'info'; }
-        else if (acao === 'EXCLUSAO_EM_MASSA') { toastMsg = (dados.total || 0) + ' computadores exclu�dos em massa'; toastType = 'warning'; }
-        else if (acao === 'IMPORTACAO') { toastMsg = (dados.total || 0) + ' computadores importados via CSV'; toastType = 'success'; }
-        refreshCurrentSection(tipo);
-    } else if (tipo === 'MANUTENCAO') {
-        if (acao === 'CRIACAO') { toastMsg = 'Nova manuten��o criada'; toastType = 'success'; }
-        else if (acao === 'ALTERACAO') { toastMsg = 'Manuten��o atualizada'; toastType = 'info'; }
-        else if (acao === 'EXCLUSAO') { toastMsg = 'Manuten��o exclu�da'; toastType = 'warning'; }
-        refreshCurrentSection(tipo);
-    } else if (tipo === 'ORDEM_SERVICO') {
-        if (acao === 'CRIACAO') { toastMsg = 'Nova OS criada: ' + (dados.titulo || ''); toastType = 'success'; }
-        else if (acao === 'ALTERACAO') { toastMsg = 'OS atualizada: ' + (dados.titulo || ''); toastType = 'info'; }
-        else if (acao === 'EXCLUSAO') { toastMsg = 'OS exclu�da'; toastType = 'warning'; }
-        refreshCurrentSection(tipo);
-    } else if (tipo === 'CHECKIN_CHECKOUT') {
-        if (acao === 'CHECKOUT') { toastMsg = 'Checkout realizado'; toastType = 'info'; }
-        else if (acao === 'CHECKIN') { toastMsg = 'Checkin realizado'; toastType = 'success'; }
-        refreshCurrentSection(tipo);
-    } else if (tipo === 'DEPARTAMENTO') {
-        if (acao === 'CRIACAO') { toastMsg = 'Setor criado: ' + (dados.nome || ''); toastType = 'success'; }
-        else if (acao === 'ALTERACAO') { toastMsg = 'Setor atualizado'; toastType = 'info'; }
-        else if (acao === 'EXCLUSAO') { toastMsg = 'Setor exclu�do'; toastType = 'warning'; }
-        refreshCurrentSection(tipo);
-    } else if (tipo === 'USUARIO') {
-        if (acao === 'CRIACAO') { toastMsg = 'Usu�rio criado: ' + (dados.username || ''); toastType = 'success'; }
-        else if (acao === 'ALTERACAO') { toastMsg = 'Usu�rio atualizado'; toastType = 'info'; }
-        else if (acao === 'EXCLUSAO') { toastMsg = 'Usu�rio exclu�do'; toastType = 'warning'; }
-        refreshCurrentSection(tipo);
-    } else if (tipo === 'LOG') {
-        refreshCurrentSection(tipo);
-    } else if (tipo === 'SOFTWARE_LICENCA') {
-        if (acao === 'CRIACAO') { toastMsg = 'Software/licenca cadastrado: ' + (dados.nomeSoftware || ''); toastType = 'success'; }
-        else if (acao === 'ALTERACAO') { toastMsg = 'Software/licenca atualizado'; toastType = 'info'; }
-        else if (acao === 'EXCLUSAO') { toastMsg = 'Software/licenca removido'; toastType = 'warning'; }
-        refreshCurrentSection(tipo);
-    }
-
-    if (toastMsg) showToast(toastMsg, toastType);
-}
-
-// ==========================================
 // ==========================================
 // NAVIGATION
 // ==========================================
