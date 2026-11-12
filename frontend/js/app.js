@@ -1,5 +1,5 @@
 // ==========================================
-// Cadastro de Computadores - Invent�rio de TI
+// Cadastro de Computadores - Inventário de TI
 // Complete Rewrite v4.2 - Audit logging, cross-tab refresh
 // ==========================================
 const API = '';
@@ -42,9 +42,9 @@ var MOCK_COMPUTADORES = [
     { id: 8, nomePc: 'PC-RH-001', numeroSerie: 'SN-2024-008', modeloMarca: 'Acer Veriton M4660G', processador: 'Intel Core i5-9400', memoriaRam: '8GB DDR4', armazenamento: '256GB SSD', usuarioDesignado: 'Juliana Costa', fornecedor: 'Acer', status: 'ATIVO', fotoUrl: '', dataCadastro: '2024-01-25T10:00:00', dataInicioCiclo: _dyn(_curYear, _curMonth - 1, 1), proximaManutencao: _dyn(_curYear, _curMonth + 7, 1), dataUltimaManutencao: _dyn(_curYear, _curMonth - 1, 1) },
     { id: 9, nomePc: 'PC-VEN-001', numeroSerie: 'SN-2024-009', modeloMarca: 'Lenovo IdeaCentre 520', processador: 'AMD Ryzen 5 3500', memoriaRam: '8GB DDR4', armazenamento: '1TB HDD', usuarioDesignado: 'Lucas Almeida', fornecedor: 'Lenovo', status: 'CONCLUIDO', fotoUrl: '', dataCadastro: '2024-02-20T10:00:00', dataInicioCiclo: _dyn(_curYear, _curMonth - 4, 1), proximaManutencao: _dyn(_curYear, _curMonth + 4, 1), dataUltimaManutencao: _dyn(_curYear, _curMonth - 4, 1) },
     { id: 10, nomePc: 'PC-VEN-002', numeroSerie: 'SN-2024-010', modeloMarca: 'HP ProOne 440 G6', processador: 'Intel Core i5-9500T', memoriaRam: '8GB DDR4', armazenamento: '256GB SSD', usuarioDesignado: 'Mariana Santos', fornecedor: 'HP Brasil', status: 'ATIVO', fotoUrl: '', dataCadastro: '2024-03-10T10:00:00', dataInicioCiclo: _dyn(_curYear, _curMonth - 8, 1), proximaManutencao: _dyn(_curYear, _curMonth, 1), dataUltimaManutencao: _dyn(_curYear, _curMonth - 2, 20) },
-    { id: 11, nomePc: 'PC-PRD-001', numeroSerie: 'SN-2024-011', modeloMarca: 'Dell Precision 3430', processador: 'Intel Core i7-8700', memoriaRam: '32GB DDR4', armazenamento: '1TB SSD', usuarioDesignado: 'T�cnico A', fornecedor: 'Dell Tecnologia', status: 'ATIVO', fotoUrl: '', dataCadastro: '2024-01-05T10:00:00', dataInicioCiclo: _dyn(_curYear, _curMonth - 2, 15), proximaManutencao: _dyn(_curYear, _curMonth + 6, 15), dataUltimaManutencao: _dyn(_curYear, _curMonth - 2, 15) },
-    { id: 12, nomePc: 'PC-PRD-002', numeroSerie: 'SN-2024-012', modeloMarca: 'Lenovo ThinkStation P330', processador: 'Intel Core i9-9900', memoriaRam: '64GB DDR4', armazenamento: '2TB SSD', usuarioDesignado: 'T�cnico B', fornecedor: 'Lenovo', status: 'ATIVO', fotoUrl: '', dataCadastro: '2024-02-01T10:00:00', dataInicioCiclo: _dyn(_curYear, _curMonth - 5, 15), proximaManutencao: _dyn(_curYear, _curMonth + 3, 15), dataUltimaManutencao: _dyn(_curYear, _curMonth - 5, 15) },
-    { id: 13, nomePc: 'PC-PRD-003', numeroSerie: 'SN-2024-013', modeloMarca: 'HP Z2 Tower G4', processador: 'Intel Core i7-9700', memoriaRam: '16GB DDR4', armazenamento: '512GB SSD', usuarioDesignado: 'T�cnico C', fornecedor: 'HP Brasil', status: 'MANUTENCAO_PREVENTIVA', fotoUrl: '', dataCadastro: '2024-03-15T10:00:00', dataInicioCiclo: _dyn(_curYear, _curMonth - 6, 10), proximaManutencao: _dyn(_curYear, _curMonth + 2, 10), dataUltimaManutencao: _dyn(_curYear, _curMonth - 1, 10) },
+    { id: 11, nomePc: 'PC-PRD-001', numeroSerie: 'SN-2024-011', modeloMarca: 'Dell Precision 3430', processador: 'Intel Core i7-8700', memoriaRam: '32GB DDR4', armazenamento: '1TB SSD', usuarioDesignado: 'Técnico A', fornecedor: 'Dell Tecnologia', status: 'ATIVO', fotoUrl: '', dataCadastro: '2024-01-05T10:00:00', dataInicioCiclo: _dyn(_curYear, _curMonth - 2, 15), proximaManutencao: _dyn(_curYear, _curMonth + 6, 15), dataUltimaManutencao: _dyn(_curYear, _curMonth - 2, 15) },
+    { id: 12, nomePc: 'PC-PRD-002', numeroSerie: 'SN-2024-012', modeloMarca: 'Lenovo ThinkStation P330', processador: 'Intel Core i9-9900', memoriaRam: '64GB DDR4', armazenamento: '2TB SSD', usuarioDesignado: 'Técnico B', fornecedor: 'Lenovo', status: 'ATIVO', fotoUrl: '', dataCadastro: '2024-02-01T10:00:00', dataInicioCiclo: _dyn(_curYear, _curMonth - 5, 15), proximaManutencao: _dyn(_curYear, _curMonth + 3, 15), dataUltimaManutencao: _dyn(_curYear, _curMonth - 5, 15) },
+    { id: 13, nomePc: 'PC-PRD-003', numeroSerie: 'SN-2024-013', modeloMarca: 'HP Z2 Tower G4', processador: 'Intel Core i7-9700', memoriaRam: '16GB DDR4', armazenamento: '512GB SSD', usuarioDesignado: 'Técnico C', fornecedor: 'HP Brasil', status: 'MANUTENCAO_PREVENTIVA', fotoUrl: '', dataCadastro: '2024-03-15T10:00:00', dataInicioCiclo: _dyn(_curYear, _curMonth - 6, 10), proximaManutencao: _dyn(_curYear, _curMonth + 2, 10), dataUltimaManutencao: _dyn(_curYear, _curMonth - 1, 10) },
     { id: 14, nomePc: 'PC-ADM-003', numeroSerie: 'SN-2024-014', modeloMarca: 'Dell Latitude 5520', processador: 'Intel Core i5-1135G7', memoriaRam: '8GB DDR4', armazenamento: '256GB SSD', usuarioDesignado: 'Gerente TI', fornecedor: 'Dell Tecnologia', status: 'ATIVO', fotoUrl: '', dataCadastro: '2024-01-18T10:00:00', dataInicioCiclo: _dyn(_curYear, _curMonth - 3, 10), proximaManutencao: _dyn(_curYear, _curMonth + 5, 10), dataUltimaManutencao: _dyn(_curYear, _curMonth - 3, 10) },
     { id: 15, nomePc: 'PC-ALM-001', numeroSerie: 'SN-2024-015', modeloMarca: 'Acer Aspire TC-885', processador: 'Intel Core i3-9100', memoriaRam: '4GB DDR4', armazenamento: '1TB HDD', usuarioDesignado: 'Auxiliar Almox', fornecedor: 'Acer', status: 'MANUTENCAO_EMERGENCIAL', fotoUrl: '', dataCadastro: '2024-02-28T10:00:00', dataInicioCiclo: _dyn(_curYear, _curMonth - 10, 1), proximaManutencao: _dyn(_curYear, _curMonth - 2, 1), dataUltimaManutencao: _dyn(_curYear, _curMonth - 4, 5) },
     { id: 16, nomePc: 'PC-ADM-004', numeroSerie: 'SN-2024-016', modeloMarca: 'Lenovo ThinkCentre M70s', processador: 'Intel Core i5-11400', memoriaRam: '16GB DDR4', armazenamento: '512GB SSD', usuarioDesignado: 'Assistente Adm', fornecedor: 'Lenovo', status: 'ATIVO', fotoUrl: '', dataCadastro: '2024-03-20T10:00:00', dataInicioCiclo: _dyn(_curYear, _curMonth - 1, 20), proximaManutencao: _dyn(_curYear, _curMonth + 7, 20), dataUltimaManutencao: _dyn(_curYear, _curMonth - 1, 20) },
@@ -75,14 +75,14 @@ var MOCK_MANUTENCOES = [
 ];
 
 var MOCK_ORDENS = [
-    { id: 1, titulo: 'Instalar software de controle de acesso', descricao: 'Instalar BioAccess v3.0 nos PCs da recep��o.', computadorId: 2, computadorNome: 'PC-ADM-002', prioridade: 'ALTA', status: 'EM_EXECUCAO', solicitante: 'Gerencia de TI', tecnicoResponsavel: 'Joao Pedro', dataAbertura: _dyn(_curYear, _curMonth, 4, 9), dataPrevisao: _dyn(_curYear, _curMonth, 20, 17), dataConclusao: null, solucao: null },
+    { id: 1, titulo: 'Instalar software de controle de acesso', descricao: 'Instalar BioAccess v3.0 nos PCs da recepção.', computadorId: 2, computadorNome: 'PC-ADM-002', prioridade: 'ALTA', status: 'EM_EXECUCAO', solicitante: 'Gerencia de TI', tecnicoResponsavel: 'Joao Pedro', dataAbertura: _dyn(_curYear, _curMonth, 4, 9), dataPrevisao: _dyn(_curYear, _curMonth, 20, 17), dataConclusao: null, solucao: null },
     { id: 2, titulo: 'Migracao de dados para novo servidor', descricao: 'Transferir dados para novo storage NAS.', computadorId: null, computadorNome: '-', prioridade: 'CRITICA', status: 'EM_ANALISE', solicitante: 'Diretor de TI', tecnicoResponsavel: 'Joao Pedro', dataAbertura: _dyn(_curYear, _curMonth, 2, 14), dataPrevisao: _dyn(_curYear, _curMonth, 25, 17), dataConclusao: null, solucao: null },
     { id: 3, titulo: 'Substituir monitor com dead pixels', descricao: 'Monitor do PC-ADM-001 com dead pixels.', computadorId: 1, computadorNome: 'PC-ADM-001', prioridade: 'BAIXA', status: 'ABERTA', solicitante: 'Carlos Silva', tecnicoResponsavel: '', dataAbertura: _dyn(_curYear, _curMonth, 6, 10), dataPrevisao: _dyn(_curYear, _curMonth, 30, 17), dataConclusao: null, solucao: null },
     { id: 4, titulo: 'Configuracao de impressora em rede', descricao: 'Configurar HP LaserJet Pro M404dn.', computadorId: 6, computadorNome: 'PC-FIN-001', prioridade: 'MEDIA', status: 'CONCLUIDA', solicitante: 'Fernanda Lima', tecnicoResponsavel: 'Roberto Alves', dataAbertura: _dyn(_prevMonth === _curMonth ? _curYear - 1 : _prevYear, _prevMonth, 5, 8), dataPrevisao: _dyn(_prevMonth === _curMonth ? _curYear - 1 : _prevYear, _prevMonth, 10, 17), dataConclusao: _dyn(_prevMonth === _curMonth ? _curYear - 1 : _prevYear, _prevMonth, 8, 16), solucao: 'Impressora configurada com IP estatico.' },
     { id: 5, titulo: 'Atualizar BIOS de todos PCs Dell', descricao: 'Verificar e atualizar BIOS de equipamentos Dell.', computadorId: null, computadorNome: '-', prioridade: 'MEDIA', status: 'ABERTA', solicitante: 'Carlos Mendes', tecnicoResponsavel: '', dataAbertura: _dyn(_curYear, _curMonth, 8, 11), dataPrevisao: _dyn(_curMonth === 11 ? _curYear + 1 : _curYear, _curMonth + 1, 15, 17), dataConclusao: null, solucao: null },
-    { id: 6, titulo: 'Corrigir falha de rede no PC-LOG-002', descricao: 'PC com desconex�es frequentes da rede.', computadorId: 4, computadorNome: 'PC-LOG-002', prioridade: 'ALTA', status: 'EM_EXECUCAO', solicitante: 'Maria Oliveira', tecnicoResponsavel: 'Carlos Mendes', dataAbertura: _dyn(_curYear, _curMonth, 3, 8), dataPrevisao: _dyn(_curYear, _curMonth, 15, 17), dataConclusao: null, solucao: null },
+    { id: 6, titulo: 'Corrigir falha de rede no PC-LOG-002', descricao: 'PC com desconexões frequentes da rede.', computadorId: 4, computadorNome: 'PC-LOG-002', prioridade: 'ALTA', status: 'EM_EXECUCAO', solicitante: 'Maria Oliveira', tecnicoResponsavel: 'Carlos Mendes', dataAbertura: _dyn(_curYear, _curMonth, 3, 8), dataPrevisao: _dyn(_curYear, _curMonth, 15, 17), dataConclusao: null, solucao: null },
     { id: 7, titulo: 'Instalar antiviruses nos novos PCs', descricao: 'Instalar Kaspersky nos 5 novos PCs.', computadorId: 15, computadorNome: 'PC-ALM-001', prioridade: 'ALTA', status: 'ABERTA', solicitante: 'Auxiliar Almox', tecnicoResponsavel: '', dataAbertura: _dyn(_curYear, _curMonth, 9, 9), dataPrevisao: _dyn(_curYear, _curMonth, 18, 17), dataConclusao: null, solucao: null },
-    { id: 8, titulo: 'Migrar Windows 10 para Windows 11', descricao: 'Atualizar OS de 3 PCs eleg�veis.', computadorId: 14, computadorNome: 'PC-ADM-003', prioridade: 'BAIXA', status: 'CANCELADA', solicitante: 'Gerente TI', tecnicoResponsavel: 'Maria Ferreira', dataAbertura: _dyn(_prevMonth === _curMonth ? _curYear - 1 : _prevYear, _prevMonth, 10, 10), dataPrevisao: _dyn(_prevMonth === _curMonth ? _curYear - 1 : _prevYear, _prevMonth, 28, 17), dataConclusao: null, solucao: 'Cancelado - PCs n�o atendem TPM 2.0.' },
+    { id: 8, titulo: 'Migrar Windows 10 para Windows 11', descricao: 'Atualizar OS de 3 PCs elegíveis.', computadorId: 14, computadorNome: 'PC-ADM-003', prioridade: 'BAIXA', status: 'CANCELADA', solicitante: 'Gerente TI', tecnicoResponsavel: 'Maria Ferreira', dataAbertura: _dyn(_prevMonth === _curMonth ? _curYear - 1 : _prevYear, _prevMonth, 10, 10), dataPrevisao: _dyn(_prevMonth === _curMonth ? _curYear - 1 : _prevYear, _prevMonth, 28, 17), dataConclusao: null, solucao: 'Cancelado - PCs não atendem TPM 2.0.' },
     { id: 9, titulo: 'Configurar VPN corporativa', descricao: 'Configurar VPN no PC-TI-001.', computadorId: 5, computadorNome: 'PC-TI-001', prioridade: 'CRITICA', status: 'CONCLUIDA', solicitante: 'Joao Pedro', tecnicoResponsavel: 'Joao Pedro', dataAbertura: _dyn(_prevMonth === _curMonth ? _curYear - 1 : _prevYear, _prevMonth, 12, 14), dataPrevisao: _dyn(_prevMonth === _curMonth ? _curYear - 1 : _prevYear, _prevMonth, 15, 17), dataConclusao: _dyn(_prevMonth === _curMonth ? _curYear - 1 : _prevYear, _prevMonth, 14, 11), solucao: 'VPN configurada com WireGuard.' },
     { id: 10, titulo: 'Limpeza geral dos equipamentos', descricao: 'Limpeza preventiva em todos PCs do estoque.', computadorId: null, computadorNome: '-', prioridade: 'MEDIA', status: 'EM_ANALISE', solicitante: 'Supervisor Log', tecnicoResponsavel: '', dataAbertura: _dyn(_curYear, _curMonth, 1, 8), dataPrevisao: _dyn(_curYear, _curMonth, 22, 17), dataConclusao: null, solucao: null },
     { id: 11, titulo: 'Reinstalar Office em todos PCs', descricao: 'Office 365 com problemas de ativacao.', computadorId: null, computadorNome: '-', prioridade: 'ALTA', status: 'CONCLUIDA', solicitante: 'Gerente TI', tecnicoResponsavel: 'Joao Pedro', dataAbertura: _dyn(_curYear, _curMonth, 11, 9), dataPrevisao: _dyn(_curYear, _curMonth, 13, 17), dataConclusao: _dyn(_curYear, _curMonth, 12, 17), solucao: 'Reinstalado em 18 maquinas.' },
@@ -106,7 +106,7 @@ var MOCK_DEPARTAMENTOS = [
     { id: 2, nome: 'Financeiro', totalComputadores: 5 },
     { id: 3, nome: 'RH', totalComputadores: 3 },
     { id: 4, nome: 'Marketing', totalComputadores: 4 },
-    { id: 5, nome: 'Opera��es', totalComputadores: 6 }
+    { id: 5, nome: 'Operações', totalComputadores: 6 }
 ];
 
 var MOCK_SOFTWARE = [
@@ -134,7 +134,7 @@ var MOCK_TROCAS = [
     { id: 4, tipoEquipamento: 'RAMAL', equipamentoId: 6, equipamentoNome: 'Ramal 3002', tipoMovimento: 'ENTRADA', descricao: 'Novo ramal instalado no RH', responsavel: 'Carlos Mendes', dataTroca: _dyn(_curYear, _curMonth, 9, 11), observacoes: 'Aparelho novo Polycom' },
     { id: 5, tipoEquipamento: 'COMPUTADOR', equipamentoId: 1, equipamentoNome: 'PC-ADM-001', tipoMovimento: 'TROCA', descricao: 'Troca de monitor com dead pixels', responsavel: 'Maria Ferreira', dataTroca: _dyn(_curYear, _curMonth, 12, 15), observacoes: 'Monitor Dell 24 substituido por Dell 27' },
     { id: 6, tipoEquipamento: 'RAMAL', equipamentoId: 2, equipamentoNome: 'Ramal 1002', tipoMovimento: 'TROCA', descricao: 'Substituicao do aparelho de ramal TI 2o andar', responsavel: 'Roberto Alves', dataTroca: _dyn(_curYear, _curMonth, 13, 8), observacoes: 'Aparelho antigo nao registrava chamadas' },
-    { id: 7, tipoEquipamento: 'COMPUTADOR', equipamentoId: 11, equipamentoNome: 'PC-PRD-001', tipoMovimento: 'ENTRADA', descricao: 'Equipamento de producao substitu�do', responsavel: 'Joao Pedro', dataTroca: _dyn(_prevMonth === _curMonth ? _curYear - 1 : _prevYear, _prevMonth, 15, 10), observacoes: 'Novo Dell Precision 3660' },
+    { id: 7, tipoEquipamento: 'COMPUTADOR', equipamentoId: 11, equipamentoNome: 'PC-PRD-001', tipoMovimento: 'ENTRADA', descricao: 'Equipamento de producao substituído', responsavel: 'Joao Pedro', dataTroca: _dyn(_prevMonth === _curMonth ? _curYear - 1 : _prevYear, _prevMonth, 15, 10), observacoes: 'Novo Dell Precision 3660' },
     { id: 8, tipoEquipamento: 'RAMAL', equipamentoId: 5, equipamentoNome: 'Ramal 3001', tipoMovimento: 'SAIDA', descricao: 'Ramal antigo retirado do RH', responsavel: 'Maria Ferreira', dataTroca: _dyn(_prevMonth === _curMonth ? _curYear - 1 : _prevYear, _prevMonth, 20, 14), observacoes: 'Substituido por modelo mais novo' },
     { id: 9, tipoEquipamento: 'COMPUTADOR', equipamentoId: 7, equipamentoNome: 'PC-FIN-002', tipoMovimento: 'TROCA', descricao: 'Troca de memoria RAM', responsavel: 'Carlos Mendes', dataTroca: _dyn(_prevMonth === _curMonth ? _curYear - 1 : _prevYear, _prevMonth, 25, 11), observacoes: '4GB para 8GB DDR4' },
     { id: 10, tipoEquipamento: 'RAMAL', equipamentoId: 7, equipamentoNome: 'Ramal 4001', tipoMovimento: 'ENTRADA', descricao: 'Ramal novo para Operacoes', responsavel: 'Roberto Alves', dataTroca: _dyn(_curYear, _curMonth, 14, 9), observacoes: 'Aparelho Intelbras' }
@@ -385,7 +385,7 @@ async function initPersistence() {
         try { pruned = pruneOldLogs(); } catch (e) { pruned = 0; }
         if (pruned > 0) {
             persistAll();
-            try { console.log(pruned + ' registro(s) do hist�rico com mais de 12 meses removidos.'); } catch (e2) {}
+            try { console.log(pruned + ' registro(s) do histórico com mais de 12 meses removidos.'); } catch (e2) {}
         }
     }
     else if (st === 'empty') { saveInitialData(); _dataLoaded = true; }
@@ -399,7 +399,7 @@ function tentarCargaInicial() {
     if (_dataLoaded) return;
     _cargaTentativas++;
     if (_cargaTentativas > 5) {
-        try { showToast('Servidor indispon�vel: as altera��es desta sess�o N�O ser�o salvas. Recarregue a p�gina.', 'error'); } catch (e) {}
+        try { showToast('Servidor indisponível: as alterações desta sessão NÃO serão salvas. Recarregue a página.', 'error'); } catch (e) {}
         return;
     }
     setTimeout(function() {
@@ -579,7 +579,7 @@ function mockFetch(url, opts) {
 
     if (url.indexOf('/api/auth/login') !== -1) return mockAuth(body.username, body.senha);
     if (url.indexOf('/api/auth/me') !== -1) return { username: localStorage.getItem('userName') || 'admin', nomeCompleto: localStorage.getItem('userName') || 'Administrador', perfil: getPerfil() };
-    if (url.indexOf('/api/historico/') !== -1 || url.indexOf('/api/hist�rico/') !== -1) return [];
+    if (url.indexOf('/api/historico/') !== -1 || url.indexOf('/api/histórico/') !== -1) return [];
     if (url.indexOf('/api/computadores/manutencao-vencida') !== -1) return computadoresCicloVencido();
     if (url.indexOf('/api/computadores/alertas') !== -1) return computadorAlertasGarantia();
     if (url.indexOf('/actuator/health') !== -1) return { status: 'UP', componentes: { db: { status: 'UP', details: { database: 'JSON (data.json) - Node.js' } }, diskSpace: { status: 'UP' } } };
@@ -595,7 +595,7 @@ function mockFetch(url, opts) {
             var dNome = String(body.nome === undefined ? '' : body.nome).trim();
             if (!dNome) throw new Error('Informe o nome do setor.');
             var dDup = MOCK_DEPARTAMENTOS.some(function(d) { return normSetor(d.nome) === normSetor(dNome); });
-            if (dDup) throw new Error('J� existe um setor com o nome "' + dNome + '".');
+            if (dDup) throw new Error('Já existe um setor com o nome "' + dNome + '".');
             var dNewId = MOCK_DEPARTAMENTOS.length > 0 ? Math.max.apply(null, MOCK_DEPARTAMENTOS.map(function(d) { return d.id; })) + 1 : 1;
             body.id = dNewId;
             body.nome = dNome;
@@ -613,7 +613,7 @@ function mockFetch(url, opts) {
                     var dNovoNome = String(body.nome).trim();
                     if (!dNovoNome) throw new Error('Informe o nome do setor.');
                     var dConflito = MOCK_DEPARTAMENTOS.some(function(d) { return d.id !== dUpId && normSetor(d.nome) === normSetor(dNovoNome); });
-                    if (dConflito) throw new Error('J� existe um setor com o nome "' + dNovoNome + '".');
+                    if (dConflito) throw new Error('Já existe um setor com o nome "' + dNovoNome + '".');
                     body.nome = dNovoNome;
                 }
                 var prevNome = MOCK_DEPARTAMENTOS[dIdx].nome;
@@ -640,7 +640,7 @@ function mockFetch(url, opts) {
                 var motivos = [];
                 if (pcsNoSetor > 0) motivos.push(pcsNoSetor + ' computador(es)');
                 if (ramaisNoSetor > 0) motivos.push(ramaisNoSetor + ' ramal(is)');
-                throw new Error('N�o � poss�vel excluir "' + dDel.nome + '": vinculado a ' + motivos.join(' e ') + '. Transfira-os para outro setor primeiro.');
+                throw new Error('Não é possível excluir "' + dDel.nome + '": vinculado a ' + motivos.join(' e ') + '. Transfira-os para outro setor primeiro.');
             }
             MOCK_DEPARTAMENTOS = MOCK_DEPARTAMENTOS.filter(function(d) { return d.id !== dDelId; });
             pushLog('EXCLUSAO', 'SETOR', dDelId, 'Setor removido: ' + (dDel ? dDel.nome : ''));
@@ -828,7 +828,7 @@ function mockFetch(url, opts) {
             }
             if (body.status !== undefined && body.status !== prevPc.status) diffParts.push('Status: ' + prevPc.status + ' ? ' + body.status);
             if (body.nomePc !== undefined && body.nomePc !== prevPc.nomePc) diffParts.push('Nome: ' + prevPc.nomePc + ' ? ' + body.nomePc);
-            if (body.usuarioDesignado !== undefined && body.usuarioDesignado !== prevPc.usuarioDesignado) diffParts.push('Usu�rio: ' + (prevPc.usuarioDesignado || '-') + ' ? ' + (body.usuarioDesignado || '-'));
+            if (body.usuarioDesignado !== undefined && body.usuarioDesignado !== prevPc.usuarioDesignado) diffParts.push('Usuário: ' + (prevPc.usuarioDesignado || '-') + ' ? ' + (body.usuarioDesignado || '-'));
             var nomeFinal = body.nomePc || prevPc.nomePc;
             var setorFinal = body.departamento !== undefined ? body.departamento : prevPc.departamento;
             Object.assign(prevPc, body);
@@ -898,7 +898,7 @@ function mockFetch(url, opts) {
             var comp = MOCK_COMPUTADORES.find(function(c) { return c.id === body.computadorId; });
             body.computadorNome = comp ? comp.nomePc : '-'; body.dataCadastro = new Date().toISOString(); body.dataConclusao = null;
             MOCK_MANUTENCOES.push(body);
-            pushLog('CRIACAO', 'MANUTENCAO', body.id, 'Manuten��o criada: ' + (body.tipo || '') + ' - ' + (body.computadorNome || ''));
+            pushLog('CRIACAO', 'MANUTENCAO', body.id, 'Manutenção criada: ' + (body.tipo || '') + ' - ' + (body.computadorNome || ''));
             persistAll();
             syncManutencaoWithComputador(body.computadorId, body.status, body.tipo);
             return body;
@@ -928,7 +928,7 @@ function mockFetch(url, opts) {
                     if (body.status === 'CONCLUIDA') MOCK_MANUTENCOES[mi].dataConclusao = new Date().toISOString();
                     if (prevStatus === 'CONCLUIDA') MOCK_MANUTENCOES[mi].dataConclusao = null;
                 }
-                pushLog('ALTERACAO', 'MANUTENCAO', muId, 'Manuten��o atualizada: ' + (MOCK_MANUTENCOES[mi].computadorNome || '-') + (body.status && body.status !== prevStatus ? ' (Status: ' + prevStatus + ' ? ' + body.status + ')' : ''));
+                pushLog('ALTERACAO', 'MANUTENCAO', muId, 'Manutenção atualizada: ' + (MOCK_MANUTENCOES[mi].computadorNome || '-') + (body.status && body.status !== prevStatus ? ' (Status: ' + prevStatus + ' ? ' + body.status + ')' : ''));
                 persistAll();
                 return MOCK_MANUTENCOES[mi];
             }
@@ -940,7 +940,7 @@ function mockFetch(url, opts) {
             MOCK_MANUTENCOES = MOCK_MANUTENCOES.filter(function(m) { return m.id !== mDelId; });
             // a manutencao aberta sumiu: o PC nao pode ficar preso em MANUTENCAO_*
             if (mDel && mDel.computadorId) syncManutencaoWithComputador(mDel.computadorId, 'CONCLUIDA', mDel.tipo);
-            pushLog('EXCLUSAO', 'MANUTENCAO', mDelId, 'Manuten��o removida: ' + (mDel ? (mDel.computadorNome || '') : ''));
+            pushLog('EXCLUSAO', 'MANUTENCAO', mDelId, 'Manutenção removida: ' + (mDel ? (mDel.computadorNome || '') : ''));
             persistAll();
             return {};
         }
@@ -1014,7 +1014,7 @@ function mockFetch(url, opts) {
             if (!body.perfil) body.perfil = 'TECNICO';
             if (!body.nomeCompleto) body.nomeCompleto = body.username || '-';
             MOCK_USUARIOS.push(body);
-            pushLog('CRIACAO', 'USUARIO', body.id, 'Usu�rio criado: ' + (body.username || body.nomeCompleto || ''));
+            pushLog('CRIACAO', 'USUARIO', body.id, 'Usuário criado: ' + (body.username || body.nomeCompleto || ''));
             persistAll();
             return body;
         }
@@ -1023,7 +1023,7 @@ function mockFetch(url, opts) {
             var ui2 = MOCK_USUARIOS.findIndex(function(u) { return u.id === uuId; });
             if (ui2 !== -1) {
                 Object.assign(MOCK_USUARIOS[ui2], body);
-                pushLog('ALTERACAO', 'USUARIO', uuId, 'Usu�rio atualizado: ' + ((body.username || MOCK_USUARIOS[ui2].username) || ''));
+                pushLog('ALTERACAO', 'USUARIO', uuId, 'Usuário atualizado: ' + ((body.username || MOCK_USUARIOS[ui2].username) || ''));
                 persistAll();
                 return MOCK_USUARIOS[ui2];
             }
@@ -1033,7 +1033,7 @@ function mockFetch(url, opts) {
             var uDelId = parseInt(url.split('/api/usuarios/')[1]);
             var uDel = MOCK_USUARIOS.find(function(u) { return u.id === uDelId; });
             MOCK_USUARIOS = MOCK_USUARIOS.filter(function(u) { return u.id !== uDelId; });
-            pushLog('EXCLUSAO', 'USUARIO', uDelId, 'Usu�rio removido: ' + (uDel ? (uDel.username || uDel.nomeCompleto || '') : ''));
+            pushLog('EXCLUSAO', 'USUARIO', uDelId, 'Usuário removido: ' + (uDel ? (uDel.username || uDel.nomeCompleto || '') : ''));
             persistAll();
             return {};
         }
@@ -1100,7 +1100,7 @@ function mockFetch(url, opts) {
             if (body.numeroRamal === undefined || body.numeroRamal === null) body.numeroRamal = '';
             if (!body.status) body.status = 'ATIVO';
             var rNum = String(body.numeroRamal || '').trim();
-            if (rNum && MOCK_RAMAIS.some(function(r) { return String(r.numeroRamal || '').trim() === rNum; })) throw new Error('J� existe um ramal com o n�mero ' + rNum + '.');
+            if (rNum && MOCK_RAMAIS.some(function(r) { return String(r.numeroRamal || '').trim() === rNum; })) throw new Error('Já existe um ramal com o número ' + rNum + '.');
             if (body.setor) { body.setor = canonSetor(body.setor); ensureSetor(body.setor); }
             body.dataCadastro = new Date().toISOString();
             if (!body.dataInicioCiclo) body.dataInicioCiclo = new Date().toISOString();
@@ -1116,7 +1116,7 @@ function mockFetch(url, opts) {
                 var oldStatus = MOCK_RAMAIS[ri].status;
                 var oldSetor = MOCK_RAMAIS[ri].setor;
                 var rNumU = String(body.numeroRamal === undefined ? MOCK_RAMAIS[ri].numeroRamal : body.numeroRamal).trim();
-                if (rNumU && MOCK_RAMAIS.some(function(r) { return r.id !== ruId && String(r.numeroRamal || '').trim() === rNumU; })) throw new Error('J� existe um ramal com o n�mero ' + rNumU + '.');
+                if (rNumU && MOCK_RAMAIS.some(function(r) { return r.id !== ruId && String(r.numeroRamal || '').trim() === rNumU; })) throw new Error('Já existe um ramal com o número ' + rNumU + '.');
                 if (body.setor) { body.setor = canonSetor(body.setor); ensureSetor(body.setor); }
                 Object.assign(MOCK_RAMAIS[ri], body);
                 if (body.status === 'EM_MANUTENCAO' && oldStatus !== 'EM_MANUTENCAO') {
@@ -1215,7 +1215,7 @@ async function apiFetch(url, opts) {
             if (res.status === 204) return {};
             var text = await res.text();
             var data = text ? JSON.parse(text) : {};
-            if (!res.ok) throw new Error(data.erro || data.mensagem || 'Erro na requisi��o');
+            if (!res.ok) throw new Error(data.erro || data.mensagem || 'Erro na requisição');
             return data;
         } catch (e) {
             if (e.name === 'TypeError' && e.message === 'Failed to fetch') {
@@ -1226,7 +1226,7 @@ async function apiFetch(url, opts) {
         }
     }
     var mockResult = mockFetch(url, opts);
-    if (mockResult === null) throw new Error('Recurso n�o encontrado (mock)');
+    if (mockResult === null) throw new Error('Recurso não encontrado (mock)');
     return mockResult;
 }
 
@@ -1280,7 +1280,7 @@ async function renderNotifPanel() {
     try {
         var alertas = await apiFetch('/api/computadores/alertas');
         (alertas.garantiaVencida || []).forEach(function(a) {
-            items.push({ i: 'fa-exclamation-circle', c: 'red', t: 'Garantia vencida: ' + a.nomePc, s: 'H� ' + a.dias + ' dia(s)', k: 'alerta' });
+            items.push({ i: 'fa-exclamation-circle', c: 'red', t: 'Garantia vencida: ' + a.nomePc, s: 'Há ' + a.dias + ' dia(s)', k: 'alerta' });
         });
         (alertas.garantiaProxima || []).forEach(function(a) {
             items.push({ i: 'fa-clock', c: 'yellow', t: 'Garantia vence: ' + a.nomePc, s: 'Em ' + a.diasRestantes + ' dia(s)', k: 'alerta' });
@@ -1302,7 +1302,7 @@ async function renderNotifPanel() {
         ll.forEach(function(lg) {
             var when = '';
             try { var dt = new Date(lg.dataAtividade); when = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); } catch (e) {}
-            items.push({ i: 'fa-circle', c: acaoMap[lg.acao] || 'cyan', t: lg.descricao || lg.acao, s: (lg.usuario || '') + (when ? ' � ' + when : ''), k: 'log' });
+            items.push({ i: 'fa-circle', c: acaoMap[lg.acao] || 'cyan', t: lg.descricao || lg.acao, s: (lg.usuario || '') + (when ? '—' + when : ''), k: 'log' });
         });
     } catch (e) {}
     try { localStorage.setItem('notifSeen', String(Date.now())); } catch (e) {}
@@ -1335,14 +1335,14 @@ async function renderNotifPanel() {
     var lbl = document.getElementById('notifCountLabel');
     if (lbl) lbl.textContent = unread > 99 ? '99+' : String(unread);
     if (items.length === 0) {
-        listEl.innerHTML = '<div class="hdr-notif-empty"><i class="fas fa-check-circle"></i><p>Nenhuma notifica��o</p></div>';
+        listEl.innerHTML = '<div class="hdr-notif-empty"><i class="fas fa-check-circle"></i><p>Nenhuma notificação</p></div>';
         return;
     }
     var html = items.map(function(x) {
         return '<div class="hdr-notif-item"><div class="hdr-notif-icon hdr-notif-' + x.c + '"><i class="fas ' + x.i + '"></i></div><div class="hdr-notif-info"><p>' + escapeHtml(x.t) + '</p><span>' + escapeHtml(x.s) + '</span></div></div>';
     }).join('');
     if (unread > items.length) {
-        html += '<div class="hdr-notif-item"><div class="hdr-notif-icon hdr-notif-cyan"><i class="fas fa-ellipsis-h"></i></div><div class="hdr-notif-info"><p>+' + (unread - items.length) + ' notifica��o(�es) anterior(es)</p><span>Atualize a p�gina para ver todas</span></div></div>';
+        html += '<div class="hdr-notif-item"><div class="hdr-notif-icon hdr-notif-cyan"><i class="fas fa-ellipsis-h"></i></div><div class="hdr-notif-info"><p>+' + (unread - items.length) + ' notificação(ões) anterior(es)</p><span>Atualize a página para ver todas</span></div></div>';
     }
     listEl.innerHTML = html;
 }
@@ -1404,7 +1404,7 @@ function updateBgOptionActive() {
 }
 function checkAuth() {
     if (!getToken()) { window.location.href = 'login.html'; return; }
-    var n = localStorage.getItem('userName') || 'Usu�rio', p = getPerfil();
+    var n = localStorage.getItem('userName') || 'Usuário', p = getPerfil();
     var el = function(id) { return document.getElementById(id); };
     if (el('sidebarUserName')) el('sidebarUserName').textContent = n;
     if (el('sidebarUserRole')) el('sidebarUserRole').textContent = p;
@@ -1428,16 +1428,16 @@ function showSection(id) {
     closeStatDetail(); closeKpiDetail(); closeManKpiDetail(); closeOsKpiDetail();
     document.querySelectorAll('canvas').forEach(function(c) { if (c._chart) { c._chart.destroy(); c._chart = null; } });
     var t = {
-        'painel': ['Dashboard', 'Vis�o geral do sistema'],
+        'painel': ['Dashboard', 'Visão geral do sistema'],
         'computadores': ['Computadores', 'Gerenciamento de computadores'],
         'ramais': ['Ramais', 'Gerenciamento de ramais'],
         'manutencoes': ['Manutencoes', 'Controle de manutencoes'],
         'ordens-servico': ['Ordens de Servico', 'Gestao de OS'],
         'trocas': ['Troca de Equipamento', 'Historico de trocas e movimentacoes'],
-        'departamentos': ['Setores', 'Gest�o de setores'],
+        'departamentos': ['Setores', 'Gestão de setores'],
         'software-licencas': ['Software/Licencas', 'Gestao de software e licencas'],
-        'logs': ['Hist�rico', 'Hist�rico de opera��es'],
-        'relatorios': ['Relat�rios', 'Relat�rio gerencial'],
+        'logs': ['Histórico', 'Histórico de operações'],
+        'relatorios': ['Relatórios', 'Relatório gerencial'],
         'usuarios': ['Usuarios', 'Gerenciamento de usuarios'],
         'admin': ['Ferramentas', 'Painel administrativo'],
         'monitoramento': ['Monitoramento', 'Verificacao preventiva de rede e Zabbix']
@@ -1552,6 +1552,181 @@ function upsertChart(canvas, config) {
     canvas._chart = new Chart(canvas, config);
     return canvas._chart;
 }
+
+// =====================================================================
+// CARTESIANO (plano X/Y) — padrao unico de TODOS os graficos do sistema
+// ---------------------------------------------------------------------
+// Estilo Grafana / GitHub Insights: eixo X e Y com titulo, gridlines
+// suaves, rotulo de valor sobre barra/ponto e tooltip com contagem +
+// percentual. Sem CDN: o plugin de rotulos e proprio (100% offline).
+// =====================================================================
+var CART = {
+    grid: 'rgba(255,255,255,0.045)',
+    tick: '#8892a8',
+    axisTitle: '#6f7a91'
+};
+
+// merge raso+profundo: preserva callbacks/ticks já definidos e permite
+// sobrescrever só o que o gráfico precisa (evita repetir opcoes).
+function cartMerge(base, extra) {
+    var r = {}, k;
+    for (k in base) r[k] = base[k];
+    if (extra) {
+        for (k in extra) {
+            var b = extra[k];
+            r[k] = (b && typeof b === 'object' && !Array.isArray(b) && r[k] && typeof r[k] === 'object' && !Array.isArray(r[k]))
+                ? cartMerge(r[k], b) : b;
+        }
+    }
+    return r;
+}
+
+// Tooltip padrao: titulo = categoria, corpo = contagem + percentual.
+function cartTooltip(sufixo, extra) {
+    return cartMerge({
+        backgroundColor: 'rgba(10,16,32,0.96)',
+        titleColor: '#00e5c7',
+        bodyColor: '#e4e8f1',
+        borderColor: 'rgba(0,229,199,0.25)',
+        borderWidth: 1,
+        cornerRadius: 8,
+        padding: 10,
+        displayColors: false,
+        titleFont: { size: 11, weight: '700' },
+        bodyFont: { size: 12, weight: '600' },
+        callbacks: {
+            label: function (c) {
+                var d = (c.dataset && c.dataset.data) || [];
+                var total = 0, i;
+                for (i = 0; i < d.length; i++) total += (Number(d[i]) || 0);
+                var pct = total > 0 ? Math.round((Number(c.raw) || 0) / total * 100) : 0;
+                return c.raw + (sufixo || '') + '  —  ' + pct + '% do total';
+            }
+        }
+    }, extra);
+}
+
+// Eixo de categoria/tempo (por padrao sem grid vertical: a leitura se
+// faz pelas linhas horizontais do eixo de valores).
+function cartAxisX(rotulo, extra) {
+    return cartMerge({
+        title: { display: !!rotulo, text: rotulo || '', color: CART.axisTitle, font: { size: 10, weight: '700' }, padding: { top: 8 } },
+        ticks: { color: CART.tick, font: { size: 10 }, autoSkip: false, maxRotation: 0, minRotation: 0, padding: 2 },
+        grid: { display: false, drawTicks: false },
+        border: { display: false }
+    }, extra);
+}
+
+// Eixo de valores (grid horizontal + titulo da unidade).
+function cartAxisY(rotulo, extra) {
+    return cartMerge({
+        title: { display: !!rotulo, text: rotulo || '', color: CART.axisTitle, font: { size: 10, weight: '700' }, padding: { top: 4, bottom: 4 } },
+        ticks: { color: CART.tick, font: { size: 10 }, precision: 0, padding: 4 },
+        grid: { color: CART.grid, drawTicks: false },
+        border: { display: false }
+    }, extra);
+}
+
+// Ordena chaves segundo uma ordem semantica conhecida (fluxo de status,
+// severidade de prioridade...). Chaves desconhecidas vao para o fim —
+// nenhum dado real e descartado nem reordenado arbitrariamente.
+function cartOrder(chaves, ordem) {
+    var out = [];
+    (ordem || []).forEach(function (k) { if (chaves.indexOf(k) !== -1) out.push(k); });
+    chaves.forEach(function (k) { if (out.indexOf(k) === -1) out.push(k); });
+    return out;
+}
+
+// Rotulo legivel: MANUTENCAO_PREDITIVA -> "Manutencao Preditiva"
+function cartPretty(v) {
+    return String(v).replace(/_/g, ' ').toLowerCase().replace(/(^|\s)\S/g, function (c) { return c.toUpperCase(); });
+}
+
+// Status de computador em rotulo curto (cabe no eixo X do dashboard).
+function cartStatusComp(k) {
+    var m = {
+        'ATIVO': 'Ativo', 'MANUTENCAO_PREDITIVA': 'Man. Preditiva',
+        'MANUTENCAO_PREVENTIVA': 'Man. Preventiva', 'MANUTENCAO_EMERGENCIAL': 'Man. Emergencial',
+        'CONCLUIDO': 'Concluido', 'INATIVO': 'Inativo'
+    };
+    return m[k] || cartPretty(k);
+}
+
+// Paleta de reserva (categorias fora das conhecidas)
+var CART_PALETTE = ['#2fd08e', '#00e5c7', '#ffe600', '#ff9f43', '#ff4757', '#b24dff', '#70b0f0', '#50d0d0', '#a855f7', '#f472b6'];
+
+// Clareia um hex em `amt` (0..1) misturando com branco.
+function cartShade(hex, amt) {
+    var h = String(hex).replace('#', '');
+    if (h.length !== 6) return hex;
+    var r = parseInt(h.substring(0, 2), 16);
+    var g = parseInt(h.substring(2, 4), 16);
+    var b = parseInt(h.substring(4, 6), 16);
+    if (isNaN(r) || isNaN(g) || isNaN(b)) return hex;
+    r = Math.round(r + (255 - r) * amt);
+    g = Math.round(g + (255 - g) * amt);
+    b = Math.round(b + (255 - b) * amt);
+    return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+
+// Gradiente vertical padrao de barra: realce no topo, tom cheio na base.
+function cartBarGrad(ctx, cor) {
+    var g = ctx.getContext('2d').createLinearGradient(0, 0, 0, 300);
+    g.addColorStop(0, cartShade(cor, 0.42));
+    g.addColorStop(1, cor);
+    return g;
+}
+
+// ---------------------------------------------------------------------
+// Plugin proprio de rotulo de valor (equivalente ao
+// chartjs-plugin-datalabels, embutido para nao depender de CDN).
+// ---------------------------------------------------------------------
+var chartValueLabels = {
+    id: 'valueLabels',
+    afterDatasetsDraw: function (chart) {
+        var o = chart.options.plugins && chart.options.plugins.valueLabels;
+        if (!o || !o.enabled) return;
+        if (!chart.scales || !chart.scales.x || !chart.scales.y) return;
+        var ctx = chart.ctx;
+        if (!ctx || typeof ctx.fillText !== 'function') return;
+        var horizontal = chart.options.indexAxis === 'y';
+        var escalaVal = horizontal ? chart.scales.x : chart.scales.y;
+        var off = (o.offset == null ? 6 : o.offset);
+        ctx.save();
+        ctx.font = (o.fontWeight || '700') + ' ' + (o.fontSize || 10) + "px 'Inter', sans-serif";
+        ctx.fillStyle = o.color || 'rgba(228,232,241,0.92)';
+        try {
+            chart.data.datasets.forEach(function (ds, di) {
+                if (ds.valueLabels === false) return;
+                var meta = chart.getDatasetMeta(di);
+                if (!meta || meta.hidden) return;
+                meta.data.forEach(function (el, i) {
+                    if (!el || el.skip === true) return;
+                    var v = ds.data[i];
+                    if (v == null || isNaN(Number(v))) return;
+                    var pv = escalaVal.getPixelForValue(v);
+                    if (pv == null || isNaN(pv)) return;
+                    var txt = o.formatter ? o.formatter(v, i, ds) : String(v);
+                    if (!txt) return;
+                    var x, y;
+                    if (horizontal) {
+                        x = pv + off; y = el.y;
+                        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+                        if (x + ctx.measureText(txt).width > chart.width - 2) { ctx.textAlign = 'right'; x = chart.width - 2; }
+                    } else {
+                        x = el.x; y = pv - off;
+                        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+                        if (y < 11) y = 11;
+                        if (x < 6) { ctx.textAlign = 'left'; x = 6; }
+                        if (x > chart.width - 6) { ctx.textAlign = 'right'; x = chart.width - 6; }
+                    }
+                    ctx.fillText(txt, x, y);
+                });
+            });
+        } finally { ctx.restore(); }
+    }
+};
+if (typeof Chart !== 'undefined' && typeof Chart.register === 'function') Chart.register(chartValueLabels);
 
 // kpiCardHtml: card KPI padrao novo — label curto, valor grande
 // (tabular-nums) e contexto real embaixo.
@@ -1681,7 +1856,7 @@ function renderKpiDetailPanel(key) {
             }).join(''));
         });
     } else if (key === 'dsh-eq-manut') {
-        title = 'Computadores em Manuten��o'; icon = 'fa-wrench'; color = 'yellow';
+        title = 'Computadores em Manutenção'; icon = 'fa-wrench'; color = 'yellow';
         Promise.all([
             apiFetch('/api/computadores/paginado?page=0&size=1000&status=MANUTENCAO_PREDITIVA&termo='),
             apiFetch('/api/computadores/paginado?page=0&size=1000&status=MANUTENCAO_PREVENTIVA&termo='),
@@ -1705,7 +1880,7 @@ function renderKpiDetailPanel(key) {
             var list = [];
             results.forEach(function(d) { list = list.concat(d.content || d || []); });
             renderKpiDetailHTML(container, title, icon, color, list.map(function(o) {
-                return '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--orange-bg);color:var(--orange);"><i class="fas fa-clipboard-list"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">' + escapeHtml(o.titulo) + '</div><div class="stat-detail-item-sub">' + escapeHtml(o.computadorNome || 'Sem v�nculo') + ' - ' + escapeHtml(o.solicitante || '') + '</div></div><div class="stat-detail-item-badge"><span class="badge badge-pendente">' + escapeHtml((o.status || 'ABERTA').replace(/_/g, ' ')) + '</span></div></div>';
+                return '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--orange-bg);color:var(--orange);"><i class="fas fa-clipboard-list"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">' + escapeHtml(o.titulo) + '</div><div class="stat-detail-item-sub">' + escapeHtml(o.computadorNome || 'Sem vínculo') + ' - ' + escapeHtml(o.solicitante || '') + '</div></div><div class="stat-detail-item-badge"><span class="badge badge-pendente">' + escapeHtml((o.status || 'ABERTA').replace(/_/g, ' ')) + '</span></div></div>';
             }).join(''));
         });
     } else if (key === 'dsh-ramais') {
@@ -1743,8 +1918,8 @@ function renderKpiDetailPanel(key) {
         });
     } else {
         var detailMap = {
-            'dsh-eq-concluidos': { title: 'Computadores Conclu�dos', icon: 'fa-check-circle', color: 'green', filter: 'CONCLUIDO' },
-            'dsh-man-vencida': { title: 'Manuten��es Vencidas', icon: 'fa-exclamation-triangle', color: 'red' },
+            'dsh-eq-concluidos': { title: 'Computadores Concluídos', icon: 'fa-check-circle', color: 'green', filter: 'CONCLUIDO' },
+            'dsh-man-vencida': { title: 'Manutenções Vencidas', icon: 'fa-exclamation-triangle', color: 'red' },
             'dsh-garantia': { title: 'Garantia Vencida', icon: 'fa-shield-alt', color: 'red' }
         };
         var cfg = detailMap[key];
@@ -1780,7 +1955,7 @@ function renderKpiDetailPanel(key) {
                 var alertas2 = _dashData.alertas || {};
                 var vencidas = alertas2.garantiaVencida || [];
                 renderKpiDetailHTML(container, title, icon, color, vencidas.map(function(a) {
-                    return '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--red-bg);color:var(--red);"><i class="fas fa-exclamation-triangle"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">' + escapeHtml(a.nomePc) + '</div><div class="stat-detail-item-sub">Vencida h� ' + a.dias + ' dias</div></div></div>';
+                    return '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--red-bg);color:var(--red);"><i class="fas fa-exclamation-triangle"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">' + escapeHtml(a.nomePc) + '</div><div class="stat-detail-item-sub">Vencida há ' + a.dias + ' dias</div></div></div>';
                 }).join(''));
             } else {
                 renderKpiDetailHTML(container, title, icon, color, '');
@@ -1800,22 +1975,37 @@ function renderKpiDetailHTML(container, title, icon, color, itemsHtml) {
 
 function renderChartStatus(s) {
     var ctx = document.getElementById('chartStatus'); if (!ctx) return;
-    var d = (s && s.porStatus) || {}, lb = Object.keys(d), vl = Object.values(d);
+    var d = (s && s.porStatus) || {};
     var colorMap = { 'ATIVO': '#2fd08e', 'MANUTENCAO_PREDITIVA': '#ffe600', 'MANUTENCAO_PREVENTIVA': '#00e5c7', 'MANUTENCAO_EMERGENCIAL': '#ff9f43', 'CONCLUIDO': '#b24dff', 'INATIVO': '#ff4757' };
     var fallback = ['#2fd08e', '#ffe600', '#00e5c7', '#ff9f43', '#b24dff', '#ff4757'];
-    var cg = lb.map(function(k, i) { return colorMap[k] || fallback[i % fallback.length]; });
-    var pretty = lb.map(function(k) { return k.replace('MANUTENCAO_', 'Man. ').replace(/_/g, ' '); });
-    upsertChart(ctx, { type: 'doughnut', data: { labels: pretty, datasets: [{ data: vl, backgroundColor: cg, borderWidth: 0, hoverOffset: 8 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '72%', layout: { padding: 6 }, plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(10,16,32,0.95)', titleColor: '#00e5c7', bodyColor: '#e4e8f1', borderColor: 'rgba(0,229,199,0.25)', borderWidth: 1, cornerRadius: 8, padding: 10, displayColors: true, boxPadding: 4 } } } });
+    // ordem semantica do ciclo de vida: Ativo -> manutencoes -> concluido
+    var ordem = ['ATIVO', 'MANUTENCAO_PREDITIVA', 'MANUTENCAO_PREVENTIVA', 'MANUTENCAO_EMERGENCIAL', 'CONCLUIDO', 'INATIVO'];
+    var chaves = cartOrder(Object.keys(d), ordem);
+    var vl = chaves.map(function(k) { return d[k] || 0; });
+    var lb = chaves.map(cartStatusComp);
+    var cg = chaves.map(function(k, i) { return colorMap[k] || fallback[i % fallback.length]; });
+    if (lb.length === 0) { lb = ['Sem dados']; vl = [0]; cg = [fallback[0]]; }
+    upsertChart(ctx, {
+        type: 'bar',
+        data: { labels: lb, datasets: [{ label: 'Equipamentos', data: vl, backgroundColor: cg, borderRadius: 6, borderSkipped: false, barPercentage: 0.62, categoryPercentage: 0.78 }] },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            layout: { padding: { top: 16, right: 8, left: 2, bottom: 2 } },
+            plugins: {
+                legend: { display: false },
+                tooltip: cartTooltip(' equipamento(s)'),
+                valueLabels: { enabled: true, color: '#e4e8f1', offset: 6 }
+            },
+            scales: {
+                x: cartAxisX('Status'),
+                y: cartAxisY('Equipamentos', { beginAtZero: true })
+            }
+        }
+    });
+    // Chip de total no cabecalho (antes ficava no centro do donut)
+    var tot = document.getElementById('dshStatusTotal');
     var total = vl.reduce(function(a, b) { return a + b; }, 0);
-    var tot = document.getElementById('dshDonutTotal');
     if (tot && tot.textContent !== String(total)) tot.textContent = total;
-    var leg = document.getElementById('chartStatusLegend');
-    if (leg) {
-        if (pretty.length === 0) { setHtml(leg, '<p style="color:var(--text-muted);font-size:13px;">Sem dados</p>'); return; }
-        setHtml(leg, pretty.map(function(l, i) {
-            return '<div class="dsh-count-item"><span class="dsh-count-dot" style="background:' + cg[i] + ';"></span><span class="dsh-count-name">' + escapeHtml(l) + '</span><b>' + vl[i] + '</b></div>';
-        }).join(''));
-    }
 }
 
 function dshRowHtml(label, value, color) {
@@ -1872,43 +2062,6 @@ function renderDashboardCompList(d) {
             var s = sm[eq.status || 'ATIVO'] || ['badge-inativo', 'Inativo'];
             return '<tr class="dsh-tr-click" onclick="showComputadorDetail(' + eq.id + ')"><td>' + escapeHtml(eq.nomePc) + '</td><td class="dsh-td-muted">' + escapeHtml(eq.usuarioDesignado || '-') + '</td><td><span class="badge ' + s[0] + '">' + s[1] + '</span></td></tr>';
         }).join('') + '</tbody></table>');
-}
-
-function chartPalette(n) {
-    var cols = [];
-    for (var i = 0; i < n; i++) {
-        cols.push('hsl(' + Math.round((i * 360) / Math.max(n, 1)) + ', 72%, 55%)');
-    }
-    return cols;
-}
-
-function renderChartRamais(ramais) {
-    ramais = ramais || [];
-    var setorCount = {};
-    ramais.forEach(function(r) {
-        var s = r.setor || 'Sem Setor';
-        setorCount[s] = (setorCount[s] || 0) + 1;
-    });
-    var labels = Object.keys(setorCount).sort(function(a, b) { return setorCount[b] - setorCount[a]; });
-    var values = labels.map(function(l) { return setorCount[l]; });
-    var colors = chartPalette(labels.length);
-    var ctx = document.getElementById('chartRamais');
-    if (!ctx) return;
-    var legendEl = document.getElementById('chartRamaisLegend');
-    if (labels.length > 0) {
-        upsertChart(ctx, {
-            type: 'doughnut',
-            data: { labels: labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 0 }] },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
-        });
-        if (legendEl) {
-            setHtml(legendEl, labels.map(function(l, i) {
-                return '<span class="chart-legend-item"><span class="chart-legend-dot" style="background:' + colors[i] + ';"></span>' + escapeHtml(l) + ' <span class="chart-legend-count">' + values[i] + '</span></span>';
-            }).join(''));
-        }
-    } else if (legendEl) {
-        setHtml(legendEl, '');
-    }
 }
 
 // ==========================================
@@ -2011,7 +2164,7 @@ async function showComputadorDetail(id) {
             var manutData = await apiFetch('/api/manutencoes?computadorId=' + id + '&page=0&size=100');
             var manutList = manutData.content || manutData;
             if (manutList.length > 0) {
-                manutHtml = '<div style="margin-top:20px;"><h4 style="font-size:13px;color:var(--text-secondary);margin-bottom:10px;"><i class="fas fa-wrench" style="color:var(--primary-light);margin-right:6px;"></i>Hist�rico de Manuten��o</h4>';
+                manutHtml = '<div style="margin-top:20px;"><h4 style="font-size:13px;color:var(--text-secondary);margin-bottom:10px;"><i class="fas fa-wrench" style="color:var(--primary-light);margin-right:6px;"></i>Histórico de Manutenção</h4>';
                 manutList.forEach(function(m) {
                     var ms = escapeHtml((m.status || 'PENDENTE').replace(/_/g, ' '));
                     manutHtml += '<div style="padding:10px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;"><div style="display:flex;justify-content:space-between;align-items:center;"><span class="badge badge-' + escapeHtml((m.tipo || 'PREVENTIVA').toLowerCase()) + '">' + escapeHtml(m.tipo) + '</span><span class="badge badge-' + escapeHtml((m.status || 'PENDENTE').toLowerCase().replace(/_/g, '-')) + '">' + ms + '</span></div><p style="font-size:12px;color:var(--text-secondary);margin-top:6px;">' + escapeHtml(m.descricao || '') + '</p>' + (m.tecnicoResponsavel ? '<p style="font-size:11px;color:var(--text-muted);margin-top:4px;"><i class="fas fa-user"></i> ' + escapeHtml(m.tecnicoResponsavel) + '</p>' : '') + '</div>';
@@ -2022,12 +2175,12 @@ async function showComputadorDetail(id) {
         var extraHtml = '';
         var extraItems = [];
         if (eq.departamento) extraItems.push(['Setor', escapeHtml(eq.departamento)]);
-        if (eq.localizacao) extraItems.push(['Localiza��o', escapeHtml(eq.localizacao)]);
+        if (eq.localizacao) extraItems.push(['Localização', escapeHtml(eq.localizacao)]);
         if (eq.fornecedor) extraItems.push(['Fornecedor', escapeHtml(eq.fornecedor)]);
-        if (eq.ipAddress) extraItems.push(['Endere�o IP', escapeHtml(eq.ipAddress)]);
+        if (eq.ipAddress) extraItems.push(['Endereço IP', escapeHtml(eq.ipAddress)]);
         if (eq.sistemaOperacional) extraItems.push(['Sistema Operacional', escapeHtml(eq.sistemaOperacional)]);
         if (eq.softwareInstalado) extraItems.push(['Software Instalado', escapeHtml(eq.softwareInstalado)]);
-        if (eq.dataAquisicao) extraItems.push(['Data Aquisi��o', new Date(eq.dataAquisicao + 'T00:00:00').toLocaleDateString('pt-BR')]);
+        if (eq.dataAquisicao) extraItems.push(['Data Aquisição', new Date(eq.dataAquisicao + 'T00:00:00').toLocaleDateString('pt-BR')]);
         if (eq.dataGarantia) {
             var garDate = new Date(eq.dataGarantia + 'T00:00:00');
             var garLabel = garDate.toLocaleDateString('pt-BR');
@@ -2047,7 +2200,7 @@ async function showComputadorDetail(id) {
             extraItems.forEach(function(item) { extraHtml += '<div><label style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">' + escapeHtml(item[0]) + '</label><p style="font-size:13px;color:var(--text-primary);font-weight:500;margin-top:2px;">' + item[1] + '</p></div>'; });
             extraHtml += '</div></div>';
         }
-        openModal('Detalhes do Computador', '<div class="detail-header">' + fotoHtml + '<div class="detail-info"><h2>' + escapeHtml(eq.nomePc) + '</h2><p>' + escapeHtml(eq.modeloMarca) + ' &mdash; ' + escapeHtml(eq.numeroSerie) + '</p><span class="badge ' + s.c + '"><i class="fas ' + s.i + '" style="font-size:9px;"></i> ' + sl + '</span></div></div><div class="detail-specs"><div class="detail-spec-item"><label>Processador</label><p>' + escapeHtml(eq.processador) + '</p></div><div class="detail-spec-item"><label>Memoria RAM</label><p>' + escapeHtml(eq.memoriaRam) + '</p></div><div class="detail-spec-item"><label>Armazenamento</label><p>' + escapeHtml(eq.armazenamento) + '</p></div><div class="detail-spec-item"><label>Usu�rio Designado</label><p>' + escapeHtml(eq.usuarioDesignado || 'Nao atribuido') + '</p></div><div class="detail-spec-item"><label>N�mero de S�rie</label><p>' + escapeHtml(eq.numeroSerie) + '</p></div></div>' + extraHtml + manutHtml, '<button onclick="closeModal()" class="btn btn-ghost btn-sm">Fechar</button><button onclick="showComputadorForm(' + eq.id + ')" class="btn btn-primary btn-sm"><i class="fas fa-pen"></i> Editar</button>');
+        openModal('Detalhes do Computador', '<div class="detail-header">' + fotoHtml + '<div class="detail-info"><h2>' + escapeHtml(eq.nomePc) + '</h2><p>' + escapeHtml(eq.modeloMarca) + ' &mdash; ' + escapeHtml(eq.numeroSerie) + '</p><span class="badge ' + s.c + '"><i class="fas ' + s.i + '" style="font-size:9px;"></i> ' + sl + '</span></div></div><div class="detail-specs"><div class="detail-spec-item"><label>Processador</label><p>' + escapeHtml(eq.processador) + '</p></div><div class="detail-spec-item"><label>Memoria RAM</label><p>' + escapeHtml(eq.memoriaRam) + '</p></div><div class="detail-spec-item"><label>Armazenamento</label><p>' + escapeHtml(eq.armazenamento) + '</p></div><div class="detail-spec-item"><label>Usuário Designado</label><p>' + escapeHtml(eq.usuarioDesignado || 'Nao atribuido') + '</p></div><div class="detail-spec-item"><label>Número de Série</label><p>' + escapeHtml(eq.numeroSerie) + '</p></div></div>' + extraHtml + manutHtml, '<button onclick="closeModal()" class="btn btn-ghost btn-sm">Fechar</button><button onclick="showComputadorForm(' + eq.id + ')" class="btn btn-primary btn-sm"><i class="fas fa-pen"></i> Editar</button>');
     } catch (e) { showToast(e.message, 'error'); }
 }
 
@@ -2118,19 +2271,19 @@ async function applyBulkStatus() {
 async function showComputadorForm(id) {
     var eq = { nomePc: '', numeroSerie: '', modeloMarca: '', processador: '', memoriaRam: '', armazenamento: '', usuarioDesignado: '', fornecedor: '', status: 'ATIVO', fotoUrl: '' };
     if (id) { try { eq = await apiFetch('/api/computadores/' + id); } catch (e) { showToast('Erro ao carregar computador: ' + e.message, 'error'); return; } }
-    var fotoHtml = '<div class="photo-upload-area" id="photoUploadArea"><input type="file" id="eqFotoFile" accept=".jpg,.jpeg,.jfif,.png,.gif,.webp,.bmp,.tiff,.tif,.heic,.heif,.avif,.svg,.ico,image/*" style="display:none;"><div id="fotoDropZone" class="foto-drop-zone"><div id="fotoPreview" class="foto-preview">' + (eq.fotoUrl && eq.fotoUrl.trim() ? '<div style="position:relative;display:inline-block;"><img src="' + escapeHtml(eq.fotoUrl) + '" style="max-height:240px;object-fit:contain;border-radius:8px;border:1px solid var(--border);" onload="this.style.display=\'block\';" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';"><div style="display:none;flex-direction:column;align-items:center;color:var(--red);padding:10px;"><i class="fas fa-exclamation-triangle" style="font-size:16px;"></i><p style="font-size:11px;margin-top:4px;">Imagem n�oencontrada</p></div></div><div style="display:flex;gap:4px;margin-top:8px;"><button type="button" onclick="event.stopPropagation();document.getElementById(\'eqFotoFile\').click();" class="btn btn-primary btn-sm"><i class="fas fa-upload"></i> Trocar Foto</button><button type="button" onclick="event.stopPropagation();removePhoto()" class="btn btn-ghost btn-sm"><i class="fas fa-trash"></i> Remover</button></div>' : '<i class="fas fa-image" style="font-size:36px;color:var(--text-muted);margin-bottom:12px;opacity:0.4;"></i><p style="font-size:14px;color:var(--text-secondary);margin-bottom:12px;">Arraste fotos ou clique para selecionar</p><button type="button" id="fotoUploadBtn" onclick="event.stopPropagation();document.getElementById(\'eqFotoFile\').click();" class="btn btn-primary btn-sm"><i class="fas fa-upload"></i> importar Foto</button><p style="font-size:11px;color:var(--text-muted);margin-top:10px;">JPG, PNG, GIF, WebP, HEIC, AVIF, BMP, TIFF, SVG (max 50MB)</p>') + '</div></div><input type="hidden" id="eqFotoUrlFinal" value="' + escapeAttr(eq.fotoUrl || '') + '"></div>';
+    var fotoHtml = '<div class="photo-upload-area" id="photoUploadArea"><input type="file" id="eqFotoFile" accept=".jpg,.jpeg,.jfif,.png,.gif,.webp,.bmp,.tiff,.tif,.heic,.heif,.avif,.svg,.ico,image/*" style="display:none;"><div id="fotoDropZone" class="foto-drop-zone"><div id="fotoPreview" class="foto-preview">' + (eq.fotoUrl && eq.fotoUrl.trim() ? '<div style="position:relative;display:inline-block;"><img src="' + escapeHtml(eq.fotoUrl) + '" style="max-height:240px;object-fit:contain;border-radius:8px;border:1px solid var(--border);" onload="this.style.display=\'block\';" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';"><div style="display:none;flex-direction:column;align-items:center;color:var(--red);padding:10px;"><i class="fas fa-exclamation-triangle" style="font-size:16px;"></i><p style="font-size:11px;margin-top:4px;">Imagem não encontrada</p></div></div><div style="display:flex;gap:4px;margin-top:8px;"><button type="button" onclick="event.stopPropagation();document.getElementById(\'eqFotoFile\').click();" class="btn btn-primary btn-sm"><i class="fas fa-upload"></i> Trocar Foto</button><button type="button" onclick="event.stopPropagation();removePhoto()" class="btn btn-ghost btn-sm"><i class="fas fa-trash"></i> Remover</button></div>' : '<i class="fas fa-image" style="font-size:36px;color:var(--text-muted);margin-bottom:12px;opacity:0.4;"></i><p style="font-size:14px;color:var(--text-secondary);margin-bottom:12px;">Arraste fotos ou clique para selecionar</p><button type="button" id="fotoUploadBtn" onclick="event.stopPropagation();document.getElementById(\'eqFotoFile\').click();" class="btn btn-primary btn-sm"><i class="fas fa-upload"></i> importar Foto</button><p style="font-size:11px;color:var(--text-muted);margin-top:10px;">JPG, PNG, GIF, WebP, HEIC, AVIF, BMP, TIFF, SVG (max 50MB)</p>') + '</div></div><input type="hidden" id="eqFotoUrlFinal" value="' + escapeAttr(eq.fotoUrl || '') + '"></div>';
     var statusOpts = ['ATIVO', 'MANUTENCAO_PREDITIVA', 'MANUTENCAO_PREVENTIVA', 'MANUTENCAO_EMERGENCIAL', 'CONCLUIDO'].map(function(st) {
-        var labels = { 'ATIVO': 'Ativo', 'MANUTENCAO_PREDITIVA': 'Manuten��o Preditiva', 'MANUTENCAO_PREVENTIVA': 'Manuten��o Preventiva', 'MANUTENCAO_EMERGENCIAL': 'Manuten��o Emergencial', 'CONCLUIDO': 'Conclu�do' };
+        var labels = { 'ATIVO': 'Ativo', 'MANUTENCAO_PREDITIVA': 'Manutenção Preditiva', 'MANUTENCAO_PREVENTIVA': 'Manutenção Preventiva', 'MANUTENCAO_EMERGENCIAL': 'Manutenção Emergencial', 'CONCLUIDO': 'Concluído' };
         return '<option value="' + st + '"' + (eq.status === st ? ' selected' : '') + '>' + labels[st] + '</option>';
     }).join('');
-    var manutDescHtml = '<div id="manutDescGroup" class="form-group" style="margin-top:14px;' + (eq.status && eq.status.indexOf('MANUTENCAO_') === 0 ? '' : 'display:none;') + '"><label class="form-label">Descri��o do Problema * <span style="color:var(--red);font-size:11px;">(obrigat�rio para manuten��o)</span></label><textarea id="eqManutDesc" class="form-input" style="min-height:80px;resize:vertical;" maxlength="2000" placeholder="Descreva o problema encontrado...">' + escapeHtml(eq.notas || '') + '</textarea></div>';
+    var manutDescHtml = '<div id="manutDescGroup" class="form-group" style="margin-top:14px;' + (eq.status && eq.status.indexOf('MANUTENCAO_') === 0 ? '' : 'display:none;') + '"><label class="form-label">Descrição do Problema * <span style="color:var(--red);font-size:11px;">(obrigatório para manutenção)</span></label><textarea id="eqManutDesc" class="form-input" style="min-height:80px;resize:vertical;" maxlength="2000" placeholder="Descreva o problema encontrado...">' + escapeHtml(eq.notas || '') + '</textarea></div>';
     var soOpts = ['', 'Windows 10', 'Windows 11', 'Linux Ubuntu', 'Linux Mint', 'macOS', 'Outro'].map(function(so) {
         return '<option value="' + so + '"' + (eq.sistemaOperacional === so ? ' selected' : '') + '>' + (so || 'Selecione...') + '</option>';
     }).join('');
     var detHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">' +
         '<div class="form-group"><label class="form-label">Setor</label><div class="searchable-dropdown" id="setorDropdown"><input type="text" id="eqDeptoSearch" class="form-input" placeholder="Buscar setor..." autocomplete="off" value="' + escapeAttr(eq.departamento || '') + '"><input type="hidden" id="eqDepto" value="' + escapeAttr(eq.departamento || '') + '"><div id="setorDropdownList" class="searchable-dropdown-list" style="display:none;"></div></div></div>' +
-        '<div class="form-group"><label class="form-label">Localiza��o</label><input id="eqLocal" value="' + escapeAttr(eq.localizacao || '') + '" class="form-input" placeholder="Ex: Sala 101, 2o andar" maxlength="150"></div>' +
-        '<div class="form-group"><label class="form-label">Endere�o IP</label><input id="eqIP" value="' + escapeAttr(eq.ipAddress || '') + '" class="form-input" placeholder="Ex: 192.168.1.100" maxlength="50"></div>' +
+        '<div class="form-group"><label class="form-label">Localização</label><input id="eqLocal" value="' + escapeAttr(eq.localizacao || '') + '" class="form-input" placeholder="Ex: Sala 101, 2o andar" maxlength="150"></div>' +
+        '<div class="form-group"><label class="form-label">Endereço IP</label><input id="eqIP" value="' + escapeAttr(eq.ipAddress || '') + '" class="form-input" placeholder="Ex: 192.168.1.100" maxlength="50"></div>' +
         '<div class="form-group"><label class="form-label">Sistema Operacional</label><select id="eqSO" class="form-input">' + soOpts + '</select></div>' +
         '<div class="form-group"><label class="form-label">Software Instalado</label><input id="eqSoftware" value="' + escapeAttr(eq.softwareInstalado || '') + '" class="form-input" placeholder="Ex: Office 365, Adobe CC" maxlength="200"></div>' +
         '</div>' +
@@ -2149,11 +2302,11 @@ async function showComputadorForm(id) {
         '<div id="tabgeral" class="form-tab-content ' + tabActives[0] + '" style="' + tabDisplays[0] + '">' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">' +
         '<div class="form-group"><label class="form-label">Nome PC *</label><input id="eqNome" value="' + escapeAttr(eq.nomePc) + '" required class="form-input" maxlength="100"></div>' +
-        '<div class="form-group"><label class="form-label">N�mero S�rie *</label><input id="eqSerie" value="' + escapeAttr(eq.numeroSerie) + '" required class="form-input" maxlength="50"></div>' +
+        '<div class="form-group"><label class="form-label">Número Série *</label><input id="eqSerie" value="' + escapeAttr(eq.numeroSerie) + '" required class="form-input" maxlength="50"></div>' +
         '<div class="form-group"><label class="form-label">Processador *</label><input id="eqProc" value="' + escapeAttr(eq.processador) + '" required class="form-input" maxlength="100"></div>' +
         '<div class="form-group"><label class="form-label">Memoria RAM *</label><input id="eqRam" value="' + escapeAttr(eq.memoriaRam) + '" required class="form-input" maxlength="50"></div>' +
         '<div class="form-group"><label class="form-label">Armazenamento *</label><input id="eqArm" value="' + escapeAttr(eq.armazenamento) + '" required class="form-input" maxlength="50"></div>' +
-        '<div class="form-group"><label class="form-label">Usu�rio Designado</label><input id="eqUsuario" value="' + escapeAttr(eq.usuarioDesignado || '') + '" class="form-input" maxlength="100"></div>' +
+        '<div class="form-group"><label class="form-label">Usuário Designado</label><input id="eqUsuario" value="' + escapeAttr(eq.usuarioDesignado || '') + '" class="form-input" maxlength="100"></div>' +
         '</div>' +
         '<div class="form-group" style="margin-top:14px;"><label class="form-label">Status</label><select id="eqStatus" class="form-input">' + statusOpts + '</select></div>' +
         manutDescHtml +
@@ -2184,7 +2337,7 @@ async function showComputadorForm(id) {
         var enteringManut = statusVal.indexOf('MANUTENCAO_') === 0 && prevStatus.indexOf('MANUTENCAO_') !== 0;
         var manutDesc = document.getElementById('eqManutDesc') ? document.getElementById('eqManutDesc').value.trim() : '';
         if (enteringManut && !manutDesc) {
-            showToast('Descri��o do problema e obrigat�ria ao registrar manuten��o.', 'error');
+            showToast('Descrição do problema e obrigatória ao registrar manutenção.', 'error');
             var descGroup = document.getElementById('manutDescGroup');
             if (descGroup) descGroup.style.display = '';
             var descField = document.getElementById('eqManutDesc');
@@ -2222,8 +2375,8 @@ async function showComputadorForm(id) {
                 var tipoMap = { 'MANUTENCAO_PREDITIVA': 'PREDITIVA', 'MANUTENCAO_PREVENTIVA': 'PREVENTIVA', 'MANUTENCAO_EMERGENCIAL': 'EMERGENCIAL' };
                 try {
                     await apiFetch('/api/manutencoes', { method: 'POST', body: JSON.stringify({ computadorId: id, tipo: tipoMap[statusVal] || 'PREVENTIVA', descricao: manutDesc, status: 'PENDENTE', tecnicoResponsavel: '' }) });
-                    showToast('Manuten��o criada automaticamente!', 'success');
-                } catch (me) { showToast('Computador salvo, mas erro ao criar manuten��o: ' + me.message, 'warning'); }
+                    showToast('Manutenção criada automaticamente!', 'success');
+                } catch (me) { showToast('Computador salvo, mas erro ao criar manutenção: ' + me.message, 'warning'); }
             }
             closeModal();
             _currentTab = 0;
@@ -2370,7 +2523,7 @@ function setupPhotoUpload() {
         return !!n.match(/\.(jpe?g|jfif|png|gif|webp|bmp|tiff?|heic|heif|ico|avif|svg)$/);
     }
     function handlePhotoFile(file) {
-        if (!isImageFile(file)) { showToast('Formato n�o suportado.', 'error'); return; }
+        if (!isImageFile(file)) { showToast('Formato não suportado.', 'error'); return; }
         if (file.size > 50 * 1024 * 1024) { showToast('Arquivo excede 50MB.', 'error'); return; }
         _photoUploading = true;
         preview.innerHTML = '<div style="text-align:center;padding:30px;"><div class="spinner"></div><p style="font-size:12px;color:var(--text-muted);margin-top:10px;">Enviando ' + formatFileSize(file.size) + '...</p></div>';
@@ -2380,7 +2533,7 @@ function setupPhotoUpload() {
                 _photoUploading = false;
                 var dataUrl = ev.target.result;
                 urlFinal.value = dataUrl;
-                preview.innerHTML = '<div style="position:relative;display:inline-block;"><img src="' + escapeHtml(dataUrl) + '" style="max-height:240px;object-fit:contain;border-radius:8px;border:1px solid var(--border);" onload="this.style.display=\'block\';" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';"><div style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px;color:var(--red);"><i class="fas fa-exclamation-triangle" style="font-size:20px;"></i><p style="font-size:11px;margin-top:4px;">Foto salva mas n�o carregou</p></div></div><div style="display:flex;gap:4px;margin-top:8px;"><button type="button" onclick="event.stopPropagation();document.getElementById(\'eqFotoFile\').click();" class="btn btn-primary btn-sm"><i class="fas fa-upload"></i> Trocar</button><button type="button" onclick="event.stopPropagation();removePhoto()" class="btn btn-ghost btn-sm"><i class="fas fa-trash"></i> Remover</button></div>';
+                preview.innerHTML = '<div style="position:relative;display:inline-block;"><img src="' + escapeHtml(dataUrl) + '" style="max-height:240px;object-fit:contain;border-radius:8px;border:1px solid var(--border);" onload="this.style.display=\'block\';" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';"><div style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px;color:var(--red);"><i class="fas fa-exclamation-triangle" style="font-size:20px;"></i><p style="font-size:11px;margin-top:4px;">Foto salva mas não carregou</p></div></div><div style="display:flex;gap:4px;margin-top:8px;"><button type="button" onclick="event.stopPropagation();document.getElementById(\'eqFotoFile\').click();" class="btn btn-primary btn-sm"><i class="fas fa-upload"></i> Trocar</button><button type="button" onclick="event.stopPropagation();removePhoto()" class="btn btn-ghost btn-sm"><i class="fas fa-trash"></i> Remover</button></div>';
                 preview.style.position = 'relative';
                 showToast('Foto carregada com sucesso!', 'success');
             };
@@ -2395,8 +2548,8 @@ function setupPhotoUpload() {
         fetchUploadJSON(file)
             .then(function(r) {
                 if (r.status === 413) throw new Error('Arquivo muito grande.');
-                if (r.status === 415) throw new Error('Tipo n�o suportado.');
-                if (r.status === 401 || r.status === 403) throw new Error('Sess�o expirada.');
+                if (r.status === 415) throw new Error('Tipo não suportado.');
+                if (r.status === 401 || r.status === 403) throw new Error('Sessão expirada.');
                 if (!r.ok) {
                     return r.text().then(function(text) {
                         var msg = 'Erro no servidor';
@@ -2410,7 +2563,7 @@ function setupPhotoUpload() {
                 _photoUploading = false;
                 if (data.url) {
                     urlFinal.value = data.url;
-                    preview.innerHTML = '<div style="position:relative;display:inline-block;"><img src="' + escapeHtml(data.url) + '" style="max-height:240px;object-fit:contain;border-radius:8px;border:1px solid var(--border);" onload="this.style.display=\'block\';" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';"><div style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px;color:var(--red);"><i class="fas fa-exclamation-triangle" style="font-size:20px;"></i><p style="font-size:11px;margin-top:4px;">Foto salva mas n�o carregou</p></div></div><div style="display:flex;gap:4px;margin-top:8px;"><button type="button" onclick="event.stopPropagation();document.getElementById(\'eqFotoFile\').click();" class="btn btn-primary btn-sm"><i class="fas fa-upload"></i> Trocar</button><button type="button" onclick="event.stopPropagation();removePhoto()" class="btn btn-ghost btn-sm"><i class="fas fa-trash"></i> Remover</button></div>';
+                    preview.innerHTML = '<div style="position:relative;display:inline-block;"><img src="' + escapeHtml(data.url) + '" style="max-height:240px;object-fit:contain;border-radius:8px;border:1px solid var(--border);" onload="this.style.display=\'block\';" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';"><div style="display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px;color:var(--red);"><i class="fas fa-exclamation-triangle" style="font-size:20px;"></i><p style="font-size:11px;margin-top:4px;">Foto salva mas não carregou</p></div></div><div style="display:flex;gap:4px;margin-top:8px;"><button type="button" onclick="event.stopPropagation();document.getElementById(\'eqFotoFile\').click();" class="btn btn-primary btn-sm"><i class="fas fa-upload"></i> Trocar</button><button type="button" onclick="event.stopPropagation();removePhoto()" class="btn btn-ghost btn-sm"><i class="fas fa-trash"></i> Remover</button></div>';
                     preview.style.position = 'relative';
                     showToast('Foto enviada com sucesso!', 'success');
                 } else { throw new Error(data.erro || 'Erro no upload'); }
@@ -2453,7 +2606,7 @@ function setupRamalPhotoUpload() {
         return !!n.match(/\.(jpe?g|jfif|png|gif|webp|bmp|tiff?|heic|heif|ico|avif|svg)$/);
     }
     function handleRamalPhotoFile(file) {
-        if (!isImageFile(file)) { showToast('Formato n�o suportado.', 'error'); return; }
+        if (!isImageFile(file)) { showToast('Formato não suportado.', 'error'); return; }
         if (file.size > 50 * 1024 * 1024) { showToast('Arquivo excede 50MB.', 'error'); return; }
         _ramalPhotoUploading = true;
         preview.innerHTML = '<div style="text-align:center;padding:30px;"><div class="spinner"></div><p style="font-size:12px;color:var(--text-muted);margin-top:10px;">Enviando ' + formatFileSize(file.size) + '...</p></div>';
@@ -2478,8 +2631,8 @@ function setupRamalPhotoUpload() {
         fetchUploadJSON(file)
             .then(function(r) {
                 if (r.status === 413) throw new Error('Arquivo muito grande.');
-                if (r.status === 415) throw new Error('Tipo n�o suportado.');
-                if (r.status === 401 || r.status === 403) throw new Error('Sess�o expirada.');
+                if (r.status === 415) throw new Error('Tipo não suportado.');
+                if (r.status === 401 || r.status === 403) throw new Error('Sessão expirada.');
                 if (!r.ok) {
                     return r.text().then(function(text) {
                         var msg = 'Erro no servidor';
@@ -2531,9 +2684,9 @@ async function quickToggleManStatus(id, currentStatus) {
             try {
                 var allOS = await apiFetch('/api/ordens-servico?page=0&size=100');
                 var osList = allOS.content || allOS || [];
-                var linkedOS = osList.filter(function(o) { return o.titulo && o.titulo.indexOf('Manuten��o #' + id) !== -1; });
+                var linkedOS = osList.filter(function(o) { return o.titulo && o.titulo.indexOf('Manutenção #' + id) !== -1; });
                 for (var oi = 0; oi < linkedOS.length; oi++) {
-                    await apiFetch('/api/ordens-servico/' + linkedOS[oi].id, { method: 'PUT', body: JSON.stringify({ ...linkedOS[oi], status: newStatus === 'CONCLUIDA' ? 'CONCLUIDA' : 'CANCELADA', solucao: 'Manuten��o #' + id + ' ' + (newStatus === 'CONCLUIDA' ? 'concluida' : 'cancelada') }) });
+                    await apiFetch('/api/ordens-servico/' + linkedOS[oi].id, { method: 'PUT', body: JSON.stringify({ ...linkedOS[oi], status: newStatus === 'CONCLUIDA' ? 'CONCLUIDA' : 'CANCELADA', solucao: 'Manutenção #' + id + ' ' + (newStatus === 'CONCLUIDA' ? 'concluida' : 'cancelada') }) });
                 }
             } catch (e) { }
         }
@@ -2558,7 +2711,7 @@ function setupManutencaoPhotoUpload() {
         return !!n.match(/\.(jpe?g|jfif|png|gif|webp|bmp|tiff?|heic|heif|ico|avif|svg)$/);
     }
     function handleManPhotoFile(file) {
-        if (!isManImageFile(file)) { showToast('Formato n�o suportado.', 'error'); return; }
+        if (!isManImageFile(file)) { showToast('Formato não suportado.', 'error'); return; }
         if (file.size > 50 * 1024 * 1024) { showToast('Arquivo excede 50MB.', 'error'); return; }
         _manPhotoUploading = true;
         preview.innerHTML = '<div style="text-align:center;padding:16px;"><div class="spinner"></div><p style="font-size:11px;color:var(--text-muted);margin-top:6px;">Enviando...</p></div>';
@@ -2582,8 +2735,8 @@ function setupManutencaoPhotoUpload() {
         fetchUploadJSON(file)
             .then(function(r) {
                 if (r.status === 413) throw new Error('Arquivo muito grande.');
-                if (r.status === 415) throw new Error('Tipo n�o suportado.');
-                if (r.status === 401 || r.status === 403) throw new Error('Sess�o expirada.');
+                if (r.status === 415) throw new Error('Tipo não suportado.');
+                if (r.status === 401 || r.status === 403) throw new Error('Sessão expirada.');
                 if (!r.ok) {
                     return r.text().then(function(text) {
                         var msg = 'Erro no servidor';
@@ -2638,7 +2791,7 @@ async function loadManutencoes(page) {
         renderManKpis();
     } catch (e) {
         var tb = document.querySelector('#manutencoesTable tbody');
-        if (tb) tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)"><i class="fas fa-inbox"></i> Nenhuma manuten��o encontrada</td></tr>';
+        if (tb) tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)"><i class="fas fa-inbox"></i> Nenhuma manutenção encontrada</td></tr>';
     }
 }
 
@@ -2681,11 +2834,11 @@ function renderManKpiDetail(key) {
     var container = document.getElementById('manKpiDetail');
     if (!container) return;
     var title = '', icon = '', color = '', statusFilter = '';
-    if (key === 'man-kpi-total') { title = 'Todas as Manuten��es'; icon = 'fa-tools'; color = 'cyan'; statusFilter = ''; }
-    else if (key === 'man-kpi-pendentes') { title = 'Manuten��es Pendentes'; icon = 'fa-clock'; color = 'yellow'; statusFilter = '&status=PENDENTE'; }
-    else if (key === 'man-kpi-andamento') { title = 'Manuten��es Em Andamento'; icon = 'fa-spinner'; color = 'orange'; statusFilter = '&status=EM_ANDAMENTO'; }
-    else if (key === 'man-kpi-concluidas') { title = 'Manuten��es Conclu�das'; icon = 'fa-check-double'; color = 'green'; statusFilter = '&status=CONCLUIDA'; }
-    else if (key === 'man-kpi-canceladas') { title = 'Manuten��es Canceladas'; icon = 'fa-times-circle'; color = 'red'; statusFilter = '&status=CANCELADA'; }
+    if (key === 'man-kpi-total') { title = 'Todas as Manutenções'; icon = 'fa-tools'; color = 'cyan'; statusFilter = ''; }
+    else if (key === 'man-kpi-pendentes') { title = 'Manutenções Pendentes'; icon = 'fa-clock'; color = 'yellow'; statusFilter = '&status=PENDENTE'; }
+    else if (key === 'man-kpi-andamento') { title = 'Manutenções Em Andamento'; icon = 'fa-spinner'; color = 'orange'; statusFilter = '&status=EM_ANDAMENTO'; }
+    else if (key === 'man-kpi-concluidas') { title = 'Manutenções Concluídas'; icon = 'fa-check-double'; color = 'green'; statusFilter = '&status=CONCLUIDA'; }
+    else if (key === 'man-kpi-canceladas') { title = 'Manutenções Canceladas'; icon = 'fa-times-circle'; color = 'red'; statusFilter = '&status=CANCELADA'; }
     apiFetch('/api/manutencoes?page=0&size=100' + statusFilter + '&showConcluidas=true').then(function(d) {
         closeManKpiDetail();
         var list = (d.content || d || []);
@@ -2705,7 +2858,7 @@ function renderManutencoes(data, searchTerm, serverStatus) {
     var tb = document.querySelector('#manutencoesTable tbody');
     if (!tb) return;
     if (!data.content || data.content.length === 0) {
-        tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)"><i class="fas fa-inbox"></i> Nenhuma manuten��o encontrada</td></tr>';
+        tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)"><i class="fas fa-inbox"></i> Nenhuma manutenção encontrada</td></tr>';
         var mp = document.getElementById('man-pagination'); if (mp) mp.innerHTML = '';
         return;
     }
@@ -2715,7 +2868,7 @@ function renderManutencoes(data, searchTerm, serverStatus) {
         items = items.filter(function(m) { return (m.computadorNome || '').toLowerCase().indexOf(sl) !== -1 || (m.tecnicoResponsavel || '').toLowerCase().indexOf(sl) !== -1 || (m.descricao || '').toLowerCase().indexOf(sl) !== -1; });
     }
     if (items.length === 0) {
-        tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)"><i class="fas fa-inbox"></i> Nenhuma manuten��o encontrada</td></tr>';
+        tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)"><i class="fas fa-inbox"></i> Nenhuma manutenção encontrada</td></tr>';
         var mp2 = document.getElementById('man-pagination'); if (mp2) mp2.innerHTML = '';
         return;
     }
@@ -2733,15 +2886,15 @@ function renderManutencoes(data, searchTerm, serverStatus) {
         var tempoAberto = '';
         if (dtCadastro) {
             var diff = Math.floor((Date.now() - dtCadastro.getTime()) / 86400000);
-            tempoAberto = diff === 0 ? 'Hoje' : diff + 'd atr�s';
+            tempoAberto = diff === 0 ? 'Hoje' : diff + 'd atrás';
         }
-        return '<tr style="' + rowStyle + '"><td class="font-medium">' + checkIcon + m.id + '</td><td>' + escapeHtml(m.computadorNome) + '</td><td><span class="badge badge-' + escapeHtml((m.tipo || 'PREVENTIVA').toLowerCase()) + '">' + escapeHtml(m.tipo) + '</span></td><td style="cursor:pointer;" onclick="quickToggleManStatus(' + m.id + ',\'' + escapeJsStr(m.status) + '\')"><span class="badge badge-' + escapeHtml((m.status || 'PENDENTE').toLowerCase().replace(/_/g, '-')) + '">' + escapeHtml((m.status || 'PENDENTE').replace(/_/g, ' ')) + '</span>' + (tempoAberto ? '<div style="font-size:9px;color:var(--text-muted);margin-top:2px;">' + tempoAberto + '</div>' : '') + '</td><td>' + escapeHtml(m.tecnicoResponsavel || '-') + '</td><td><div style="display:flex;gap:4px;"><button onclick="showManutencaoForm(' + m.id + ')" class="action-btn action-btn-edit"><i class="fas fa-pen"></i></button><button onclick="confirmDelete(\'manuten��o\',' + m.id + ',\'Manuten��o #' + m.id + '\')" class="action-btn action-btn-delete"><i class="fas fa-trash"></i></button></div></td></tr>';
+        return '<tr style="' + rowStyle + '"><td class="font-medium">' + checkIcon + m.id + '</td><td>' + escapeHtml(m.computadorNome) + '</td><td><span class="badge badge-' + escapeHtml((m.tipo || 'PREVENTIVA').toLowerCase()) + '">' + escapeHtml(m.tipo) + '</span></td><td style="cursor:pointer;" onclick="quickToggleManStatus(' + m.id + ',\'' + escapeJsStr(m.status) + '\')"><span class="badge badge-' + escapeHtml((m.status || 'PENDENTE').toLowerCase().replace(/_/g, '-')) + '">' + escapeHtml((m.status || 'PENDENTE').replace(/_/g, ' ')) + '</span>' + (tempoAberto ? '<div style="font-size:9px;color:var(--text-muted);margin-top:2px;">' + tempoAberto + '</div>' : '') + '</td><td>' + escapeHtml(m.tecnicoResponsavel || '-') + '</td><td><div style="display:flex;gap:4px;"><button onclick="showManutencaoForm(' + m.id + ')" class="action-btn action-btn-edit"><i class="fas fa-pen"></i></button><button onclick="confirmDelete(\'manutenção\',' + m.id + ',\'Manutenção #' + m.id + '\')" class="action-btn action-btn-delete"><i class="fas fa-trash"></i></button></div></td></tr>';
     }).join('');
 }
 
 async function showManutencaoForm(id) {
     var m = { tipo: 'CORRETIVA', status: 'PENDENTE', descricao: '' };
-    if (id) { try { m = await apiFetch('/api/manutencoes/' + id); } catch (e) { showToast('Erro ao carregar manuten��o: ' + e.message, 'error'); return; } }
+    if (id) { try { m = await apiFetch('/api/manutencoes/' + id); } catch (e) { showToast('Erro ao carregar manutenção: ' + e.message, 'error'); return; } }
     try { allComputadores = await apiFetch('/api/computadores/paginado?page=0&size=1000&status=&termo='); } catch (e) { allComputadores = { content: [] }; }
     var compList = allComputadores.content || allComputadores;
     var manCompItems = compList.map(function(c) { return { value: String(c.id), label: c.nomePc, sub: c.numeroSerie }; });
@@ -2750,14 +2903,14 @@ async function showManutencaoForm(id) {
     try { usuarios = await apiFetch('/api/usuarios'); } catch (e) { }
     var tecnicos = usuarios.filter(function(u) { return u.perfil === 'ADMIN' || u.perfil === 'TECNICO'; });
     var manTecItems = tecnicos.map(function(u) { return { value: u.nomeCompleto, label: u.nomeCompleto, sub: u.perfil }; });
-    openModal(id ? 'Editar Manuten��o' : 'Nova Manuten��o',
+    openModal(id ? 'Editar Manutenção' : 'Nova Manutenção',
         '<form id="manForm"><div class="form-group"><label class="form-label">Computador</label><div class="searchable-dropdown"><input type="text" id="manCompSearch" required class="form-input" placeholder="Buscar computador..." autocomplete="off" value="' + escapeAttr(manCompInit ? manCompInit.nomePc : (m.computadorNome || '')) + '"><input type="hidden" id="manComputador" value="' + (m.computadorId != null ? m.computadorId : '') + '"><div id="manCompList" class="searchable-dropdown-list" style="display:none;"></div></div></div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;"><div class="form-group"><label class="form-label">Tipo</label><select id="manTipo" class="form-input"><option value="CORRETIVA"' + (m.tipo === 'CORRETIVA' ? ' selected' : '') + '>Corretiva</option><option value="PREVENTIVA"' + (m.tipo === 'PREVENTIVA' ? ' selected' : '') + '>Preventiva</option><option value="PREDITIVA"' + (m.tipo === 'PREDITIVA' ? ' selected' : '') + '>Preditiva</option><option value="EMERGENCIAL"' + (m.tipo === 'EMERGENCIAL' ? ' selected' : '') + '>Emergencial</option></select></div>' +
-        '<div class="form-group"><label class="form-label">Status</label><select id="manStatus" class="form-input"><option value="PENDENTE"' + (m.status === 'PENDENTE' ? ' selected' : '') + '>Pendente</option><option value="EM_ANDAMENTO"' + (m.status === 'EM_ANDAMENTO' ? ' selected' : '') + '>Em Andamento</option><option value="CONCLUIDA"' + (m.status === 'CONCLUIDA' ? ' selected' : '') + '>Conclu�da</option><option value="CANCELADA"' + (m.status === 'CANCELADA' ? ' selected' : '') + '>Cancelada</option></select></div></div>' +
-        '<div class="form-group" style="margin-top:14px;"><label class="form-label">Descri��o</label><textarea id="manDescricao" required class="form-input" style="min-height:80px;resize:vertical;">' + escapeHtml(m.descricao || '') + '</textarea></div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;"><div class="form-group"><label class="form-label">T�cnico Respons�vel</label><div class="searchable-dropdown"><input type="text" id="manTecSearch" class="form-input" placeholder="Buscar t�cnico..." autocomplete="off" value="' + escapeAttr(m.tecnicoResponsavel || '') + '"><input type="hidden" id="manTecnico" value="' + escapeAttr(m.tecnicoResponsavel || '') + '"><div id="manTecList" class="searchable-dropdown-list" style="display:none;"></div></div></div></div>' +
-        '<div class="form-group" style="margin-top:14px;"><label class="form-label">Pe�as Trocadas</label><input id="manPecas" value="' + escapeAttr(m.pecasTrocadas || '') + '" class="form-input"></div>' +
-        '<div class="form-group" style="margin-top:14px;"><label class="form-label">Observa��es</label><textarea id="manObs" class="form-input" style="min-height:60px;resize:vertical;">' + escapeHtml(m.observacoes || '') + '</textarea></div>' +
+        '<div class="form-group"><label class="form-label">Status</label><select id="manStatus" class="form-input"><option value="PENDENTE"' + (m.status === 'PENDENTE' ? ' selected' : '') + '>Pendente</option><option value="EM_ANDAMENTO"' + (m.status === 'EM_ANDAMENTO' ? ' selected' : '') + '>Em Andamento</option><option value="CONCLUIDA"' + (m.status === 'CONCLUIDA' ? ' selected' : '') + '>Concluída</option><option value="CANCELADA"' + (m.status === 'CANCELADA' ? ' selected' : '') + '>Cancelada</option></select></div></div>' +
+        '<div class="form-group" style="margin-top:14px;"><label class="form-label">Descrição</label><textarea id="manDescricao" required class="form-input" style="min-height:80px;resize:vertical;">' + escapeHtml(m.descricao || '') + '</textarea></div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;"><div class="form-group"><label class="form-label">Técnico Responsável</label><div class="searchable-dropdown"><input type="text" id="manTecSearch" class="form-input" placeholder="Buscar técnico..." autocomplete="off" value="' + escapeAttr(m.tecnicoResponsavel || '') + '"><input type="hidden" id="manTecnico" value="' + escapeAttr(m.tecnicoResponsavel || '') + '"><div id="manTecList" class="searchable-dropdown-list" style="display:none;"></div></div></div></div>' +
+        '<div class="form-group" style="margin-top:14px;"><label class="form-label">Peças Trocadas</label><input id="manPecas" value="' + escapeAttr(m.pecasTrocadas || '') + '" class="form-input"></div>' +
+        '<div class="form-group" style="margin-top:14px;"><label class="form-label">Observações</label><textarea id="manObs" class="form-input" style="min-height:60px;resize:vertical;">' + escapeHtml(m.observacoes || '') + '</textarea></div>' +
         '<div class="photo-upload-area" style="margin-top:14px;"><input type="file" id="manFotoFile" accept=".jpg,.jpeg,.jfif,.png,.gif,.webp,.bmp,.tiff,.tif,.heic,.heif,.avif,.svg,.ico,image/*" style="display:none;"><div id="manFotoDropZone" class="foto-drop-zone" style="min-height:80px;"><div id="manFotoPreview" class="foto-preview"><i class="fas fa-camera" style="font-size:24px;color:var(--text-muted);margin-bottom:8px;opacity:0.4;"></i><p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">Arraste ou clique para adicionar foto</p><button type="button" onclick="event.stopPropagation();document.getElementById(\'manFotoFile\').click();" class="btn btn-primary btn-sm"><i class="fas fa-upload"></i> importar</button></div></div><input type="hidden" id="manFotoUrlFinal" value="' + escapeAttr(m.fotoUrl || '') + '"></div></form>',
         '<button onclick="closeModal()" class="btn btn-ghost btn-sm">Cancelar</button><button onclick="document.getElementById(\'manForm\').requestSubmit()" class="btn btn-primary btn-sm"><i class="fas fa-save"></i> ' + (id ? 'Salvar' : 'Cadastrar') + '</button>'
     );
@@ -2784,14 +2937,14 @@ async function showManutencaoForm(id) {
         try {
             if (id) {
                 await apiFetch('/api/manutencoes/' + id, { method: 'PUT', body: JSON.stringify(p) });
-                showToast('Manuten��o atualizada!');
+                showToast('Manutenção atualizada!');
             } else {
                 var res = await apiFetch('/api/manutencoes', { method: 'POST', body: JSON.stringify(p) });
-                showToast('Manuten��o cadastrada!');
+                showToast('Manutenção cadastrada!');
                 if (res && res.id) {
                     try {
                         var comp = compList.find(function(c) { return c.id === p.computadorId; });
-                        await apiFetch('/api/ordens-servico', { method: 'POST', body: JSON.stringify({ titulo: 'OS - Manuten��o #' + res.id + ' - ' + (comp ? comp.nomePc : ''), descricao: 'Ordem aberta automaticamente para manuten��o #' + res.id, computadorId: p.computadorId, prioridade: 'MEDIA', status: 'ABERTA', solicitante: p.tecnicoResponsavel || '', tecnicoResponsavel: p.tecnicoResponsavel || '', solucao: 'Aguardando in�cio da manuten��o ' + res.id }) });
+                        await apiFetch('/api/ordens-servico', { method: 'POST', body: JSON.stringify({ titulo: 'OS - Manutenção #' + res.id + ' - ' + (comp ? comp.nomePc : ''), descricao: 'Ordem aberta automaticamente para manutenção #' + res.id, computadorId: p.computadorId, prioridade: 'MEDIA', status: 'ABERTA', solicitante: p.tecnicoResponsavel || '', tecnicoResponsavel: p.tecnicoResponsavel || '', solucao: 'Aguardando início da manutenção ' + res.id }) });
                     } catch (e) { console.warn('[MANUT] Erro ao criar OS:', e); }
                 }
             }
@@ -2806,9 +2959,9 @@ async function showManutencaoForm(id) {
                         var allOSUrl = '/api/ordens-servico?page=0&size=100' + (statusFiltro ? '&status=' + statusFiltro : '');
                         var allOS = await apiFetch(allOSUrl);
                         var osList = allOS.content || allOS || [];
-                        var linkedOS = osList.filter(function(o) { return o.titulo && o.titulo.indexOf('Manuten��o #' + manutId) !== -1; });
+                        var linkedOS = osList.filter(function(o) { return o.titulo && o.titulo.indexOf('Manutenção #' + manutId) !== -1; });
                         var osStatusMap = { 'EM_ANDAMENTO': 'EM_EXECUCAO', 'CONCLUIDA': 'CONCLUIDA', 'CANCELADA': 'CANCELADA' };
-                        var osSolucaoMap = { 'EM_ANDAMENTO': 'Manuten��o #' + manutId + ' em andamento', 'CONCLUIDA': 'Manuten��o #' + manutId + ' concluida', 'CANCELADA': 'Manuten��o #' + manutId + ' cancelada' };
+                        var osSolucaoMap = { 'EM_ANDAMENTO': 'Manutenção #' + manutId + ' em andamento', 'CONCLUIDA': 'Manutenção #' + manutId + ' concluida', 'CANCELADA': 'Manutenção #' + manutId + ' cancelada' };
                         for (var oi = 0; oi < linkedOS.length; oi++) {
                             await apiFetch('/api/ordens-servico/' + linkedOS[oi].id, { method: 'PUT', body: JSON.stringify({ ...linkedOS[oi], status: osStatusMap[p.status], solucao: osSolucaoMap[p.status] }) });
                         }
@@ -2881,8 +3034,8 @@ function renderOsKpiDetail(key) {
     if (key === 'os-kpi-total') { title = 'Todas as OS'; icon = 'fa-clipboard-list'; color = 'cyan'; statusFilter = ''; }
     else if (key === 'os-kpi-abertas') { title = 'OS Abertas'; icon = 'fa-folder-open'; color = 'orange'; statusFilter = '&status=ABERTA'; }
     else if (key === 'os-kpi-analise') { title = 'OS Em Analise'; icon = 'fa-search'; color = 'yellow'; statusFilter = '&status=EM_ANALISE'; }
-    else if (key === 'os-kpi-execucao') { title = 'OS Em Execu��o'; icon = 'fa-cogs'; color = 'green'; statusFilter = '&status=EM_EXECUCAO'; }
-    else if (key === 'os-kpi-concluidas') { title = 'OS Conclu�das'; icon = 'fa-check-circle'; color = 'green'; statusFilter = '&status=CONCLUIDA'; }
+    else if (key === 'os-kpi-execucao') { title = 'OS Em Execução'; icon = 'fa-cogs'; color = 'green'; statusFilter = '&status=EM_EXECUCAO'; }
+    else if (key === 'os-kpi-concluidas') { title = 'OS Concluídas'; icon = 'fa-check-circle'; color = 'green'; statusFilter = '&status=CONCLUIDA'; }
     apiFetch('/api/ordens-servico?page=0&size=100' + statusFilter).then(function(d) {
         closeOsKpiDetail();
         var list = (d.content || d || []);
@@ -2890,7 +3043,7 @@ function renderOsKpiDetail(key) {
         var ov = document.createElement('div'); ov.id = 'sdOverlay-os'; ov.className = 'sd-overlay';
         var ct = document.createElement('div'); ct.id = 'sdContainer-os'; ct.className = 'sd-container';
         var itemsHtml = list.map(function(o) {
-            return '<div class="stat-detail-item" onclick="showOrdemForm(' + o.id + ')"><div class="stat-detail-item-icon" style="background:var(--' + color + '-bg);color:var(--' + color + ');"><i class="fas fa-clipboard-list"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">' + escapeHtml(o.titulo) + '</div><div class="stat-detail-item-sub">' + escapeHtml(o.computadorNome || 'Sem v�nculo') + ' - ' + escapeHtml(o.solicitante || '') + '</div></div><div class="stat-detail-item-badge"><span class="badge badge-' + escapeHtml((o.status || 'ABERTA').toLowerCase().replace(/_/g, '-')) + '">' + escapeHtml((o.status || 'ABERTA').replace(/_/g, ' ')) + '</span></div></div>';
+            return '<div class="stat-detail-item" onclick="showOrdemForm(' + o.id + ')"><div class="stat-detail-item-icon" style="background:var(--' + color + '-bg);color:var(--' + color + ');"><i class="fas fa-clipboard-list"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">' + escapeHtml(o.titulo) + '</div><div class="stat-detail-item-sub">' + escapeHtml(o.computadorNome || 'Sem vínculo') + ' - ' + escapeHtml(o.solicitante || '') + '</div></div><div class="stat-detail-item-badge"><span class="badge badge-' + escapeHtml((o.status || 'ABERTA').toLowerCase().replace(/_/g, '-')) + '">' + escapeHtml((o.status || 'ABERTA').replace(/_/g, ' ')) + '</span></div></div>';
         }).join('');
         if (!itemsHtml) itemsHtml = '<div class="stat-detail-empty"><i class="fas fa-inbox"></i> Nenhum item encontrado</div>';
         ct.innerHTML = '<div class="stat-detail-header"><h4><i class="fas ' + icon + '" style="color:var(--' + color + ');"></i> ' + title + ' <span style="font-weight:400;font-size:11px;color:var(--text-muted);">(' + count + ' itens)</span></h4><button class="stat-detail-close" onclick="closeOsKpiDetail()"><i class="fas fa-times"></i> Fechar</button></div><div class="stat-detail-body">' + itemsHtml + '</div>';
@@ -2981,16 +3134,16 @@ async function showOrdemForm(id, prefill) {
     var tecnicos = usuarios.filter(function(u) { return u.perfil === 'ADMIN' || u.perfil === 'TECNICO'; });
     var osTecItems = tecnicos.map(function(u) { return { value: u.nomeCompleto, label: u.nomeCompleto, sub: u.perfil }; });
     var dataPrevisao = o.dataPrevisao ? o.dataPrevisao.substring(0, 10) : '';
-    openModal(id ? 'Editar Ordem de Servi�o' : 'Nova Ordem de Servi�o',
+    openModal(id ? 'Editar Ordem de Serviço' : 'Nova Ordem de Serviço',
         '<form id="osForm"><div class="form-group"><label class="form-label">Titulo *</label><input id="osTitulo" value="' + escapeAttr(o.titulo) + '" required class="form-input"></div>' +
-        '<div class="form-group" style="margin-top:14px;"><label class="form-label">Descri��o</label><textarea id="osDescricao" class="form-input" style="min-height:80px;resize:vertical;">' + escapeHtml(o.descricao || '') + '</textarea></div>' +
+        '<div class="form-group" style="margin-top:14px;"><label class="form-label">Descrição</label><textarea id="osDescricao" class="form-input" style="min-height:80px;resize:vertical;">' + escapeHtml(o.descricao || '') + '</textarea></div>' +
         '<div class="form-group" style="margin-top:14px;"><label class="form-label">Equipamento</label><div class="searchable-dropdown"><input type="text" id="osCompSearch" class="form-input" placeholder="Buscar equipamento..." autocomplete="off" value="' + escapeAttr(osCompInit ? osCompInit.nomePc : (o.computadorNome || '')) + '"><input type="hidden" id="osComputador" value="' + (o.computadorId != null ? o.computadorId : '') + '"><div id="osCompList" class="searchable-dropdown-list" style="display:none;"></div></div></div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;"><div class="form-group"><label class="form-label">Prioridade</label><select id="osPrioridade" class="form-input"><option value="BAIXA"' + (o.prioridade === 'BAIXA' ? ' selected' : '') + '>Baixa</option><option value="MEDIA"' + (o.prioridade === 'MEDIA' ? ' selected' : '') + '>Media</option><option value="ALTA"' + (o.prioridade === 'ALTA' ? ' selected' : '') + '>Alta</option><option value="CRITICA"' + (o.prioridade === 'CRITICA' ? ' selected' : '') + '>Critica</option></select></div>' +
-        '<div class="form-group"><label class="form-label">Status</label><select id="osStatus" class="form-input"><option value="ABERTA"' + (o.status === 'ABERTA' ? ' selected' : '') + '>Aberta</option><option value="EM_ANALISE"' + (o.status === 'EM_ANALISE' ? ' selected' : '') + '>Em Analise</option><option value="EM_EXECUCAO"' + (o.status === 'EM_EXECUCAO' ? ' selected' : '') + '>Em Execu��o</option><option value="CONCLUIDA"' + (o.status === 'CONCLUIDA' ? ' selected' : '') + '>Conclu�da</option><option value="CANCELADA"' + (o.status === 'CANCELADA' ? ' selected' : '') + '>Cancelada</option></select></div></div>' +
+        '<div class="form-group"><label class="form-label">Status</label><select id="osStatus" class="form-input"><option value="ABERTA"' + (o.status === 'ABERTA' ? ' selected' : '') + '>Aberta</option><option value="EM_ANALISE"' + (o.status === 'EM_ANALISE' ? ' selected' : '') + '>Em Analise</option><option value="EM_EXECUCAO"' + (o.status === 'EM_EXECUCAO' ? ' selected' : '') + '>Em Execução</option><option value="CONCLUIDA"' + (o.status === 'CONCLUIDA' ? ' selected' : '') + '>Concluída</option><option value="CANCELADA"' + (o.status === 'CANCELADA' ? ' selected' : '') + '>Cancelada</option></select></div></div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;"><div class="form-group"><label class="form-label">Solicitante</label><input id="osSolicitante" value="' + escapeAttr(o.solicitante || '') + '" class="form-input"></div>' +
-        '<div class="form-group"><label class="form-label">Respons�vel</label><div class="searchable-dropdown"><input type="text" id="osTecSearch" class="form-input" placeholder="Buscar respons�vel..." autocomplete="off" value="' + escapeAttr(o.tecnicoResponsavel || '') + '"><input type="hidden" id="osTecnico" value="' + escapeAttr(o.tecnicoResponsavel || '') + '"><div id="osTecList" class="searchable-dropdown-list" style="display:none;"></div></div></div></div>' +
-        '<div class="form-group" style="margin-top:14px;"><label class="form-label">Data Previs�o</label><input type="date" id="osDataPrevisao" value="' + dataPrevisao + '" class="form-input"></div>' +
-        '<div class="form-group" style="margin-top:14px;"><label class="form-label">Solu��o</label><textarea id="osSolucao" class="form-input" style="min-height:60px;resize:vertical;">' + escapeHtml(o.solucao || '') + '</textarea></div></form>',
+        '<div class="form-group"><label class="form-label">Responsável</label><div class="searchable-dropdown"><input type="text" id="osTecSearch" class="form-input" placeholder="Buscar responsável..." autocomplete="off" value="' + escapeAttr(o.tecnicoResponsavel || '') + '"><input type="hidden" id="osTecnico" value="' + escapeAttr(o.tecnicoResponsavel || '') + '"><div id="osTecList" class="searchable-dropdown-list" style="display:none;"></div></div></div></div>' +
+        '<div class="form-group" style="margin-top:14px;"><label class="form-label">Data Previsão</label><input type="date" id="osDataPrevisao" value="' + dataPrevisao + '" class="form-input"></div>' +
+        '<div class="form-group" style="margin-top:14px;"><label class="form-label">Solução</label><textarea id="osSolucao" class="form-input" style="min-height:60px;resize:vertical;">' + escapeHtml(o.solucao || '') + '</textarea></div></form>',
         '<button onclick="closeModal()" class="btn btn-ghost btn-sm">Cancelar</button><button onclick="document.getElementById(\'osForm\').requestSubmit()" class="btn btn-primary btn-sm"><i class="fas fa-save"></i> ' + (id ? 'Salvar' : 'Cadastrar') + '</button>'
     );
     setupSearchableSelect('osCompSearch', 'osComputador', 'osCompList', osCompItems, false);
@@ -3031,7 +3184,7 @@ async function loadRelatorios() {
         var eqList = eqData.content || eqData;
         var r2 = await Promise.all([apiFetch('/api/computadores/estatisticas').catch(function() { return null; }), apiFetch('/api/manutencoes/estatisticas').catch(function() { return null; }), apiFetch('/api/ordens-servico/estatisticas').catch(function() { return null; })]);
         renderChartMarcas(eqList); renderChartManTipos(r2[1]); renderChartManutencoesMes(r2[1]); renderChartOSPrioridade(r2[2]); renderChartOSStatus(r2[2]); renderChartManStatus(r2[1]); renderStatsGerais(r2[0], r2[1], r2[2]);
-    } catch (e) { showToast('Erro ao carregar relat�rios', 'error'); }
+    } catch (e) { showToast('Erro ao carregar relatórios', 'error'); }
 }
 
 function renderChartMarcas(eq) {
@@ -3041,7 +3194,26 @@ function renderChartMarcas(eq) {
     if (s.length === 0) s = [['Sem dados', 0]];
     var palette = [['#7dfce4','#30c8a8','#0affdc'],['#b090f0','#9070d0','#c0a0ff'],['#f080b0','#d06090','#ff70a0'],['#f0b060','#d09040','#ffb840'],['#70e8a0','#40c880','#60ffb0'],['#70b0f0','#5090d0','#60c0ff'],['#f08080','#d06060','#ff7070'],['#f8e070','#d8b830','#ffe840'],['#50d0d0','#30b0c0','#60e8e8'],['#a090e0','#8070c0','#b0a0ff']];
     var cArr = s.map(function(_, i) { var p = palette[i % palette.length]; var g = ctx.getContext('2d').createLinearGradient(0,0,400,0); g.addColorStop(0,'#ffffff'); g.addColorStop(0.05,p[2]); g.addColorStop(0.15,p[0]); g.addColorStop(0.55,p[0]); g.addColorStop(1,p[1]); return g; });
-    upsertChart(ctx, { type: 'bar', data: { labels: s.map(function(x) { return x[0]; }), datasets: [{ label: 'Quantidade', data: s.map(function(x) { return x[1]; }), backgroundColor: cArr, borderRadius: 6, borderSkipped: false, barPercentage: 0.65 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, layout: { padding: { right: 16 } }, plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(10,16,32,0.95)', titleColor: '#00e5c7', bodyColor: '#e4e8f1', borderColor: 'rgba(0,229,199,0.25)', borderWidth: 1, cornerRadius: 8, padding: 10, callbacks: { label: function(c) { return c.raw + ' equipamento(s)'; } } } }, scales: { x: { beginAtZero: true, ticks: { color: '#4e5a72', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.03)', lineWidth: 1 } }, y: { ticks: { color: '#8892a8', font: { size: 10, weight: '500' } }, grid: { display: false } } } } });
+    upsertChart(ctx, {
+        type: 'bar',
+        data: { labels: s.map(function(x) { return x[0]; }), datasets: [{ label: 'Equipamentos', data: s.map(function(x) { return x[1]; }), backgroundColor: cArr, borderRadius: 6, borderSkipped: false, barPercentage: 0.68 }] },
+        options: {
+            indexAxis: 'y',
+            responsive: true, maintainAspectRatio: false,
+            layout: { padding: { top: 6, right: 54, bottom: 4 } },
+            plugins: {
+                legend: { display: false },
+                tooltip: cartTooltip(' equipamento(s)'),
+                valueLabels: { enabled: true, color: '#e4e8f1', offset: 6 }
+            },
+            scales: {
+                // eixo X = valor (quantidade) -> grid vertical para leitura
+                x: cartAxisX('Equipamentos', { beginAtZero: true, grid: { display: true, color: CART.grid } }),
+                // eixo Y = categoria (marca) -> sem grid
+                y: cartAxisY('Marca', { grid: { display: false }, ticks: { color: '#8892a8', font: { size: 10, weight: '600' }, autoSkip: false, padding: 2 } })
+            }
+        }
+    });
 }
 
 function renderChartManutencoesMes(s) {
@@ -3052,52 +3224,157 @@ function renderChartManutencoesMes(s) {
     if (lb.length === 0) { lb = ['Sem dados']; vl = [0]; }
     var gFill = ctx.getContext('2d').createLinearGradient(0,0,0,260); gFill.addColorStop(0,'rgba(125,252,228,0.25)'); gFill.addColorStop(0.5,'rgba(125,252,228,0.08)'); gFill.addColorStop(1,'rgba(125,252,228,0.01)');
     var gLine = ctx.getContext('2d').createLinearGradient(0,0,400,0); gLine.addColorStop(0,'#7dfce4'); gLine.addColorStop(0.5,'#50e8d0'); gLine.addColorStop(1,'#30c8b0');
-    upsertChart(ctx, { type: 'line', data: { labels: lb, datasets: [{ label: 'Manuten��es', data: vl, borderColor: gLine, backgroundColor: gFill, fill: true, tension: 0.4, pointRadius: 4, pointBackgroundColor: '#00e5c7', pointBorderColor: '#0c1022', pointBorderWidth: 2, pointHoverRadius: 7, pointHoverBackgroundColor: '#00e5c7', pointHoverBorderColor: '#fff', pointHoverBorderWidth: 2, borderWidth: 2.5 }] }, options: { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 8, bottom: 4 } }, plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(10,16,32,0.95)', titleColor: '#00e5c7', bodyColor: '#e4e8f1', borderColor: 'rgba(0,229,199,0.25)', borderWidth: 1, cornerRadius: 8, padding: 10, callbacks: { label: function(c) { return c.raw + ' manuten��o(oes)'; } } } }, scales: { y: { beginAtZero: true, ticks: { color: '#4e5a72', font: { size: 10 }, stepSize: 1 }, grid: { color: 'rgba(255,255,255,0.03)', lineWidth: 1 } }, x: { ticks: { color: '#8892a8', font: { size: 10 } }, grid: { display: false } } } } });
+    upsertChart(ctx, {
+        type: 'line',
+        data: { labels: lb, datasets: [{ label: 'Manutencoes', data: vl, borderColor: gLine, backgroundColor: gFill, fill: true, tension: 0.35, pointRadius: 4, pointBackgroundColor: '#00e5c7', pointBorderColor: '#0c1022', pointBorderWidth: 2, pointHoverRadius: 7, pointHoverBackgroundColor: '#00e5c7', pointHoverBorderColor: '#fff', pointHoverBorderWidth: 2, borderWidth: 2.5 }] },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            layout: { padding: { top: 20, right: 12, bottom: 4 } },
+            plugins: {
+                legend: { display: false },
+                tooltip: cartTooltip(' manutencao(oes)'),
+                valueLabels: { enabled: true, color: '#bfeee7', offset: 10, fontSize: 10 }
+            },
+            scales: {
+                x: cartAxisX('Mes'),
+                y: cartAxisY('Manutencoes', { beginAtZero: true })
+            }
+        }
+    });
 }
 
 function renderChartManTipos(man) {
     var ctx = document.getElementById('chartManTipo'); if (!ctx) return;
-    var d = (man && man.porTipo) || {}; var labels = Object.keys(d); var vals = Object.values(d);
-    if (labels.length === 0) { labels = ['Sem dados']; vals = [0]; }
-    var palette = [['#7dfce4','#30c8a8','#0affdc'],['#b090f0','#9070d0','#c0a0ff'],['#f080b0','#d06090','#ff70a0'],['#f0b060','#d09040','#ffb840'],['#70e8a0','#40c880','#60ffb0'],['#70b0f0','#5090d0','#60c0ff']];
-    var cArr = labels.map(function(_, i) { var p = palette[i % palette.length]; var g = ctx.getContext('2d').createRadialGradient(90,90,5,90,90,160); g.addColorStop(0,'#ffffff'); g.addColorStop(0.08,p[2]); g.addColorStop(0.25,p[0]); g.addColorStop(0.65,p[0]); g.addColorStop(1,p[1]); return g; });
-    upsertChart(ctx, { type: 'doughnut', data: { labels: labels, datasets: [{ data: vals, backgroundColor: cArr, borderWidth: 2, borderColor: 'rgba(8,12,24,0.9)', hoverOffset: 8 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', layout: { padding: 8 }, plugins: { legend: { position: 'bottom', labels: { color: '#8892a8', padding: 12, usePointStyle: true, pointStyle: 'circle', font: { size: 10, family: 'Inter' } } }, tooltip: { backgroundColor: 'rgba(10,16,32,0.95)', titleColor: '#00e5c7', bodyColor: '#e4e8f1', borderColor: 'rgba(0,229,199,0.25)', borderWidth: 1, cornerRadius: 8, padding: 10, callbacks: { label: function(c) { var total = c.dataset.data.reduce(function(a, b) { return a + b; }, 0); var pct = total > 0 ? Math.round(c.raw / total * 100) : 0; return c.label + ': ' + c.raw + ' (' + pct + '%)'; } } } } } });
+    var d = (man && man.porTipo) || {};
+    // fluxo operacional: corretiva -> preventiva -> preditiva -> emergencial
+    var ordem = ['CORRETIVA', 'PREVENTIVA', 'PREDITIVA', 'EMERGENCIAL'];
+    // mesmas cores das linhas do dashboard (Consistencia entre painéis)
+    var cores = { 'CORRETIVA': '#ff4757', 'PREVENTIVA': '#00e5c7', 'PREDITIVA': '#ffe600', 'EMERGENCIAL': '#ff9f43' };
+    var chaves = cartOrder(Object.keys(d), ordem);
+    var labels = chaves.map(cartPretty);
+    var vals = chaves.map(function(k) { return d[k] || 0; });
+    var cg = chaves.map(function(k, i) { return cartBarGrad(ctx, cores[k] || CART_PALETTE[i % CART_PALETTE.length]); });
+    if (labels.length === 0) { labels = ['Sem dados']; vals = [0]; cg = [cartBarGrad(ctx, CART_PALETTE[0])]; }
+    upsertChart(ctx, {
+        type: 'bar',
+        data: { labels: labels, datasets: [{ label: 'Manutencoes', data: vals, backgroundColor: cg, borderRadius: 6, borderSkipped: false, barPercentage: 0.62, categoryPercentage: 0.78 }] },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            layout: { padding: { top: 20, right: 8, left: 2, bottom: 2 } },
+            plugins: {
+                legend: { display: false },
+                tooltip: cartTooltip(' manutencao(oes)'),
+                valueLabels: { enabled: true, color: '#e4e8f1', offset: 6 }
+            },
+            scales: {
+                x: cartAxisX('Tipo de manutencao'),
+                y: cartAxisY('Manutencoes', { beginAtZero: true })
+            }
+        }
+    });
 }
 
 function renderChartOSPrioridade(os) {
     var ctx = document.getElementById('chartOSPrioridade'); if (!ctx) return;
-    var d = (os && os.porPrioridade) || {}; var labels = Object.keys(d); var vals = Object.values(d);
-    if (labels.length === 0) { labels = ['Sem dados']; vals = [0]; }
-    var palette = [['#70e8a0','#40c880','#60ffb0'],['#f8e070','#d8b830','#ffe840'],['#f0b060','#d09040','#ffb840'],['#f080b0','#d06090','#ff70a0'],['#b080f0','#9060d0','#c0a0ff']];
-    var cArr = labels.map(function(_, i) { var p = palette[i % palette.length]; var g = ctx.getContext('2d').createRadialGradient(90,90,5,90,90,160); g.addColorStop(0,'#ffffff'); g.addColorStop(0.08,p[2]); g.addColorStop(0.25,p[0]); g.addColorStop(0.65,p[0]); g.addColorStop(1,p[1]); return g; });
-    upsertChart(ctx, { type: 'doughnut', data: { labels: labels, datasets: [{ data: vals, backgroundColor: cArr, borderWidth: 2, borderColor: 'rgba(8,12,24,0.9)', hoverOffset: 8 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', layout: { padding: 8 }, plugins: { legend: { position: 'bottom', labels: { color: '#8892a8', padding: 12, usePointStyle: true, pointStyle: 'circle', font: { size: 10, family: 'Inter' } } }, tooltip: { backgroundColor: 'rgba(10,16,32,0.95)', titleColor: '#00e5c7', bodyColor: '#e4e8f1', borderColor: 'rgba(0,229,199,0.25)', borderWidth: 1, cornerRadius: 8, padding: 10, callbacks: { label: function(c) { var total = c.dataset.data.reduce(function(a, b) { return a + b; }, 0); var pct = total > 0 ? Math.round(c.raw / total * 100) : 0; return c.label + ': ' + c.raw + ' (' + pct + '%)'; } } } } } });
+    var d = (os && os.porPrioridade) || {};
+    // severidade crescente: barra mais alta = problema mais grave
+    var ordem = ['BAIXA', 'MEDIA', 'ALTA', 'CRITICA'];
+    var cores = { 'BAIXA': '#2fd08e', 'MEDIA': '#ffe600', 'ALTA': '#ff9f43', 'CRITICA': '#ff4757' };
+    var chaves = cartOrder(Object.keys(d), ordem);
+    var labels = chaves.map(cartPretty);
+    var vals = chaves.map(function(k) { return d[k] || 0; });
+    var cg = chaves.map(function(k, i) { return cartBarGrad(ctx, cores[k] || CART_PALETTE[i % CART_PALETTE.length]); });
+    if (labels.length === 0) { labels = ['Sem dados']; vals = [0]; cg = [cartBarGrad(ctx, CART_PALETTE[0])]; }
+    upsertChart(ctx, {
+        type: 'bar',
+        data: { labels: labels, datasets: [{ label: 'Ordens de Servico', data: vals, backgroundColor: cg, borderRadius: 6, borderSkipped: false, barPercentage: 0.62, categoryPercentage: 0.78 }] },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            layout: { padding: { top: 20, right: 8, left: 2, bottom: 2 } },
+            plugins: {
+                legend: { display: false },
+                tooltip: cartTooltip(' ordem(ns)'),
+                valueLabels: { enabled: true, color: '#e4e8f1', offset: 6 }
+            },
+            scales: {
+                x: cartAxisX('Prioridade'),
+                y: cartAxisY('Ordens de Servico', { beginAtZero: true })
+            }
+        }
+    });
 }
 
 function renderChartOSStatus(os) {
     var ctx = document.getElementById('chartOSStatus'); if (!ctx) return;
     os = os || {};
-    var labels = ['Aberta', 'Em Analise', 'Em Execucao', 'Concluida', 'Cancelada'];
-    var vals = [os.abertas || os.aberta || 0, os.emAnalise || 0, os.emExecucao || 0, os.concluidas || os.concluida || 0, os.canceladas || os.cancelada || 0];
-    var palette = [['#70b0f0','#5090d0','#60c0ff'],['#f8e070','#d8b830','#ffe840'],['#7dfce4','#30c8a8','#0affdc'],['#70e8a0','#40c880','#60ffb0'],['#f08080','#d06060','#ff7070']];
-    var cArr = labels.map(function(_, i) { var p = palette[i]; var g = ctx.getContext('2d').createRadialGradient(90,90,5,90,90,160); g.addColorStop(0,'#ffffff'); g.addColorStop(0.08,p[2]); g.addColorStop(0.25,p[0]); g.addColorStop(0.65,p[0]); g.addColorStop(1,p[1]); return g; });
-    upsertChart(ctx, { type: 'doughnut', data: { labels: labels, datasets: [{ data: vals, backgroundColor: cArr, borderWidth: 0, hoverOffset: 8 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', layout: { padding: 8 }, plugins: { legend: { position: 'bottom', labels: { color: '#8892a8', padding: 12, usePointStyle: true, pointStyle: 'circle', font: { size: 10, family: 'Inter' } } }, tooltip: { backgroundColor: 'rgba(10,16,32,0.95)', titleColor: '#00e5c7', bodyColor: '#e4e8f1', borderColor: 'rgba(0,229,199,0.25)', borderWidth: 1, cornerRadius: 8, padding: 10, callbacks: { label: function(c) { var total = c.dataset.data.reduce(function(a, b) { return a + b; }, 0); var pct = total > 0 ? Math.round(c.raw / total * 100) : 0; return c.label + ': ' + c.raw + ' (' + pct + '%)'; } } } } } });
+    // fluxo do ticket: aberta -> analise -> execucao -> concluida/cancelada
+    var ordem = ['ABERTA', 'EM_ANALISE', 'EM_EXECUCAO', 'CONCLUIDA', 'CANCELADA'];
+    var cores = { 'ABERTA': '#70b0f0', 'EM_ANALISE': '#ffe600', 'EM_EXECUCAO': '#00e5c7', 'CONCLUIDA': '#2fd08e', 'CANCELADA': '#ff4757' };
+    var d = os.porStatus || {};
+    var chaves = cartOrder(Object.keys(d), ordem);
+    var labels = chaves.map(cartPretty);
+    var vals = chaves.map(function(k) { return d[k] || 0; });
+    var cg = chaves.map(function(k, i) { return cartBarGrad(ctx, cores[k] || CART_PALETTE[i % CART_PALETTE.length]); });
+    if (labels.length === 0) {
+        // contrato antigo (campos planos) — mantido como reserva
+        labels = ['Aberta', 'Em Analise', 'Em Execucao', 'Concluida', 'Cancelada'];
+        vals = [os.abertas || os.aberta || 0, os.emAnalise || 0, os.emExecucao || 0, os.concluidas || os.concluida || 0, os.canceladas || os.cancelada || 0];
+        cg = labels.map(function(_, i) { return cartBarGrad(ctx, cores[ordem[i]]); });
+    }
+    upsertChart(ctx, {
+        type: 'bar',
+        data: { labels: labels, datasets: [{ label: 'Ordens de Servico', data: vals, backgroundColor: cg, borderRadius: 6, borderSkipped: false, barPercentage: 0.62, categoryPercentage: 0.78 }] },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            layout: { padding: { top: 20, right: 8, left: 2, bottom: 2 } },
+            plugins: {
+                legend: { display: false },
+                tooltip: cartTooltip(' ordem(ns)'),
+                valueLabels: { enabled: true, color: '#e4e8f1', offset: 6 }
+            },
+            scales: {
+                x: cartAxisX('Status'),
+                y: cartAxisY('Ordens de Servico', { beginAtZero: true })
+            }
+        }
+    });
 }
 
 function renderChartManStatus(man) {
     var ctx = document.getElementById('chartManStatus'); if (!ctx) return;
-    var d = (man && man.porStatus) || {}; var labels = Object.keys(d); var vals = Object.values(d);
-    if (labels.length === 0) { labels = ['Sem dados']; vals = [0]; }
-    var palette = [['#f8e070','#d8b830','#ffe840'],['#7dfce4','#30c8a8','#0affdc'],['#70e8a0','#40c880','#60ffb0'],['#f08080','#d06060','#ff7070'],['#909098','#707078','#b0b0b8']];
-    var cArr = labels.map(function(_, i) { var p = palette[i % palette.length]; var g = ctx.getContext('2d').createLinearGradient(0,0,0,260); g.addColorStop(0,'#ffffff'); g.addColorStop(0.05,p[2]); g.addColorStop(0.15,p[0]); g.addColorStop(0.6,p[0]); g.addColorStop(1,p[1]); return g; });
-    upsertChart(ctx, { type: 'bar', data: { labels: labels, datasets: [{ label: 'Quantidade', data: vals, backgroundColor: cArr, borderRadius: 6, borderSkipped: false, barPercentage: 0.6 }] }, options: { responsive: true, maintainAspectRatio: false, layout: { padding: { top: 8 } }, plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(10,16,32,0.95)', titleColor: '#00e5c7', bodyColor: '#e4e8f1', borderColor: 'rgba(0,229,199,0.25)', borderWidth: 1, cornerRadius: 8, padding: 10 } }, scales: { x: { ticks: { color: '#8892a8', font: { size: 10 } }, grid: { display: false } }, y: { beginAtZero: true, ticks: { color: '#4e5a72', font: { size: 10 }, stepSize: 1 }, grid: { color: 'rgba(255,255,255,0.03)', lineWidth: 1 } } } } });
+    var d = (man && man.porStatus) || {};
+    var ordem = ['PENDENTE', 'EM_ANDAMENTO', 'CONCLUIDA', 'CANCELADA'];
+    var cores = { 'PENDENTE': '#ffe600', 'EM_ANDAMENTO': '#00e5c7', 'CONCLUIDA': '#2fd08e', 'CANCELADA': '#ff4757' };
+    var chaves = cartOrder(Object.keys(d), ordem);
+    var labels = chaves.map(cartPretty);
+    var vals = chaves.map(function(k) { return d[k] || 0; });
+    var cg = chaves.map(function(k, i) { return cartBarGrad(ctx, cores[k] || CART_PALETTE[i % CART_PALETTE.length]); });
+    if (labels.length === 0) { labels = ['Sem dados']; vals = [0]; cg = [cartBarGrad(ctx, CART_PALETTE[0])]; }
+    upsertChart(ctx, {
+        type: 'bar',
+        data: { labels: labels, datasets: [{ label: 'Manutencoes', data: vals, backgroundColor: cg, borderRadius: 6, borderSkipped: false, barPercentage: 0.62, categoryPercentage: 0.78 }] },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            layout: { padding: { top: 20, right: 8, left: 2, bottom: 2 } },
+            plugins: {
+                legend: { display: false },
+                tooltip: cartTooltip(' manutencao(oes)'),
+                valueLabels: { enabled: true, color: '#e4e8f1', offset: 6 }
+            },
+            scales: {
+                x: cartAxisX('Status'),
+                y: cartAxisY('Manutencoes', { beginAtZero: true })
+            }
+        }
+    });
 }
 
 function exportRelatoriosCSV() {
     var rows = [];
-    rows.push(['Relat�rio de Estat�sticas - Invent�rio de TI']);
+    rows.push(['Relatório de Estatísticas - Inventário de TI']);
     rows.push(['Data: ' + new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR')]);
     rows.push([]);
-    rows.push(['Categoria', 'M�trica', 'Valor']);
+    rows.push(['Categoria', 'Métrica', 'Valor']);
     var gc = document.getElementById('statsGerais');
     if (gc) {
         var groups = gc.querySelectorAll('.stat-card-group');
@@ -3122,8 +3399,8 @@ function exportRelatoriosCSV() {
     var csv = rows.map(function(r) { return r.map(csvEscape).join(';'); }).join('\n');
     var BOM = '\uFEFF';
     var blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
-    var url = URL.createObjectURL(blob); var a = document.createElement('a'); a.href = url; a.download = 'relat�rios_invent�rio_ti_' + new Date().toISOString().slice(0, 10) + '.csv'; a.click(); setTimeout(function() { URL.revokeObjectURL(url); }, 100);
-    showToast('Relat�rio exportado!');
+    var url = URL.createObjectURL(blob); var a = document.createElement('a'); a.href = url; a.download = 'relatórios_inventário_ti_' + new Date().toISOString().slice(0, 10) + '.csv'; a.click(); setTimeout(function() { URL.revokeObjectURL(url); }, 100);
+    showToast('Relatório exportado!');
 }
 
 function renderStatsGerais(eq, man, os) {
@@ -3134,12 +3411,12 @@ function renderStatsGerais(eq, man, os) {
     html += '<div class="stat-card-group"><div class="stat-card-group-title"><i class="fas fa-desktop"></i> COMPUTADORES</div><div class="stat-card-items">';
     html += '<div class="stat-card-item" onclick="toggleStatDetail(\'eq-total\')" data-key="eq-total"><div class="stat-card-icon cyan"><i class="fas fa-desktop"></i></div><div><div class="stat-card-value">' + (eq.total || 0) + '</div><div class="stat-card-label">Total Computadores</div></div></div>';
     html += '<div class="stat-card-item" onclick="toggleStatDetail(\'eq-ativos\')" data-key="eq-ativos"><div class="stat-card-icon green"><i class="fas fa-check-circle"></i></div><div><div class="stat-card-value">' + (eq.ativos || 0) + '</div><div class="stat-card-label">Ativos</div></div></div>';
-    html += '<div class="stat-card-item" onclick="toggleStatDetail(\'eq-manut\')" data-key="eq-manut"><div class="stat-card-icon yellow"><i class="fas fa-wrench"></i></div><div><div class="stat-card-value">' + totalMan + '</div><div class="stat-card-label">Em Manuten��o</div></div></div>';
+    html += '<div class="stat-card-item" onclick="toggleStatDetail(\'eq-manut\')" data-key="eq-manut"><div class="stat-card-icon yellow"><i class="fas fa-wrench"></i></div><div><div class="stat-card-value">' + totalMan + '</div><div class="stat-card-label">Em Manutenção</div></div></div>';
     html += '</div></div>';
     html += '<div class="stat-card-group" style="margin-top:14px;"><div class="stat-card-group-title"><i class="fas fa-wrench"></i> MANUTENCOES</div><div class="stat-card-items">';
-    html += '<div class="stat-card-item" onclick="toggleStatDetail(\'man-total\')" data-key="man-total"><div class="stat-card-icon orange"><i class="fas fa-tools"></i></div><div><div class="stat-card-value">' + (man.total || 0) + '</div><div class="stat-card-label">Total Manuten��es</div></div></div>';
+    html += '<div class="stat-card-item" onclick="toggleStatDetail(\'man-total\')" data-key="man-total"><div class="stat-card-icon orange"><i class="fas fa-tools"></i></div><div><div class="stat-card-value">' + (man.total || 0) + '</div><div class="stat-card-label">Total Manutenções</div></div></div>';
     html += '<div class="stat-card-item" onclick="toggleStatDetail(\'man-pendentes\')" data-key="man-pendentes"><div class="stat-card-icon yellow"><i class="fas fa-clock"></i></div><div><div class="stat-card-value">' + (man.pendentes || 0) + '</div><div class="stat-card-label">Pendentes</div></div></div>';
-    html += '<div class="stat-card-item" onclick="toggleStatDetail(\'man-concluidas\')" data-key="man-concluidas"><div class="stat-card-icon green"><i class="fas fa-check-double"></i></div><div><div class="stat-card-value">' + (man.concluidas || 0) + '</div><div class="stat-card-label">Conclu�das</div></div></div>';
+    html += '<div class="stat-card-item" onclick="toggleStatDetail(\'man-concluidas\')" data-key="man-concluidas"><div class="stat-card-icon green"><i class="fas fa-check-double"></i></div><div><div class="stat-card-value">' + (man.concluidas || 0) + '</div><div class="stat-card-label">Concluídas</div></div></div>';
     html += '</div></div>';
     html += '<div class="stat-card-group" style="margin-top:14px;"><div class="stat-card-group-title"><i class="fas fa-clock"></i> CICLO MANUTENCAO (8 meses)</div><div class="stat-card-items">';
     html += '<div class="stat-card-item" onclick="toggleStatDetail(\'ciclo-ativos\')" data-key="ciclo-ativos"><div class="stat-card-icon green"><i class="fas fa-check-circle"></i></div><div><div class="stat-card-value">' + (eq.faseAtivo || 0) + '</div><div class="stat-card-label">Ativos (0-4m)</div></div></div>';
@@ -3150,8 +3427,8 @@ function renderStatsGerais(eq, man, os) {
     html += '<div class="stat-card-group" style="margin-top:14px;"><div class="stat-card-group-title"><i class="fas fa-clipboard-list"></i> ORDENS DE SERVICO</div><div class="stat-card-items">';
     html += '<div class="stat-card-item" onclick="toggleStatDetail(\'os-total\')" data-key="os-total"><div class="stat-card-icon purple"><i class="fas fa-clipboard-list"></i></div><div><div class="stat-card-value">' + (os.total || 0) + '</div><div class="stat-card-label">Total OS</div></div></div>';
     html += '<div class="stat-card-item" onclick="toggleStatDetail(\'os-abertas\')" data-key="os-abertas"><div class="stat-card-icon red"><i class="fas fa-folder-open"></i></div><div><div class="stat-card-value">' + (os.abertas || 0) + '</div><div class="stat-card-label">OS Abertas</div></div></div>';
-    html += '<div class="stat-card-item" onclick="toggleStatDetail(\'os-execucao\')" data-key="os-execucao"><div class="stat-card-icon cyan"><i class="fas fa-cogs"></i></div><div><div class="stat-card-value">' + (os.emExecucao || 0) + '</div><div class="stat-card-label">OS Em Execu��o</div></div></div>';
-    html += '<div class="stat-card-item" onclick="toggleStatDetail(\'os-concluidas\')" data-key="os-concluidas"><div class="stat-card-icon green"><i class="fas fa-check-circle"></i></div><div><div class="stat-card-value">' + (os.concluidas || 0) + '</div><div class="stat-card-label">OS Conclu�das</div></div></div>';
+    html += '<div class="stat-card-item" onclick="toggleStatDetail(\'os-execucao\')" data-key="os-execucao"><div class="stat-card-icon cyan"><i class="fas fa-cogs"></i></div><div><div class="stat-card-value">' + (os.emExecucao || 0) + '</div><div class="stat-card-label">OS Em Execução</div></div></div>';
+    html += '<div class="stat-card-item" onclick="toggleStatDetail(\'os-concluidas\')" data-key="os-concluidas"><div class="stat-card-icon green"><i class="fas fa-check-circle"></i></div><div><div class="stat-card-value">' + (os.concluidas || 0) + '</div><div class="stat-card-label">OS Concluídas</div></div></div>';
     html += '</div></div>';
     div.innerHTML = html;
     var ts = document.getElementById('relatorioTimestamp');
@@ -3206,7 +3483,7 @@ function renderStatDetailPanel(key) {
             }).join(''));
         });
     } else if (key === 'eq-manut') {
-        title = 'Computadores em Manuten��o'; icon = 'fa-wrench'; color = 'yellow';
+        title = 'Computadores em Manutenção'; icon = 'fa-wrench'; color = 'yellow';
         Promise.all([
             apiFetch('/api/computadores/paginado?page=0&size=1000&status=MANUTENCAO_PREDITIVA&termo='),
             apiFetch('/api/computadores/paginado?page=0&size=1000&status=MANUTENCAO_PREVENTIVA&termo='),
@@ -3254,7 +3531,7 @@ function renderStatDetailPanel(key) {
             }).join(''));
         });
     } else if (key === 'man-total') {
-        title = 'Todas as Manuten��es'; icon = 'fa-wrench'; color = 'orange';
+        title = 'Todas as Manutenções'; icon = 'fa-wrench'; color = 'orange';
         apiFetch('/api/manutencoes?page=0&size=100&showConcluidas=true').then(function(d) {
             var list = d.content || d || [];
             renderStatDetailHTML(container, title, icon, color, list.map(function(m) {
@@ -3263,7 +3540,7 @@ function renderStatDetailPanel(key) {
             }).join(''));
         });
     } else if (key === 'man-pendentes') {
-        title = 'Manuten��es Pendentes'; icon = 'fa-clock'; color = 'yellow';
+        title = 'Manutenções Pendentes'; icon = 'fa-clock'; color = 'yellow';
         apiFetch('/api/manutencoes?page=0&size=100&status=PENDENTE').then(function(d) {
             var list = d.content || d || [];
             renderStatDetailHTML(container, title, icon, color, list.map(function(m) {
@@ -3271,7 +3548,7 @@ function renderStatDetailPanel(key) {
             }).join(''));
         });
     } else if (key === 'man-concluidas') {
-        title = 'Manuten��es Conclu�das'; icon = 'fa-check-double'; color = 'green';
+        title = 'Manutenções Concluídas'; icon = 'fa-check-double'; color = 'green';
         apiFetch('/api/manutencoes?page=0&size=100&status=CONCLUIDA').then(function(d) {
             var list = d.content || d || [];
             renderStatDetailHTML(container, title, icon, color, list.map(function(m) {
@@ -3279,12 +3556,12 @@ function renderStatDetailPanel(key) {
             }).join(''));
         });
     } else if (key === 'os-total') {
-        title = 'Todas as Ordens de Servi�o'; icon = 'fa-clipboard-list'; color = 'purple';
+        title = 'Todas as Ordens de Serviço'; icon = 'fa-clipboard-list'; color = 'purple';
         apiFetch('/api/ordens-servico?page=0&size=100').then(function(d) {
             var list = d.content || d || [];
             renderStatDetailHTML(container, title, icon, color, list.map(function(o) {
                 var st = statusMap[o.status] || 'badge-pendente';
-                return '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--purple-bg);color:var(--purple);"><i class="fas fa-clipboard-list"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">' + escapeHtml(o.titulo) + '</div><div class="stat-detail-item-sub">' + escapeHtml(o.computadorNome || 'Sem v�nculo') + ' - ' + escapeHtml(o.solicitante || '') + '</div></div><div class="stat-detail-item-badge"><span class="badge ' + st + '">' + escapeHtml((o.status || 'ABERTA').replace(/_/g, ' ')) + '</span></div></div>';
+                return '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--purple-bg);color:var(--purple);"><i class="fas fa-clipboard-list"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">' + escapeHtml(o.titulo) + '</div><div class="stat-detail-item-sub">' + escapeHtml(o.computadorNome || 'Sem vínculo') + ' - ' + escapeHtml(o.solicitante || '') + '</div></div><div class="stat-detail-item-badge"><span class="badge ' + st + '">' + escapeHtml((o.status || 'ABERTA').replace(/_/g, ' ')) + '</span></div></div>';
             }).join(''));
         });
     } else if (key === 'os-abertas') {
@@ -3294,23 +3571,23 @@ function renderStatDetailPanel(key) {
             results.forEach(function(d) { list = list.concat(d.content || d || []); });
             renderStatDetailHTML(container, title, icon, color, list.map(function(o) {
                 var st = statusMap[o.status] || 'badge-pendente';
-                return '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--red-bg);color:var(--red);"><i class="fas fa-folder-open"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">' + escapeHtml(o.titulo) + '</div><div class="stat-detail-item-sub">' + escapeHtml(o.computadorNome || 'Sem v�nculo') + ' - ' + escapeHtml(o.solicitante || '') + '</div></div><div class="stat-detail-item-badge"><span class="badge ' + st + '">' + escapeHtml((o.status || 'ABERTA').replace(/_/g, ' ')) + '</span></div></div>';
+                return '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--red-bg);color:var(--red);"><i class="fas fa-folder-open"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">' + escapeHtml(o.titulo) + '</div><div class="stat-detail-item-sub">' + escapeHtml(o.computadorNome || 'Sem vínculo') + ' - ' + escapeHtml(o.solicitante || '') + '</div></div><div class="stat-detail-item-badge"><span class="badge ' + st + '">' + escapeHtml((o.status || 'ABERTA').replace(/_/g, ' ')) + '</span></div></div>';
             }).join(''));
         });
     } else if (key === 'os-execucao') {
-        title = 'OS em Execu��o'; icon = 'fa-cogs'; color = 'cyan';
+        title = 'OS em Execução'; icon = 'fa-cogs'; color = 'cyan';
         apiFetch('/api/ordens-servico?page=0&size=100&status=EM_EXECUCAO').then(function(d) {
             var list = d.content || d || [];
             renderStatDetailHTML(container, title, icon, color, list.map(function(o) {
-                return '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--cyan-bg);color:var(--cyan);"><i class="fas fa-cogs"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">' + escapeHtml(o.titulo) + '</div><div class="stat-detail-item-sub">' + escapeHtml(o.computadorNome || 'Sem v�nculo') + ' - ' + escapeHtml(o.tecnicoResponsavel || 'Sem tecnico') + '</div></div><div class="stat-detail-item-badge"><span class="badge badge-em-execucao">EM EXECUCAO</span></div></div>';
+                return '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--cyan-bg);color:var(--cyan);"><i class="fas fa-cogs"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">' + escapeHtml(o.titulo) + '</div><div class="stat-detail-item-sub">' + escapeHtml(o.computadorNome || 'Sem vínculo') + ' - ' + escapeHtml(o.tecnicoResponsavel || 'Sem tecnico') + '</div></div><div class="stat-detail-item-badge"><span class="badge badge-em-execucao">EM EXECUCAO</span></div></div>';
             }).join(''));
         });
     } else if (key === 'os-concluidas') {
-        title = 'OS Conclu�das'; icon = 'fa-check-circle'; color = 'green';
+        title = 'OS Concluídas'; icon = 'fa-check-circle'; color = 'green';
         apiFetch('/api/ordens-servico?page=0&size=100&status=CONCLUIDA').then(function(d) {
             var list = d.content || d || [];
             renderStatDetailHTML(container, title, icon, color, list.map(function(o) {
-                return '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--green-bg);color:var(--green);"><i class="fas fa-check-circle"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">' + escapeHtml(o.titulo) + '</div><div class="stat-detail-item-sub">' + escapeHtml(o.computadorNome || 'Sem v�nculo') + ' - ' + escapeHtml(o.tecnicoResponsavel || '') + '</div></div><div class="stat-detail-item-badge"><span class="badge badge-concluida">CONCLUIDA</span></div></div>';
+                return '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--green-bg);color:var(--green);"><i class="fas fa-check-circle"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">' + escapeHtml(o.titulo) + '</div><div class="stat-detail-item-sub">' + escapeHtml(o.computadorNome || 'Sem vínculo') + ' - ' + escapeHtml(o.tecnicoResponsavel || '') + '</div></div><div class="stat-detail-item-badge"><span class="badge badge-concluida">CONCLUIDA</span></div></div>';
             }).join(''));
         });
     }
@@ -3384,9 +3661,9 @@ async function showDeptoForm(id) {
 }
 
 // ==========================================
-// LOGS (Hist�rico)
+// LOGS (Histórico)
 // ==========================================
-var LOG_MONTHS = ['Janeiro', 'Fevereiro', 'Mar�o', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+var LOG_MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 function initLogDateFilters() {
     var mesSel = document.getElementById('log-filtro-mes');
@@ -3425,7 +3702,7 @@ async function loadLogs(page) {
         renderLogs(d);
     } catch (e) {
         var tb = document.querySelector('#logsTable tbody');
-        if (tb) tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)"><i class="fas fa-inbox"></i> Erro ao carregar hist�rico</td></tr>';
+        if (tb) tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)"><i class="fas fa-inbox"></i> Erro ao carregar histórico</td></tr>';
     }
 }
 
@@ -3476,11 +3753,11 @@ function renderUsuarios(usuarios) {
 async function showUsuarioForm(id) {
     var u = { username: '', nomeCompleto: '', email: '', perfil: 'USUARIO', senha: '' };
     if (id) { try { u = await apiFetch('/api/usuarios/' + id); } catch (e) { showToast('Erro ao carregar usuario: ' + e.message, 'error'); return; } }
-    openModal(id ? 'Editar Usu�rio' : 'Novo Usu�rio',
+    openModal(id ? 'Editar Usuário' : 'Novo Usuário',
         '<form id="userForm"><div class="form-group"><label class="form-label">Nome Completo *</label><input id="userNome" value="' + escapeAttr(u.nomeCompleto) + '" required class="form-input"></div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;"><div class="form-group"><label class="form-label">Username *</label><input id="userUsername" value="' + escapeAttr(u.username) + '" ' + (id ? 'disabled' : '') + ' required class="form-input"></div>' +
         '<div class="form-group"><label class="form-label">Email</label><input type="email" id="userEmail" value="' + escapeAttr(u.email || '') + '" class="form-input"></div></div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;"><div class="form-group"><label class="form-label">Perfil</label><select id="userPerfil" class="form-input"><option value="USUARIO"' + (u.perfil === 'USUARIO' ? ' selected' : '') + '>Usu�rio</option><option value="TECNICO"' + (u.perfil === 'TECNICO' ? ' selected' : '') + '>T�cnico</option><option value="ADMIN"' + (u.perfil === 'ADMIN' ? ' selected' : '') + '>Admin</option></select></div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px;"><div class="form-group"><label class="form-label">Perfil</label><select id="userPerfil" class="form-input"><option value="USUARIO"' + (u.perfil === 'USUARIO' ? ' selected' : '') + '>Usuário</option><option value="TECNICO"' + (u.perfil === 'TECNICO' ? ' selected' : '') + '>Técnico</option><option value="ADMIN"' + (u.perfil === 'ADMIN' ? ' selected' : '') + '>Admin</option></select></div>' +
         '<div class="form-group"><label class="form-label">' + (id ? 'Nova Senha (opcional)' : 'Senha*') + '</label><input type="password" id="userSenha" ' + (id ? '' : 'required') + ' minlength="6" class="form-input"></div></div></form>',
         '<button onclick="closeModal()" class="btn btn-ghost btn-sm">Cancelar</button><button onclick="document.getElementById(\'userForm\').requestSubmit()" class="btn btn-primary btn-sm"><i class="fas fa-save"></i> ' + (id ? 'Salvar' : 'Cadastrar') + '</button>'
     );
@@ -3492,10 +3769,10 @@ async function showUsuarioForm(id) {
         try {
             if (id) {
                 await apiFetch('/api/usuarios/' + id, { method: 'PUT', body: JSON.stringify(p) });
-                showToast('Usu�rio atualizado!');
+                showToast('Usuário atualizado!');
             } else {
                 await apiFetch('/api/usuarios', { method: 'POST', body: JSON.stringify(p) });
-                showToast('Usu�rio cadastrado!');
+                showToast('Usuário cadastrado!');
             }
             closeModal(); loadUsuarios(); refreshAllData();
         } catch (e) { showToast(e.message, 'error'); }
@@ -3521,14 +3798,14 @@ function confirmDelete(type, id, name) {
     if (cy) cy.onclick = async function() {
         try {
             if (type === 'computador') await apiFetch('/api/computadores/' + id, { method: 'DELETE' });
-            else if (type === 'manuten��o') await apiFetch('/api/manutencoes/' + id, { method: 'DELETE' });
+            else if (type === 'manutenção') await apiFetch('/api/manutencoes/' + id, { method: 'DELETE' });
             else if (type === 'ordem') await apiFetch('/api/ordens-servico/' + id, { method: 'DELETE' });
             else if (type === 'usuario') await apiFetch('/api/usuarios/' + id, { method: 'DELETE' });
             else if (type === 'departamento') await apiFetch('/api/departamentos/' + id, { method: 'DELETE' });
             else if (type === 'software') await apiFetch('/api/software-licencas/' + id, { method: 'DELETE' });
             else if (type === 'ramal') await apiFetch('/api/ramais/' + id, { method: 'DELETE' });
             else if (type === 'troca') await apiFetch('/api/trocas/' + id, { method: 'DELETE' });
-            showToast('Exclu�do com sucesso!');
+            showToast('Excluído com sucesso!');
             closeConfirm();
             refreshAllData();
         } catch (e) { showToast(e.message, 'error'); closeConfirm(); }
@@ -3622,22 +3899,22 @@ function generatePlaceholderSVG(modelo, w, h) {
 function showManual() {
     openModal('Manual do Sistema',
         '<div style="font-size:13px;color:var(--text-secondary);line-height:1.8;">' +
-        '<h3 style="color:var(--cyan);font-size:15px;margin-bottom:10px;">1. Vis�o Geral</h3>' +
-        '<p>O sistema de Invent�rio de TI permite gerenciar computadores, manuten��es, ordens de servi�o, setores e usu�rios. O dashboard fornece uma vis�o completa do invent�rio.</p>' +
+        '<h3 style="color:var(--cyan);font-size:15px;margin-bottom:10px;">1. Visão Geral</h3>' +
+        '<p>O sistema de Inventário de TI permite gerenciar computadores, manutenções, ordens de serviço, setores e usuários. O dashboard fornece uma visão completa do inventário.</p>' +
         '<h3 style="color:var(--cyan);font-size:15px;margin:14px 0 10px;">2. Computadores</h3>' +
-        '<p>Cadastre equipamentos com tr�s abas: <b>Geral</b> (dados b�sicos), <b>Foto</b> (upload de imagem) e <b>Detalhes</b> (setor, IP, SO, etc). Use os filtros e busca para encontrar equipamentos. A��es em massa dispon�veis para usu�rios ADMIN.</p>' +
-        '<h3 style="color:var(--cyan);font-size:15px;margin:14px 0 10px;">3. Manuten��es</h3>' +
-        '<p>Registre manuten��es corretivas, preventivas, preditivas ou emergenciais. Ao cadastrar uma manuten��o, uma OS � criada automaticamente. Ao concluir, o status do computador � atualizado.</p>' +
-        '<h3 style="color:var(--cyan);font-size:15px;margin:14px 0 10px;">4. Ordens de Servi�o</h3>' +
-        '<p>Gerencie tickets de suporte com prioridade, status, respons�vel e solu��o. Clique em uma OS na tabela para editar. Use filtros por status e prioridade.</p>' +
+        '<p>Cadastre equipamentos com três abas: <b>Geral</b> (dados básicos), <b>Foto</b> (upload de imagem) e <b>Detalhes</b> (setor, IP, SO, etc). Use os filtros e busca para encontrar equipamentos. Ações em massa disponíveis para usuários ADMIN.</p>' +
+        '<h3 style="color:var(--cyan);font-size:15px;margin:14px 0 10px;">3. Manutenções</h3>' +
+        '<p>Registre manutenções corretivas, preventivas, preditivas ou emergenciais. Ao cadastrar uma manutenção, uma OS Ã© criada automaticamente. Ao concluir, o status do computador Ã© atualizado.</p>' +
+        '<h3 style="color:var(--cyan);font-size:15px;margin:14px 0 10px;">4. Ordens de Serviço</h3>' +
+        '<p>Gerencie tickets de suporte com prioridade, status, responsável e solução. Clique em uma OS na tabela para editar. Use filtros por status e prioridade.</p>' +
         '<h3 style="color:var(--cyan);font-size:15px;margin:14px 0 10px;">5. Setores</h3>' +
-        '<p>Gerencie os setores da empresa. Apenas nome � necess�rio. O n�mero de computadores vinculados � exibido automaticamente.</p>' +
-        '<h3 style="color:var(--cyan);font-size:15px;margin:14px 0 10px;">6. Hist�rico</h3>' +
-        '<p>Visualize todas as opera��es realizadas no sistema com filtros por entidade (Computador, Manuten��o, OS, etc).</p>' +
-        '<h3 style="color:var(--cyan);font-size:15px;margin:14px 0 10px;">7. Relat�rios</h3>' +
-        '<p>Visualize gr�ficos e estat�sticas detalhadas. Clique nos cards de estat�sticas para ver os itens individuais. Exporte em CSV ou imprima em PDF.</p>' +
+        '<p>Gerencie os setores da empresa. Apenas nome Ã© necessÃ¡rio. O número de computadores vinculados Ã© exibido automaticamente.</p>' +
+        '<h3 style="color:var(--cyan);font-size:15px;margin:14px 0 10px;">6. Histórico</h3>' +
+        '<p>Visualize todas as operações realizadas no sistema com filtros por entidade (Computador, Manutenção, OS, etc).</p>' +
+        '<h3 style="color:var(--cyan);font-size:15px;margin:14px 0 10px;">7. Relatórios</h3>' +
+        '<p>Visualize gráficos e estatísticas detalhadas. Clique nos cards de estatísticas para ver os itens individuais. Exporte em CSV ou imprima em PDF.</p>' +
         '<h3 style="color:var(--cyan);font-size:15px;margin:14px 0 10px;">8. Ferramentas</h3>' +
-        '<p>Painel administrativo com status do sistema, H2 Console, Swagger, Actuator e m�tricas. Apenas usu�rios ADMIN tem acesso.</p>' +
+        '<p>Painel administrativo com status do sistema, H2 Console, Swagger, Actuator e métricas. Apenas usuários ADMIN tem acesso.</p>' +
         '</div>',
         '<button onclick="closeModal()" class="btn btn-ghost btn-sm">Fechar</button>'
     );
@@ -3669,7 +3946,7 @@ function showSystemInfo() {
         );
     }).catch(function() {
         openModal('Status do Sistema',
-            '<div style="padding:10px;text-align:center;"><p style="color:var(--red);font-size:14px;">N�o foi poss�vel obter informa��es do sistema.</p></div>',
+            '<div style="padding:10px;text-align:center;"><p style="color:var(--red);font-size:14px;">Não foi possível obter informações do sistema.</p></div>',
             '<button onclick="closeModal()" class="btn btn-ghost btn-sm">Fechar</button>'
         );
     });
@@ -3689,16 +3966,16 @@ function clearSystemCache() {
 function showBackupInfo() {
     openModal('Backup do Banco de Dados',
         '<div style="padding:10px;font-size:13px;color:var(--text-secondary);line-height:1.8;">' +
-        '<p>O banco de dados � armazenado em arquivo local no servidor:</p>' +
-        '<div style="background:rgba(0,0,0,0.3);padding:12px;border-radius:8px;margin:10px 0;font-family:monospace;font-size:12px;color:var(--cyan);">./data/invent�rio_db.mv.db</div>' +
+        '<p>O banco de dados Ã© armazenado em arquivo local no servidor:</p>' +
+        '<div style="background:rgba(0,0,0,0.3);padding:12px;border-radius:8px;margin:10px 0;font-family:monospace;font-size:12px;color:var(--cyan);">./data/inventário_db.mv.db</div>' +
         '<p><b>Como fazer backup:</b></p>' +
         '<ol style="padding-left:18px;margin:6px 0;">' +
         '<li>Pare o servidor</li>' +
-        '<li>Copie o arquivo <code style="color:var(--cyan);">invent�rio_db.mv.db</code> da pasta <code style="color:var(--cyan);">data/</code></li>' +
+        '<li>Copie o arquivo <code style="color:var(--cyan);">inventário_db.mv.db</code> da pasta <code style="color:var(--cyan);">data/</code></li>' +
         '<li>Salve o arquivo em local seguro</li>' +
         '<li>Reinicie o servidor</li>' +
         '</ol>' +
-        '<p style="color:var(--red);margin-top:10px;"><b>importante:</b> O arquivo de banco � o �nico necess�rio para restaurar todos os dados do sistema.</p>' +
+        '<p style="color:var(--red);margin-top:10px;"><b>importante:</b> O arquivo de banco é o único necessário para restaurar todos os dados do sistema.</p>' +
         '</div>',
         '<button onclick="closeModal()" class="btn btn-ghost btn-sm">Fechar</button>'
     );
@@ -3708,7 +3985,7 @@ function showBackupInfo() {
 // CSV EXPORT/IMPORT (processado no cliente)
 // ==========================================
 var CSV_PC_CAMPOS = ['nomePc', 'numeroSerie', 'modeloMarca', 'processador', 'memoriaRam', 'armazenamento', 'usuarioDesignado', 'fornecedor', 'status', 'departamento', 'localizacao', 'ipAddress', 'sistemaOperacional', 'softwareInstalado', 'notas', 'dataCadastro', 'proximaManutencao', 'dataAquisicao', 'dataGarantia'];
-var CSV_PC_ROTULOS = { nomePc: 'Nome PC', numeroSerie: 'N�mero S�rie', modeloMarca: 'Modelo/Marca', processador: 'Processador', memoriaRam: 'Mem�ria RAM', armazenamento: 'Armazenamento', usuarioDesignado: 'Usu�rio Designado', fornecedor: 'Fornecedor', status: 'Status', departamento: 'Setor', localizacao: 'Localiza��o', ipAddress: 'IP', sistemaOperacional: 'Sistema Operacional', softwareInstalado: 'Software Instalado', notas: 'Notas', dataCadastro: 'Data de Cadastro', proximaManutencao: 'Pr�xima Manuten��o', dataAquisicao: 'Data de Aquisi��o', dataGarantia: 'Garantia at�' };
+var CSV_PC_ROTULOS = { nomePc: 'Nome PC', numeroSerie: 'Número Série', modeloMarca: 'Modelo/Marca', processador: 'Processador', memoriaRam: 'Memória RAM', armazenamento: 'Armazenamento', usuarioDesignado: 'Usuário Designado', fornecedor: 'Fornecedor', status: 'Status', departamento: 'Setor', localizacao: 'Localização', ipAddress: 'IP', sistemaOperacional: 'Sistema Operacional', softwareInstalado: 'Software Instalado', notas: 'Notas', dataCadastro: 'Data de Cadastro', proximaManutencao: 'Próxima Manutenção', dataAquisicao: 'Data de Aquisição', dataGarantia: 'Garantia até' };
 var CSV_PC_OBRIGATORIOS = ['nomePc', 'numeroSerie', 'processador', 'memoriaRam', 'armazenamento'];
 var CSV_PC_DATAS = ['dataCadastro', 'proximaManutencao', 'dataAquisicao', 'dataGarantia'];
 var CSV_PC_STATUS = ['ATIVO', 'MANUTENCAO_PREDITIVA', 'MANUTENCAO_PREVENTIVA', 'MANUTENCAO_EMERGENCIAL', 'CONCLUIDO'];
@@ -3739,7 +4016,7 @@ function exportComputadoresCSV() {
             setTimeout(function() { URL.revokeObjectURL(url); }, 100);
             showToast('CSV exportado: ' + list.length + ' computador(es).', 'success');
         })
-        .catch(function(e) { showToast('Erro na exporta��o: ' + e.message, 'error'); });
+        .catch(function(e) { showToast('Erro na exportação: ' + e.message, 'error'); });
 }
 
 function parseCSVTexto(texto) {
@@ -3778,23 +4055,23 @@ function importComputadoresCSV(event) {
     event.target.value = '';
     if (!file) return;
     var reader = new FileReader();
-    reader.onerror = function() { showToast('Erro na importa��o: n�o foi poss�vel ler o arquivo.', 'error'); };
+    reader.onerror = function() { showToast('Erro na importação: não foi possível ler o arquivo.', 'error'); };
     reader.onload = function() {
         importarComputadoresDoCSV(String(reader.result || ''))
             .then(function(res) {
-                var msg = 'Importa��o: ' + res.importados + ' importado(s), ' + res.duplicados + ' duplicado(s), ' + res.erros + ' erro(s).';
+                var msg = 'Importação: ' + res.importados + ' importado(s), ' + res.duplicados + ' duplicado(s), ' + res.erros + ' erro(s).';
                 showToast(msg, res.erros ? 'warning' : 'success');
                 if (res.primeiroErro) showToast('Primeiro erro: ' + res.primeiroErro, 'error');
                 if (res.importados) { loadComputadores(0); refreshAllData(); }
             })
-            .catch(function(e) { showToast('Erro na importa��o: ' + e.message, 'error'); });
+            .catch(function(e) { showToast('Erro na importação: ' + e.message, 'error'); });
     };
     reader.readAsText(file, 'utf-8');
 }
 
 async function importarComputadoresDoCSV(texto) {
     var rows = parseCSVTexto(texto);
-    if (rows.length < 2) throw new Error('arquivo sem dados (esperado cabe�alho + linhas).');
+    if (rows.length < 2) throw new Error('arquivo sem dados (esperado cabeçalho + linhas).');
     var cab = rows[0].map(normalizarColunaCSV);
     var idx = {};
     CSV_PC_CAMPOS.forEach(function(f) {
@@ -3805,8 +4082,8 @@ async function importarComputadoresDoCSV(texto) {
             if (pos !== -1) { idx[f] = pos; break; }
         }
     });
-    if (idx.nomePc === undefined) throw new Error('coluna "Nome PC" n�o encontrada no cabe�alho.');
-    if (idx.numeroSerie === undefined) throw new Error('coluna "N�mero S�rie" n�o encontrada no cabe�alho.');
+    if (idx.nomePc === undefined) throw new Error('coluna "Nome PC" não encontrada no cabeçalho.');
+    if (idx.numeroSerie === undefined) throw new Error('coluna "Número Série" não encontrada no cabeçalho.');
     var nomes = {}, series = {};
     MOCK_COMPUTADORES.forEach(function(c) {
         nomes[String(c.nomePc || '').trim().toUpperCase()] = true;
@@ -3821,7 +4098,7 @@ async function importarComputadoresDoCSV(texto) {
             if (v !== '') pc[f] = v;
         });
         var falta = CSV_PC_OBRIGATORIOS.filter(function(f) { return !pc[f]; });
-        if (falta.length) { erros++; if (!primeiroErro) primeiroErro = 'linha ' + (i + 1) + ': obrigat�rio ' + falta.join(', '); continue; }
+        if (falta.length) { erros++; if (!primeiroErro) primeiroErro = 'linha ' + (i + 1) + ': obrigatório ' + falta.join(', '); continue; }
         CSV_PC_DATAS.forEach(function(f) { if (pc[f] && !parseDataISO(pc[f])) delete pc[f]; });
         if (pc.status) {
             pc.status = pc.status.toUpperCase();
@@ -3882,7 +4159,7 @@ async function loadSoftwareLicencas(page) {
         renderSoftwareLicencas(d);
     } catch (e) {
         var tb = document.querySelector('#softwareTable tbody');
-        if (tb) tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)"><i class="fas fa-inbox"></i> Erro ao carregar licen�as</td></tr>';
+        if (tb) tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-muted)"><i class="fas fa-inbox"></i> Erro ao carregar licenças</td></tr>';
     }
 }
 
@@ -3921,17 +4198,17 @@ function renderSoftwareLicencas(data) {
 async function showSoftwareLicencaForm(id) {
     var s = { nomeSoftware: '', fabricante: '', chaveLicenca: '', tipoLicenca: 'PRO', quantidadeTotal: 1, quantidadeUtilizada: 0, dataAquisicao: '', dataExpiracao: '', observacoes: '' };
     if (id) { try { s = await apiFetch('/api/software-licencas/' + id); } catch (e) { showToast('Erro ao carregar licenca: ' + e.message, 'error'); return; } }
-    openModal(id ? 'Editar Licen�a' : 'Nova Licen�a',
+    openModal(id ? 'Editar Licença' : 'Nova Licença',
         '<form id="swForm">' +
         '<div class="form-row"><div class="form-group"><label class="form-label">Software *</label><input id="swNome" value="' + escapeAttr(s.nomeSoftware || '') + '" required class="form-input" placeholder="Ex: Microsoft Office"></div>' +
         '<div class="form-group"><label class="form-label">Fabricante</label><input id="swFab" value="' + escapeAttr(s.fabricante || '') + '" class="form-input" placeholder="Ex: Microsoft"></div></div>' +
-        '<div class="form-group"><label class="form-label">Chave de Licen�a</label><input id="swChave" value="' + escapeAttr(s.chaveLicenca || '') + '" class="form-input" placeholder="XXXXX-XXXXX-XXXXX"></div>' +
+        '<div class="form-group"><label class="form-label">Chave de Licença</label><input id="swChave" value="' + escapeAttr(s.chaveLicenca || '') + '" class="form-input" placeholder="XXXXX-XXXXX-XXXXX"></div>' +
         '<div class="form-group"><label class="form-label">Tipo</label><select id="swTipo" class="form-input"><option value="PRO"' + (s.tipoLicenca === 'PRO' ? ' selected' : '') + '>PRO</option><option value="ENTERPRISE"' + (s.tipoLicenca === 'ENTERPRISE' ? ' selected' : '') + '>ENTERPRISE</option><option value="HOME"' + (s.tipoLicenca === 'HOME' ? ' selected' : '') + '>HOME</option><option value="EDUCACIONAL"' + (s.tipoLicenca === 'EDUCACIONAL' ? ' selected' : '') + '>EDUCACIONAL</option><option value="OEM"' + (s.tipoLicenca === 'OEM' ? ' selected' : '') + '>OEM</option><option value="VOLUME"' + (s.tipoLicenca === 'VOLUME' ? ' selected' : '') + '>VOLUME</option><option value="OUTRO"' + (s.tipoLicenca === 'OUTRO' ? ' selected' : '') + '>OUTRO</option></select></div>' +
         '<div class="form-row"><div class="form-group"><label class="form-label">Qtde Total</label><input id="swTotal" type="number" min="0" value="' + (s.quantidadeTotal || 1) + '" class="form-input"></div>' +
         '<div class="form-group"><label class="form-label">Qtde Utilizada</label><input id="swUtil" type="number" min="0" value="' + (s.quantidadeUtilizada || 0) + '" class="form-input"></div></div>' +
-        '<div class="form-row"><div class="form-group"><label class="form-label">Data Aquisi��o</label><input id="swAq" type="date" value="' + (s.dataAquisicao || '') + '" class="form-input"></div>' +
-        '<div class="form-group"><label class="form-label">Data Expira��o</label><input id="swExp" type="date" value="' + (s.dataExpiracao || '') + '" class="form-input"></div></div>' +
-        '<div class="form-group"><label class="form-label">Observa��es</label><textarea id="swObs" class="form-input" rows="2" placeholder="Observa��es...">' + escapeHtml(s.observacoes || '') + '</textarea></div>' +
+        '<div class="form-row"><div class="form-group"><label class="form-label">Data Aquisição</label><input id="swAq" type="date" value="' + (s.dataAquisicao || '') + '" class="form-input"></div>' +
+        '<div class="form-group"><label class="form-label">Data Expiração</label><input id="swExp" type="date" value="' + (s.dataExpiracao || '') + '" class="form-input"></div></div>' +
+        '<div class="form-group"><label class="form-label">Observações</label><textarea id="swObs" class="form-input" rows="2" placeholder="Observações...">' + escapeHtml(s.observacoes || '') + '</textarea></div>' +
         '</form>',
         '<button onclick="closeModal()" class="btn btn-ghost btn-sm">Cancelar</button><button onclick="document.getElementById(\'swForm\').requestSubmit()" class="btn btn-primary btn-sm"><i class="fas fa-save"></i> ' + (id ? 'Salvar' : 'Criar') + '</button>'
     );
@@ -3951,7 +4228,7 @@ async function showSoftwareLicencaForm(id) {
         try {
             if (id) await apiFetch('/api/software-licencas/' + id, { method: 'PUT', body: JSON.stringify(p) });
             else await apiFetch('/api/software-licencas', { method: 'POST', body: JSON.stringify(p) });
-            showToast(id ? 'Licen�a atualizada!' : 'Licen�a criada!');
+            showToast(id ? 'Licença atualizada!' : 'Licença criada!');
             closeModal(); loadSoftwareLicencas(currentPage.software || 0);
         } catch (e) { showToast(e.message, 'error'); }
     });
@@ -4280,7 +4557,7 @@ async function showTrocaForm(id) {
             '<option value="SAIDA"' + (t.tipoMovimento === 'SAIDA' ? ' selected' : '') + '>Saida</option>' +
             '<option value="TROCA"' + (t.tipoMovimento === 'TROCA' ? ' selected' : '') + '>Troca</option>' +
         '</select></div>' +
-        '<div class="form-group"><label class="form-label">Responsavel</label><div class="searchable-dropdown"><input type="text" id="trocaRespSearch" class="form-input" placeholder="Buscar respons�vel..." autocomplete="off" value="' + escapeAttr(t.responsavel || '') + '"><input type="hidden" id="trocaResp" value="' + escapeAttr(t.responsavel || '') + '"><div id="trocaRespList" class="searchable-dropdown-list" style="display:none;"></div></div></div>' +
+        '<div class="form-group"><label class="form-label">Responsavel</label><div class="searchable-dropdown"><input type="text" id="trocaRespSearch" class="form-input" placeholder="Buscar responsável..." autocomplete="off" value="' + escapeAttr(t.responsavel || '') + '"><input type="hidden" id="trocaResp" value="' + escapeAttr(t.responsavel || '') + '"><div id="trocaRespList" class="searchable-dropdown-list" style="display:none;"></div></div></div>' +
         '</div>' +
         '<div class="form-group" style="margin-top:14px;"><label class="form-label">Descricao *</label><textarea id="trocaDesc" required class="form-input" style="min-height:80px;resize:vertical;" placeholder="Descreva a movimentacao...">' + escapeHtml(t.descricao || '') + '</textarea></div>' +
         '<div class="form-group" style="margin-top:14px;"><label class="form-label">Observacoes</label><textarea id="trocaObs" class="form-input" style="min-height:60px;resize:vertical;">' + escapeHtml(t.observacoes || '') + '</textarea></div>' +
@@ -4754,7 +5031,7 @@ function generateRelatorioTrocasPDF() {
 }
 
 function generateRelatorioHistoricoPDF() {
-    showToast('Gerando PDF do Hist�rico...', 'info');
+    showToast('Gerando PDF do Histórico...', 'info');
     var usuario = ((document.getElementById('log-busca-usuario') || {}).value || '');
     var entidade = ((document.getElementById('log-filtro-entidade') || {}).value || '');
     var mesEl = document.getElementById('log-filtro-mes');
@@ -4764,7 +5041,7 @@ function generateRelatorioHistoricoPDF() {
     if (mes === undefined || mes === null) mes = '';
     if (ano === undefined || ano === null) ano = '';
     var sl = usuario.toLowerCase();
-    var periodLabel = 'Todos os per�odos';
+    var periodLabel = 'Todos os períodos';
     if (mes !== '' && ano !== '') periodLabel = LOG_MONTHS[parseInt(mes)] + ' ' + ano;
     else if (ano !== '') periodLabel = 'Ano ' + ano;
     else if (mes !== '') periodLabel = LOG_MONTHS[parseInt(mes)];
@@ -4780,19 +5057,19 @@ function generateRelatorioHistoricoPDF() {
         return true;
     }).slice().sort(function(a, b) { return new Date(b.dataAtividade) - new Date(a.dataAtividade); });
     var doc = new jspdf.jsPDF();
-    pdfCreateHeader(doc, 'Relat�rio de Hist�rico - ' + periodLabel);
+    pdfCreateHeader(doc, 'Relatório de Histórico - ' + periodLabel);
     var y = 28;
     y = pdfSectionTitle(doc, 'Resumo', y);
     function countAcao(a) { return items.filter(function(x) { return x.acao === a; }).length; }
     y = pdfKpiRow(doc, [
         { l: 'Total', v: items.length },
         { l: 'Logins', v: countAcao('LOGIN') },
-        { l: 'Cria��es', v: countAcao('CRIACAO') },
-        { l: 'Altera��es', v: countAcao('ALTERACAO') },
-        { l: 'Exclus�es', v: countAcao('EXCLUSAO') }
+        { l: 'Criações', v: countAcao('CRIACAO') },
+        { l: 'Alterações', v: countAcao('ALTERACAO') },
+        { l: 'Exclusões', v: countAcao('EXCLUSAO') }
     ], y);
     y = pdfSectionTitle(doc, 'Registros (' + items.length + ') - ' + periodLabel, y);
-    y = pdfTable(doc, ['Data', 'Usu�rio', 'A��o', 'Entidade', 'Descri��o'], items.map(function(x) {
+    y = pdfTable(doc, ['Data', 'Usuário', 'Ação', 'Entidade', 'Descrição'], items.map(function(x) {
         return [x.dataAtividade ? new Date(x.dataAtividade).toLocaleDateString('pt-BR') : '-', x.usuario || '-', x.acao || '-', x.entidade || '-', (x.descricao || '-').substring(0, 45)];
     }), y);
     var fileName = 'Relatorio_Historico' + (ano !== '' ? '_' + ano : '') + (mes !== '' ? '_' + String(parseInt(mes) + 1).padStart(2, '0') : '');

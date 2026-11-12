@@ -580,9 +580,9 @@ body {
 }
 .glass-panel:hover { border-color: rgba(255, 255, 255, 0.11); }
 /* Painéis do dashboard: coluna flex para o conteúdo ocupar/centralizar
-   na altura da linha da grid (evita buraco em baixo do donut) */
+   na altura da linha da grid (evita buraco embaixo do gráfico) */
 .dashboard-chart-half { display: flex; flex-direction: column; }
-.dashboard-chart-half .dsh-status-wrap { flex: 1; }
+.dashboard-chart-half .dsh-status-chart { flex: 1; display: flex; align-items: center; padding: 12px 16px 16px; }
 .dashboard-chart-half .dsh-rows { flex: 1; justify-content: center; }
 .glass-panel-header {
     padding: 14px 18px; border-bottom: 1px solid var(--border);
@@ -611,38 +611,14 @@ body {
 /* ==========================================
    Dashboard Lean Components (ref. design)
    ========================================== */
-.dsh-status-wrap {
-    display: flex; align-items: center; justify-content: center;
-    gap: 28px; padding: 24px 22px; flex-wrap: wrap;
+.dsh-total-chip {
+    font-size: 11px; color: var(--text-muted);
+    white-space: nowrap; letter-spacing: 0.2px;
 }
-.dsh-donut { position: relative; width: 210px; height: 210px; flex-shrink: 0; }
-.dsh-donut .chart-wrapper { height: 210px; width: 210px; }
-.dsh-donut-center {
-    position: absolute; inset: 0;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    pointer-events: none;
+.dsh-total-chip b {
+    font-size: 15px; font-weight: 800; color: var(--text-primary);
+    font-variant-numeric: tabular-nums; margin-right: 3px;
 }
-.dsh-donut-center span {
-    font-size: 34px; font-weight: 800; letter-spacing: -1px;
-    color: var(--text-primary); line-height: 1;
-}
-.dsh-donut-center small {
-    font-size: 10px; color: var(--text-muted); text-transform: uppercase;
-    letter-spacing: 1.5px; margin-top: 6px;
-}
-.dsh-count-list {
-    flex: 1; min-width: 180px; max-width: 300px;
-    display: flex; flex-direction: column; gap: 4px;
-}
-.dsh-count-item {
-    display: flex; align-items: center; gap: 10px;
-    font-size: 13px; color: var(--text-secondary);
-    padding: 8px 4px;
-}
-.dsh-count-item + .dsh-count-item { border-top: 1px solid rgba(255, 255, 255, 0.04); }
-.dsh-count-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.dsh-count-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dsh-count-item b { font-size: 17px; font-weight: 800; color: var(--text-primary); }
 .dsh-rows {
     display: flex; flex-direction: column; gap: 10px;
     padding: 14px 18px;

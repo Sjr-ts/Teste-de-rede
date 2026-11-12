@@ -13,7 +13,7 @@
     <script src="vendor/chart.umd.min.js"></script>
 
     <link rel="stylesheet" href="vendor/css/all.min.css">
-    <link rel="stylesheet" href="css/style.css?v=5000-kpi">
+    <link rel="stylesheet" href="css/style.css?v=5100-cartesiano">
     <style>
         .print-header, .print-footer { display: none; }
     </style>
@@ -220,13 +220,12 @@
             <div id="kpiDetail" class="stat-detail-panel"></div>
             <div class="dashboard-grid">
                 <div class="glass-panel dashboard-chart-half">
-                    <div class="glass-panel-header"><h3><i class="fas fa-chart-pie"></i> Status dos Equipamentos</h3></div>
-                    <div class="dsh-status-wrap">
-                        <div class="dsh-donut">
-                            <div class="chart-wrapper"><canvas id="chartStatus"></canvas></div>
-                            <div class="dsh-donut-center"><span id="dshDonutTotal">0</span><small>Total</small></div>
-                        </div>
-                        <div id="chartStatusLegend" class="dsh-count-list"></div>
+                    <div class="glass-panel-header">
+                        <h3><i class="fas fa-chart-bar"></i> Status dos Equipamentos</h3>
+                        <span class="dsh-total-chip"><b id="dshStatusTotal">0</b> equipamentos</span>
+                    </div>
+                    <div class="dsh-status-chart">
+                        <div class="chart-wrapper"><canvas id="chartStatus"></canvas></div>
                     </div>
                 </div>
                 <div class="glass-panel dashboard-chart-half">
@@ -502,7 +501,7 @@
             </div>
             <div id="statDetail" class="stat-detail-panel"></div>
             <div class="glass-panel" style="margin-bottom:16px;">
-                <div class="glass-panel-header"><h3><i class="fas fa-chart-pie"></i> Analise Visual</h3></div>
+                <div class="glass-panel-header"><h3><i class="fas fa-chart-bar"></i> Analise Visual</h3></div>
                 <div style="padding:16px;">
                     <div class="reports-grid">
                 <div class="glass-panel">
@@ -510,7 +509,7 @@
                     <div class="chart-container"><div class="chart-wrapper"><canvas id="chartMarcas"></canvas></div></div>
                 </div>
                 <div class="glass-panel">
-                    <div class="glass-panel-header"><h3><i class="fas fa-chart-doughnut"></i> Manutencoes por Tipo</h3></div>
+                    <div class="glass-panel-header"><h3><i class="fas fa-chart-bar"></i> Manutencoes por Tipo</h3></div>
                     <div class="chart-container"><div class="chart-wrapper"><canvas id="chartManTipo"></canvas></div></div>
                 </div>
                 <div class="glass-panel">
@@ -518,11 +517,11 @@
                     <div class="chart-container"><div class="chart-wrapper"><canvas id="chartManutencoesMes"></canvas></div></div>
                 </div>
                 <div class="glass-panel">
-                    <div class="glass-panel-header"><h3><i class="fas fa-chart-doughnut"></i> OS por Prioridade</h3></div>
+                    <div class="glass-panel-header"><h3><i class="fas fa-chart-bar"></i> OS por Prioridade</h3></div>
                     <div class="chart-container"><div class="chart-wrapper"><canvas id="chartOSPrioridade"></canvas></div></div>
                 </div>
                 <div class="glass-panel">
-                    <div class="glass-panel-header"><h3><i class="fas fa-chart-doughnut"></i> OS por Status</h3></div>
+                    <div class="glass-panel-header"><h3><i class="fas fa-chart-bar"></i> OS por Status</h3></div>
                     <div class="chart-container"><div class="chart-wrapper"><canvas id="chartOSStatus"></canvas></div></div>
                 </div>
                 <div class="glass-panel">
@@ -1077,7 +1076,7 @@
 
     <script src="vendor/jspdf.umd.min.js"></script>
     <script src="vendor/jspdf.plugin.autotable.min.js"></script>
-<script src="js/app.js?v=5000-kpi"></script>
-<script src="js/monitor.js?v=5000-kpi"></script>
+<script src="js/app.js?v=5100-cartesiano"></script>
+<script src="js/monitor.js?v=5100-cartesiano"></script>
 </body>
 </html>

@@ -1383,18 +1383,49 @@ function monSvgChart(dados, cor, corFundo, largura, altura, marcarFalhas) {
  * dados: [{t: timestamp, v: valor, ok: bool}] ou array numerico
  * opts: {titulo, unidade, cor, largura, altura, minForcado, maxForcado, formatarY, formatarX}
  */
+// Escala "bonita" (nice ticks), no estilo Grafana: limites e passo em
+// numeros redondos (1/2/2.5/5 x 10^n) e ~5 rotulos legiveis no eixo Y.
+// Evita rótulos quebrados como 0.30000000000000004 ou 46.66666.
+function monNiceScale(min, max, alvoTicks) {
+    alvoTicks = alvoTicks || 5;
+    if (!isFinite(min) || !isFinite(max)) return { min: 0, max: 1, step: 0.2 };
+    if (min === max) { min = min - 1; max = max + 1; }
+    if (min > max) { const _t = min; min = max; max = _t; }
+    const span = max - min;
+    const bruto = span / Math.max(2, alvoTicks - 1);
+    if (!(bruto > 0)) return { min: min, max: max, step: span };
+    const exp = Math.floor(Math.log(bruto) / Math.LN10);
+    const base = Math.pow(10, exp);
+    const f = bruto / base;
+    const passo = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * base;
+    const nmin = Math.floor(min / passo) * passo;
+    const nmax = Math.ceil(max / passo) * passo;
+    const fator = Math.pow(10, Math.max(0, -exp + 1));
+    const arred = v => Math.round(v * fator) / fator;
+    return { min: arred(nmin), max: arred(nmax), step: arred(passo) };
+}
+
 function monCartesianChart(dados, opts) {
     opts = opts || {};
     if (!dados || dados.length < 2) return '<div style="font-size:10px;color:var(--text-muted);padding:8px;">Dados insuficientes</div>';
 
-    // Normaliza para [{t,v,ok}]
+    // Normaliza para [{t,v,ok}]. Quando o chamador passa rotulosX, o eixo X
+    // e categorico (hosts, volumes, dias) — NUNCA inventamos horarios falsos.
     let pts;
-    if (typeof dados[0] === 'object' && dados[0] !== null) {
-        pts = dados.map(d => ({ t: d.t || d.timestamp || 0, v: d.v != null ? d.v : d.valor, ok: d.ok !== false }));
+    const rotulosX = (Array.isArray(opts.rotulosX) && opts.rotulosX.length) ? opts.rotulosX : null;
+    if (rotulosX && rotulosX.length === ((typeof dados.length === 'number') ? dados.length : 0)) {
+        pts = dados.map((v, i) => {
+            const val = (v !== null && typeof v === 'object' && !Array.isArray(v))
+                ? (v.v != null ? v.v : v.valor) : v;
+            return { t: i, v: val, ok: !(v && v.ok === false), r: rotulosX[i] };
+        });
+    } else if (typeof dados[0] === 'object' && dados[0] !== null) {
+        pts = dados.map(d => ({ t: d.t || d.timestamp || 0, v: d.v != null ? d.v : d.valor, ok: d.ok !== false, r: d.r }));
     } else {
         const agora = Date.now();
         pts = dados.map((v, i) => ({ t: agora - (dados.length - 1 - i) * 60000, v: v, ok: v != null }));
     }
+    const rotulos = rotulosX;
     const validos = pts.filter(p => p.v != null && !isNaN(p.v));
     if (validos.length < 2) return '<div style="font-size:10px;color:var(--text-muted);padding:8px;">Dados insuficientes</div>';
 
@@ -1402,14 +1433,27 @@ function monCartesianChart(dados, opts) {
     const corFundo = opts.corFundo || 'rgba(0,0,0,0.25)';
     const w = opts.largura || 1000;
     const h = opts.altura || 300;
-    const padL = 52, padR = 18, padT = 32, padB = 40;
+
+    // --- limites do eixo Y: respeita minForcado/maxForcado; quando vem
+    //     dos dados, adiciona 6% de folga e arredonda para nice ticks.
+    const valores = validos.map(p => p.v);
+    let lo = opts.minForcado != null ? opts.minForcado : Math.min(...valores);
+    let hi = opts.maxForcado != null ? opts.maxForcado : Math.max(...valores);
+    if (lo === hi) { lo = lo - 1; hi = hi + 1; }
+    if (opts.minForcado == null || opts.maxForcado == null) {
+        const folga = (hi - lo) * 0.06;
+        if (opts.minForcado == null) lo -= folga;
+        if (opts.maxForcado == null) hi += folga;
+    }
+    const escala = monNiceScale(lo, hi, 5);
+    const min = escala.min, max = escala.max, passo = escala.step;
+
+    // --- espaco reservado para os rotulos dos eixos
+    const rotuloY = opts.rotuloY != null ? opts.rotuloY : (opts.unidade || '');
+    const rotuloX = opts.rotuloX != null ? opts.rotuloX : (rotulos ? '' : 'Horario');
+    const padL = rotuloY ? 64 : 54, padR = 18, padT = 32, padB = rotuloX ? 50 : 34;
     const plotW = w - padL - padR;
     const plotH = h - padT - padB;
-
-    const valores = validos.map(p => p.v);
-    let min = opts.minForcado != null ? opts.minForcado : Math.min(...valores);
-    let max = opts.maxForcado != null ? opts.maxForcado : Math.max(...valores);
-    if (min === max) { min = min - 1; max = max + 1; }
     const range = max - min;
 
     const tMin = Math.min(...pts.map(p => p.t));
@@ -1417,33 +1461,74 @@ function monCartesianChart(dados, opts) {
     const tRange = (tMax - tMin) || 1;
 
     const fmtY = opts.formatarY || (v => (Math.abs(v) >= 100 ? Math.round(v) : Math.round(v * 10) / 10));
-    const fmtX = opts.formatarX || (t => {
-        const d = new Date(t);
-        return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    });
+    // formato do tempo conforme a janela: segundos / HH:MM / data+HH:MM
+    const fmtX = opts.formatarX || (rotulos
+        ? (t => { const idx = Math.round(t); return (rotulos[idx] != null) ? String(rotulos[idx]) : ('#' + (idx + 1)); })
+        : (t => {
+            const d = new Date(t);
+            if (tRange > 86400000 * 2) {
+                return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' +
+                       d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            }
+            if (tRange > 7200000) return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }));
 
     const xOf = t => padL + ((t - tMin) / tRange) * plotW;
     const yOf = v => padT + plotH - ((v - min) / range) * plotH;
+    const yLabel = h - (rotuloX ? 30 : 12);
+    const yRotX = h - 10;
 
-    // Grid horizontal + labels Y
+    // Grid horizontal + rotulos Y no passo "bonito" (linhas extremas reforçadas)
     let gridH = '', lblY = '';
-    const nY = 5;
+    const nY = Math.max(1, Math.min(14, Math.round((max - min) / passo)));
     for (let i = 0; i <= nY; i++) {
-        const v = min + (range * i) / nY;
+        const v = Math.min(max, min + passo * i);
         const y = yOf(v);
-        gridH += '<line x1="' + padL + '" y1="' + y.toFixed(1) + '" x2="' + (w - padR) + '" y2="' + y.toFixed(1) + '" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>';
-        lblY += '<text x="' + (padL - 6) + '" y="' + (y + 3).toFixed(1) + '" text-anchor="end" fill="rgba(255,255,255,0.45)" font-size="10">' + fmtY(v) + '</text>';
+        const forte = (i === 0 || i === nY);
+        gridH += '<line x1="' + padL + '" y1="' + y.toFixed(1) + '" x2="' + (w - padR) + '" y2="' + y.toFixed(1) + '" stroke="' + (forte ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.06)') + '" stroke-width="1"/>';
+        lblY += '<text x="' + (padL - 8) + '" y="' + (y + 3.5).toFixed(1) + '" text-anchor="end" fill="rgba(255,255,255,0.5)" font-size="10">' + fmtY(v) + '</text>';
     }
 
-    // Grid vertical + labels X
+    // Grid vertical + rotulos X (janela de tempo regular, sem sobreposicao)
     let gridV = '', lblX = '';
-    const nX = Math.min(6, pts.length);
-    for (let i = 0; i <= nX; i++) {
-        const t = tMin + (tRange * i) / nX;
-        const x = xOf(t);
-        gridV += '<line x1="' + x.toFixed(1) + '" y1="' + padT + '" x2="' + x.toFixed(1) + '" y2="' + (padT + plotH) + '" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>';
-        lblX += '<text x="' + x.toFixed(1) + '" y="' + (h - 8) + '" text-anchor="middle" fill="rgba(255,255,255,0.45)" font-size="10">' + fmtX(t) + '</text>';
+    if (rotulos) {
+        const n = rotulos.length;
+        const cabem = Math.max(1, Math.floor(plotW / 62));
+        const salto = Math.max(1, Math.ceil(n / cabem));
+        const idxs = [];
+        for (let i = 0; i < n; i += salto) idxs.push(i);
+        if (idxs[idxs.length - 1] !== n - 1) {
+            if (n - 1 - idxs[idxs.length - 1] < salto) idxs[idxs.length - 1] = n - 1;
+            else idxs.push(n - 1);
+        }
+        for (let i = 0; i < n; i++) {
+            const x = xOf(i);
+            gridV += '<line x1="' + x.toFixed(1) + '" y1="' + padT + '" x2="' + x.toFixed(1) + '" y2="' + (padT + plotH) + '" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>';
+            if (idxs.indexOf(i) === -1) continue;
+            const anchor = i === 0 ? 'start' : (i === n - 1 ? 'end' : 'middle');
+            const xx = i === 0 ? padL : (i === n - 1 ? (w - padR) : x);
+            lblX += '<text x="' + xx.toFixed(1) + '" y="' + yLabel + '" text-anchor="' + anchor + '" fill="rgba(255,255,255,0.5)" font-size="10">' + esc(String(rotulos[i])) + '</text>';
+        }
+    } else {
+        const nX = Math.max(1, Math.min(6, Math.floor(plotW / 74), pts.length));
+        for (let i = 0; i <= nX; i++) {
+            const t = tMin + (tRange * i) / nX;
+            const x = xOf(t);
+            gridV += '<line x1="' + x.toFixed(1) + '" y1="' + padT + '" x2="' + x.toFixed(1) + '" y2="' + (padT + plotH) + '" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>';
+            const anchor = i === 0 ? 'start' : (i === nX ? 'end' : 'middle');
+            const xx = i === 0 ? padL : (i === nX ? (w - padR) : x);
+            lblX += '<text x="' + xx.toFixed(1) + '" y="' + yLabel + '" text-anchor="' + anchor + '" fill="rgba(255,255,255,0.5)" font-size="10">' + fmtX(t) + '</text>';
+        }
     }
+
+    // Titulos dos eixos (o que transforma o grafico em plano cartesiano)
+    const txtRotY = rotuloY
+        ? '<text transform="translate(14,' + (padT + plotH / 2).toFixed(1) + ') rotate(-90)" text-anchor="middle" fill="rgba(255,255,255,0.55)" font-size="10" font-weight="600" letter-spacing="0.4">' + esc(rotuloY) + '</text>'
+        : '';
+    const txtRotX = rotuloX
+        ? '<text x="' + (padL + plotW / 2).toFixed(1) + '" y="' + yRotX + '" text-anchor="middle" fill="rgba(255,255,255,0.55)" font-size="10" font-weight="600" letter-spacing="0.4">' + esc(rotuloX) + '</text>'
+        : '';
 
     // Linha + area
     const coords = pts.filter(p => p.v != null).map(p => xOf(p.t).toFixed(1) + ',' + yOf(p.v).toFixed(1));
@@ -1466,7 +1551,8 @@ function monCartesianChart(dados, opts) {
     let hoverPts = '';
     for (const p of pts) {
         if (p.v == null) continue;
-        const tip = new Date(p.t).toLocaleString('pt-BR') + ' — ' + fmtY(p.v) + (opts.unidade || '') + (p.ok === false ? ' (FALHA)' : '');
+        const rotuloPontos = rotulos ? (rotulos[Math.round(p.t)] != null ? rotulos[Math.round(p.t)] : ('#' + (Math.round(p.t) + 1))) : new Date(p.t).toLocaleString('pt-BR');
+        const tip = rotuloPontos + ' — ' + fmtY(p.v) + (opts.unidade || '') + (p.ok === false ? ' (FALHA)' : '');
         hoverPts += '<circle class="mchov" cx="' + xOf(p.t).toFixed(1) + '" cy="' + yOf(p.v).toFixed(1) + '" r="7" fill="transparent">' +
             '<title>' + esc(tip) + '</title></circle>';
     }
@@ -1477,7 +1563,7 @@ function monCartesianChart(dados, opts) {
     // SVG responsivo: viewBox + width 100% escala o grafico em qualquer container/aba
     return '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block;background:' + corFundo + ';border-radius:8px;max-width:100%;height:auto;min-height:' + Math.min(h, 260) + 'px;">' +
         titulo + legendaValor +
-        gridH + gridV + lblY + lblX +
+        gridH + gridV + lblY + lblX + txtRotY + txtRotX +
         '<polygon points="' + area + '" fill="' + cor + '" opacity="0.10"/>' +
         '<polyline points="' + linha + '" fill="none" stroke="' + cor + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
         falhas + pontoAtual +
@@ -2700,28 +2786,28 @@ function monKpiChartBlock(key) {
     if (key === 'mon-kpi-coletor') {
         titulo = 'CPU do PC Local (%)';
         dados = _monCpuHist;
-        opts = { cor: '#00d4ff', minForcado: 0, maxForcado: 100, altura: 200 };
+        opts = { cor: '#00d4ff', minForcado: 0, maxForcado: 100, altura: 200, unidade: '%' };
     } else if (key === 'mon-kpi-cpu-tempo-real') {
         titulo = 'CPU em Tempo Real (%)';
         dados = _monCpuHist;
-        opts = { cor: '#00e5c7', minForcado: 0, maxForcado: 100, altura: 200 };
+        opts = { cor: '#00e5c7', minForcado: 0, maxForcado: 100, altura: 200, unidade: '%' };
     } else if (key === 'mon-kpi-gpu-tempo-real') {
         titulo = 'GPU em Tempo Real (%)';
         dados = _monGpuHist || [];
-        opts = { cor: '#b24dff', minForcado: 0, maxForcado: 100, altura: 200 };
+        opts = { cor: '#b24dff', minForcado: 0, maxForcado: 100, altura: 200, unidade: '%' };
     } else if (key === 'mon-kpi-disponibilidade') {
         const linhas = (_monDados && _monDados.linhas) || [];
         if (linhas.length) {
             titulo = 'Disponibilidade por Host (%)';
             dados = linhas.map(l => l.estado === 'ACESSIVEL' ? 100 : 0);
-            opts = { cor: '#00e676', minForcado: 0, maxForcado: 100, altura: 200 };
+            opts = { cor: '#00e676', minForcado: 0, maxForcado: 100, altura: 200, unidade: '%', rotulosX: linhas.map(l => l.nome || l.ip) };
         }
     } else if (['mon-kpi-total','mon-kpi-acessiveis','mon-kpi-semresposta','mon-kpi-instaveis','mon-kpi-semdados','mon-kpi-alertas','mon-kpi-incidentes'].indexOf(key) >= 0) {
         const linhas = (_monDados && _monDados.linhas) || [];
         if (linhas.length) {
             titulo = 'Latencia dos Hosts (ms)';
             dados = linhas.map(l => l.latenciaMediaMs != null ? l.latenciaMediaMs : 0);
-            opts = { cor: '#2962FF', altura: 200 };
+            opts = { cor: '#2962FF', altura: 200, unidade: 'ms', rotulosX: linhas.map(l => l.nome || l.ip) };
         }
     } else if (key === 'mon-kpi-medicoes') {
         // sem serie temporal direta — usa contagem por dia se disponivel
@@ -2729,14 +2815,14 @@ function monKpiChartBlock(key) {
         if (dm.arquivos && dm.arquivos.length) {
             titulo = 'Medicoes por Dia';
             dados = dm.arquivos.map(a => a.medicoes);
-            opts = { cor: '#a855f7', altura: 180 };
+            opts = { cor: '#a855f7', altura: 180, rotulosX: dm.arquivos.map(a => a.dia || 'Dia') };
         }
     } else if (key === 'mon-kpi-disco') {
         const discos = (_monArmKPIs && _monArmKPIs.discos) || [];
         if (discos.length) {
             titulo = 'Uso de Disco por Volume (%)';
             dados = discos.map(d => d.usoPct != null ? d.usoPct : 0);
-            opts = { cor: '#22c55e', altura: 180, minForcado: 0, maxForcado: 100 };
+            opts = { cor: '#22c55e', altura: 180, minForcado: 0, maxForcado: 100, unidade: '%', rotulosX: discos.map(d => d.letra || '?') };
         }
     }
     if (!dados || (Array.isArray(dados) && dados.length < 2)) return '';
@@ -3423,7 +3509,7 @@ function monAbrirRelatorioPC() {
         // Vamos gerar dados de chart a partir do historico coletado
         function geraDadosChart(lados) {
             if (!lados || lados.length < 2) return '';
-            // Simples gera��o de dados para o chart canvas
+            // Simples geraÃ§Ã£o de dados para o chart canvas
             const ctx = document.createElement('canvas');
             ctx.width = 400;
             ctx.height = 200;
@@ -3467,7 +3553,7 @@ function monAbrirRelatorioPC() {
             '<p class="meta">Inventario TI — Monitoramento | Gerado em ' + new Date().toLocaleString('pt-BR') + '</p>' +
             '<button onclick="window.print()">Imprimir / Salvar PDF</button>' +
             '<button onclick="window.close()">Fechar</button>' +
-            // Se��o 1: Identificacao
+            // SeÃ§Ã£o 1: Identificacao
             '<section class="card"><h2>Identificacao</h2>' +
             '<table class="tbl"><tr><td>Hostname</td><td>' + esc((sistema && sistema.hostname) || _monLocalIp) + '</td></tr>' +
             '<tr><td>IP Local</td><td>' + (rede ? rede.ip : '?') + '</td></tr>' +
@@ -3475,7 +3561,7 @@ function monAbrirRelatorioPC() {
             '<tr><td>Plataforma</td><td>' + (info.plataforma || '?') + ' ' + (info.arquitetura || '') + '</td></tr>' +
             '<tr><td>Kernel</td><td>' + (info.release || '?') + '</td></tr>' +
             '<tr><td>Node.js</td><td>' + (info.node || '?') + '</td></tr></table></section>' +
-            // Se��o 2: CPU e RAM
+            // SeÃ§Ã£o 2: CPU e RAM
             '<section class="card"><h2>CPU e Memoria</h2>' +
             '<div style="display:flex;align-items:center;justify-content:center;padding:8px;background:#1a1a2e;border-radius:8px;margin-bottom:12px;">' +
             '<span style="font-size:32px;color:#00d4ff;">' + (cpu.usoPct != null ? Math.round(cpu.usoPct) : '—') + '%</span>' +
@@ -3485,7 +3571,7 @@ function monAbrirRelatorioPC() {
             '<div class="chart"><canvas id="cLat"></canvas></div>' +
             '<div class="chart"><canvas id="cPerda"></canvas></div>' +
             '</section>' +
-            // Se��o 3: GPU
+            // SeÃ§Ã£o 3: GPU
             '<section class="card"><h2>GPU</h2>' +
             (gpu.gpus && gpu.gpus.length ?
                 gpu.gpus.map(function(g) {
@@ -3495,23 +3581,23 @@ function monAbrirRelatorioPC() {
                 }).join('') :
                 '<p>Indisponivel</p>') +
             '</section>' +
-            // Se��o 4: Disco
+            // SeÃ§Ã£o 4: Disco
             '<section class="card"><h2>Disco ' + (disco ? disco.letra : 'C:') + '</h2>' +
             '<p>Total: ' + (disco ? disco.totalGb + ' GB' : '?') + ', Usado: ' + (disco ? disco.usadoGb + ' GB' : '?') +
             ', Livre: ' + (disco ? disco.livreGb + ' GB' : '?') + ', Uso: ' + (disco ? disco.usoPct + '%' : '?') + '</p>' +
             '</section>' +
-            // Se��o 5: Uptime / Sistema
+            // SeÃ§Ã£o 5: Uptime / Sistema
             '<section class="card"><h2>Uptime / Sistema</h2>' +
             '<p>Uptime: <b>' + (up.uptimeHumano || '?') + '</b> (boot: ' + (up.bootTime ? new Date(up.bootTime).toLocaleString('pt-BR') : '?') + ')</p>' +
             '<p>Reinicio detectado: ' + (up.reiniciadoDesdeUltimaColeta ? '<span style="color:#f44;">SIM</span>' : 'Nao') + '</p>' +
             '<p>Plataforma: ' + (info.plataforma || '?') + ' ' + (info.arquitetura || '') + '</p>' +
             '<p>Kernel: ' + (info.release || '?') + ' | Node ' + (info.node || '?') + '</p>' +
             '</section>' +
-            // Se��o 6: Rede
+            // SeÃ§Ã£o 6: Rede
             '<section class="card"><h2>Rede</h2>' +
             '<p>' + (rede ? rede.nome + ' — ' + rede.ip : '?') + ' (MAC: ' + (rede ? rede.mac : '?') + ')</p>' +
             '</section>' +
-            // Se��o 7: Hosts Monitorados
+            // SeÃ§Ã£o 7: Hosts Monitorados
             '<section class="card"><h2>Hosts Monitorados (' + (hist && hist.linhas ? hist.linhas.length : 0) + ')</h2>' +
             '<table class="tbl"><thead><tr><th>Nome</th><th>IP</th><th>Estado</th><th>Latencia</th><th>Falhas</th></tr></thead><tbody>' +
             (hist && hist.linhas ?
@@ -3521,7 +3607,7 @@ function monAbrirRelatorioPC() {
                 '<tr><td colspan="5">Sem dados</td></tr>') +
             '</tbody></table>' +
             '</section>' +
-            // Se��o 8: Alertas
+            // SeÃ§Ã£o 8: Alertas
             '<section class="card"><h2>Alertas (' + (alertas ? alertas.length : 0) + ')</h2>' +
             (alertas ?
                 '<table class="tbl"><thead><tr><th>Gravidade</th><th>Titulo</th><th>Confianca</th></tr></thead><tbody>' +
@@ -3531,7 +3617,7 @@ function monAbrirRelatorioPC() {
                 '</tbody></table>'
             : '<p>Nenhum alerta.</p>') +
             '</section>' +
-            // Se��o 9: Armazenamento
+            // SeÃ§Ã£o 9: Armazenamento
             '<section class="card"><h2>Armazenamento</h2>' +
             '<p>Medicoes hoje: ' + (hist && hist.medicoesHoje != null ? hist.medicoesHoje : '?') + ' | Total: ' + (hist && hist.totalMedicoes != null ? hist.totalMedicoes : '?') +
             ' (' + (hist && hist.diasComDados != null ? hist.diasComDados : '?') + ' dias) | Espaco: ' + (hist && hist.tamanhoTotalMB != null ? hist.tamanhoTotalMB + ' MB' : '?') + '</p>' +
