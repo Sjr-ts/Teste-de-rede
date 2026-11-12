@@ -1424,6 +1424,7 @@ function showSection(id) {
     var sec = document.getElementById(id);
     if (sec) sec.classList.remove('hidden');
     document.querySelectorAll('.nav-btn').forEach(function(b) { b.classList.remove('active'); if (b.dataset.section === id) b.classList.add('active'); });
+    expandNavGroupOf(document.querySelector('.nav-btn.active'));
     closeStatDetail(); closeKpiDetail(); closeManKpiDetail(); closeOsKpiDetail();
     document.querySelectorAll('canvas').forEach(function(c) { if (c._chart) { c._chart.destroy(); c._chart = null; } });
     var t = {
@@ -1464,6 +1465,39 @@ function showSection(id) {
 }
 
 function toggleSidebar() { var s = document.getElementById('sidebar'), o = document.getElementById('sidebar-overlay'); if (!s || !o) return; s.classList.toggle('open'); o.classList.toggle('open'); }
+
+// ---- Sidebar: grupos colapsaveis (estilo Zabbix) ----
+function toggleNavGroup(btn) {
+    var g = btn && btn.closest ? btn.closest('.nav-group') : null;
+    if (!g) return;
+    var collapsed = g.classList.toggle('collapsed');
+    btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    try {
+        var st = JSON.parse(localStorage.getItem('navGroups') || '{}');
+        if (g.id) st[g.id] = collapsed;
+        localStorage.setItem('navGroups', JSON.stringify(st));
+    } catch (e) {}
+}
+function restoreNavGroups() {
+    try {
+        var st = JSON.parse(localStorage.getItem('navGroups') || '{}');
+        document.querySelectorAll('.nav-group').forEach(function(g) {
+            if (g.id && st[g.id]) {
+                g.classList.add('collapsed');
+                var t = g.querySelector('.nav-group-toggle');
+                if (t) t.setAttribute('aria-expanded', 'false');
+            }
+        });
+    } catch (e) {}
+}
+function expandNavGroupOf(el) {
+    var g = el && el.closest ? el.closest('.nav-group') : null;
+    if (!g) return;
+    g.classList.remove('collapsed');
+    var t = g.querySelector('.nav-group-toggle');
+    if (t) t.setAttribute('aria-expanded', 'true');
+}
+document.addEventListener('DOMContentLoaded', restoreNavGroups);
 
 async function loadAdmin() {
     var el = document.getElementById('admin-db-info');
@@ -1827,7 +1861,7 @@ async function loadComputadores(page) {
 function renderComputadoresCards(data) {
     var grid = document.getElementById('pc-cards-grid');
     var navTotal = document.getElementById('nav-total');
-    if (navTotal) navTotal.textContent = data.totalGeral !== undefined ? data.totalGeral : (data.totalElements || 0);
+    if (navTotal) navTotal.textContent = data.totalGeral !== undefined ? data.totalGeral : (data.total || data.totalElements || 0);
     if (!grid) return;
     if (!data.content || data.content.length === 0) {
         grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;"><i class="fas fa-inbox"></i><p>Nenhum computador encontrado</p></div>';
@@ -1835,11 +1869,44 @@ function renderComputadoresCards(data) {
         return;
     }
     var sm = { 'ATIVO': { c: 'badge-ativo', i: 'fa-check-circle' }, 'MANUTENCAO_PREDITIVA': { c: 'badge-preditiva', i: 'fa-search' }, 'MANUTENCAO_PREVENTIVA': { c: 'badge-preventiva', i: 'fa-shield-alt' }, 'MANUTENCAO_EMERGENCIAL': { c: 'badge-emergencial', i: 'fa-exclamation-triangle' }, 'CONCLUIDO': { c: 'badge-concluido', i: 'fa-check-double' } };
-    grid.innerHTML = data.content.map(function(eq) {
+    grid.innerHTML = data.content.map(function(raw) {
+        var eq = computeCycle(Object.assign({}, raw));
         var isSelected = selectedComputadores.has(eq.id);
         var s = sm[eq.status || 'ATIVO'] || { c: 'badge-inativo', i: 'fa-circle' }, sl = escapeHtml((eq.status || 'ATIVO').replace('MANUTENCAO_', 'Man. ').replace(/_/g, ' '));
         var admin = getPerfil() === 'ADMIN' ? '<button onclick="event.stopPropagation();confirmDelete(\'computador\',' + eq.id + ',\'' + escapeJsStr(eq.nomePc) + '\')" class="action-btn action-btn-delete" title="Excluir"><i class="fas fa-trash"></i></button>' : '';
         var checkHtml = getPerfil() === 'ADMIN' ? '<input type="checkbox" class="bulk-check" ' + (isSelected ? 'checked' : '') + ' onclick="event.stopPropagation();toggleSelection(' + eq.id + ',this.checked)" title="Selecionar">' : '';
+        // especificacoes reais (so as que existem; ignora marcador de vazio "A definir")
+        var ehVazio = function(v) {
+            if (v === null || v === undefined) return true;
+            var t = String(v).trim();
+            return t === '' || /^(a definir|nao informado|n\/a|sem dados|-|—)$/i.test(t);
+        };
+        var specs = [eq.processador, eq.memoriaRam, eq.armazenamento].filter(function(v) { return !ehVazio(v); });
+        var specsHtml = specs.length ? '<div class="pc-card-specs">' + specs.map(function(v) { return '<span class="pc-card-spec">' + escapeHtml(v) + '</span>'; }).join('') + '</div>' : '';
+        // grade de dados: apenas campos preenchidos no registro (nada de valor inventado)
+        var meta = [];
+        var addMeta = function(icon, label, value, cls) { if (!ehVazio(value)) meta.push({ i: icon, l: label, v: String(value).trim(), c: cls || '' }); };
+        addMeta('fa-barcode', 'Serie', eq.numeroSerie);
+        addMeta('fa-network-wired', 'Endereco IP', eq.ipAddress);
+        addMeta('fa-window-maximize', 'Sistema Operacional', eq.sistemaOperacional);
+        addMeta('fa-map-marker-alt', 'Localizacao', eq.localizacao);
+        addMeta('fa-building', 'Fornecedor', eq.fornecedor);
+        var aq = parseDataISO(eq.dataAquisicao);
+        addMeta('fa-calendar', 'Data de aquisicao', aq ? aq.toLocaleDateString('pt-BR') : '');
+        var pd = parseDataISO(eq.proximaManutencao);
+        if (pd) {
+            var diasProx = Math.ceil((pd.getTime() - Date.now()) / 86400000);
+            addMeta('fa-calendar-check', 'Proxima manutencao', pd.toLocaleDateString('pt-BR'), diasProx < 0 ? 'over' : (diasProx <= 15 ? 'soon' : ''));
+        }
+        var gd = parseDataISO(eq.dataGarantia);
+        addMeta('fa-shield-alt', 'Garantia', gd ? gd.toLocaleDateString('pt-BR') + (gd.getTime() < Date.now() ? ' (vencida)' : '') : '');
+        var metaHtml = '';
+        if (meta.length) {
+            metaHtml = '<div class="pc-card-meta">' + meta.map(function(m) {
+                return '<span class="pc-meta' + (m.c ? ' pc-meta-' + m.c : '') + '" title="' + escapeHtml(m.l + ': ' + m.v) + '"><i class="fas ' + m.i + '" aria-hidden="true"></i><span class="pc-meta-v">' + escapeHtml(m.v) + '</span></span>';
+            }).join('') + '</div>';
+        }
+        var notasHtml = eq.notas && String(eq.notas).trim() !== '' ? '<div class="pc-card-notas" title="' + escapeHtml(eq.notas) + '"><i class="fas fa-sticky-note"></i><span>' + escapeHtml(eq.notas) + '</span></div>' : '';
         var cicloHtml = '';
         if (eq.diasDesdeInicioCiclo !== null && eq.diasDesdeInicioCiclo !== undefined) {
             var pct = Math.min(100, Math.max(0, (eq.diasDesdeInicioCiclo / 240) * 100));
@@ -1848,7 +1915,16 @@ function renderComputadoresCards(data) {
             var faseLabel = { 'ATIVO': 'Ativo', 'PREDITIVO': 'Preditivo', 'PREVENTIVO': 'Preventivo', 'ATRASADO': 'Atrasado' };
             cicloHtml = '<div class="pc-card-ciclo"><div class="ciclo-bar"><div class="ciclo-fill" style="width:' + pct + '%;background:' + corCiclo + ';"></div></div><div class="ciclo-info"><span class="ciclo-fase" style="color:' + corCiclo + ';">' + (faseLabel[eq.faseCiclo] || eq.faseCiclo) + '</span><span class="ciclo-dias">' + cicloTexto + '</span></div></div>';
         }
-        return '<div class="pc-card' + (isSelected ? ' selected' : '') + (eq.faseCiclo === 'ATRASADO' ? ' pc-card-atrasado' : '') + '" onclick="showComputadorDetail(' + eq.id + ')">' + checkHtml + '<div class="pc-card-foto">' + getComputerPhoto(eq, { w: 320, h: 220 }) + '<div class="pc-card-status-bar"><span class="badge ' + s.c + '"><i class="fas ' + s.i + '" style="font-size:9px;"></i> ' + sl + '</span></div></div><div class="pc-card-body"><div class="pc-card-name">' + escapeHtml(eq.nomePc) + '</div><div class="pc-card-model">' + escapeHtml(eq.modeloMarca) + '</div>' + (eq.departamento ? '<div class="pc-card-dept"><i class="fas fa-sitemap"></i> ' + escapeHtml(eq.departamento) + '</div>' : '') + '<div class="pc-card-specs"><span class="pc-card-spec">' + escapeHtml(eq.processador) + '</span><span class="pc-card-spec">' + escapeHtml(eq.memoriaRam) + '</span><span class="pc-card-spec">' + escapeHtml(eq.armazenamento) + '</span></div>' + cicloHtml + '<div class="pc-card-footer"><span class="pc-card-user"><i class="fas fa-user"></i> ' + escapeHtml(eq.usuarioDesignado || 'Sem usuario') + '</span><div class="pc-card-actions" onclick="event.stopPropagation()"><button onclick="event.stopPropagation();showComputadorForm(' + eq.id + ')" class="action-btn action-btn-edit" title="Editar"><i class="fas fa-pen"></i></button>' + admin + '</div></div></div></div>';
+        return '<div class="pc-card' + (isSelected ? ' selected' : '') + (eq.faseCiclo === 'ATRASADO' ? ' pc-card-atrasado' : '') + '" onclick="showComputadorDetail(' + eq.id + ')">' + checkHtml +
+            '<div class="pc-card-foto">' + getComputerPhoto(eq, { w: 340, h: 150 }) + '<div class="pc-card-status-bar"><span class="badge ' + s.c + '"><i class="fas ' + s.i + '" style="font-size:9px;"></i> ' + sl + '</span></div></div>' +
+            '<div class="pc-card-body">' +
+            '<div class="pc-card-name">' + escapeHtml(eq.nomePc || 'Sem nome') + '</div>' +
+            (eq.modeloMarca ? '<div class="pc-card-model">' + escapeHtml(eq.modeloMarca) + '</div>' : '') +
+            (eq.departamento ? '<div class="pc-card-dept"><i class="fas fa-sitemap"></i> ' + escapeHtml(eq.departamento) + '</div>' : '') +
+            specsHtml + metaHtml + notasHtml + cicloHtml +
+            '<div class="pc-card-footer"><span class="pc-card-user" title="' + escapeHtml(eq.usuarioDesignado || 'Sem usuario') + '"><i class="fas fa-user"></i> ' + escapeHtml(eq.usuarioDesignado || 'Sem usuario') + '</span>' +
+            '<div class="pc-card-actions" onclick="event.stopPropagation()"><button onclick="event.stopPropagation();showComputadorForm(' + eq.id + ')" class="action-btn action-btn-edit" title="Editar"><i class="fas fa-pen"></i></button>' + admin + '</div></div>' +
+            '</div></div>';
     }).join('');
     renderPagination('cards-pagination', data.totalPages, data.page !== undefined ? data.page : data.number, loadComputadores);
 }

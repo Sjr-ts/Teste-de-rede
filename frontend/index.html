@@ -13,7 +13,7 @@
     <script src="vendor/chart.umd.min.js"></script>
 
     <link rel="stylesheet" href="vendor/css/all.min.css">
-    <link rel="stylesheet" href="css/style.css?v=3579-auth">
+    <link rel="stylesheet" href="css/style.css?v=3600-ux">
     <style>
         .print-header, .print-footer { display: none; }
     </style>
@@ -36,49 +36,88 @@
             </div>
         </div>
 
-        <nav class="sidebar-nav">
-            <button onclick="showSection('painel')" class="nav-btn active" data-section="painel">
-                <i class="fas fa-chart-pie nav-icon"></i><span>Dashboard</span>
-            </button>
-            <button onclick="showSection('computadores')" class="nav-btn" data-section="computadores">
-                <i class="fas fa-desktop nav-icon"></i><span>Computadores</span>
-                <span class="nav-badge" id="nav-total">0</span>
-            </button>
-            <button onclick="showSection('manutencoes')" class="nav-btn" data-section="manutencoes">
-                <i class="fas fa-wrench nav-icon"></i><span>Manutencoes</span>
-            </button>
-             <button onclick="showSection('ordens-servico')" class="nav-btn" data-section="ordens-servico">
-                <i class="fas fa-clipboard-list nav-icon"></i><span>Ordens de Servico</span>
-            </button>
-             <button onclick="showSection('departamentos')" class="nav-btn" data-section="departamentos">
-                <i class="fas fa-sitemap nav-icon"></i><span>Setores</span>
-            </button>
-             <button onclick="showSection('software-licencas')" class="nav-btn" data-section="software-licencas">
-                <i class="fas fa-key nav-icon"></i><span>Software/Licencas</span>
-            </button>
-             <button onclick="showSection('ramais')" class="nav-btn" data-section="ramais">
-                <i class="fas fa-phone-alt nav-icon"></i><span>Ramais</span>
-                <span class="nav-badge" id="nav-ramais-total">0</span>
-            </button>
-             <button onclick="showSection('trocas')" class="nav-btn" data-section="trocas">
-                <i class="fas fa-exchange-alt nav-icon"></i><span>Trocas</span>
-            </button>
-             <button onclick="showSection('logs')" class="nav-btn" data-section="logs">
-                <i class="fas fa-history nav-icon"></i><span>Historico</span>
-            </button>
-            <button onclick="showSection('relatorios')" class="nav-btn" data-section="relatorios">
-                <i class="fas fa-chart-bar nav-icon"></i><span>Relatorios</span>
-            </button>
-            <button onclick="showSection('usuarios')" class="nav-btn" data-section="usuarios">
-                <i class="fas fa-users nav-icon"></i><span>Usuários</span>
-            </button>
-             <button onclick="showSection('admin')" class="nav-btn" data-section="admin">
-                <i class="fas fa-cogs nav-icon"></i><span>Ferramentas</span>
-            </button>
-            <button onclick="showSection('monitoramento')" class="nav-btn" data-section="monitoramento">
-                <i class="fas fa-heartbeat nav-icon"></i><span>Monitoramento</span>
-                <span class="nav-badge" id="nav-monitor-alerts" style="background:var(--red);display:none;">0</span>
-            </button>
+        <nav class="sidebar-nav" id="sidebar-nav">
+            <div class="nav-group" id="navg-inicio">
+                <button type="button" class="nav-group-toggle" onclick="toggleNavGroup(this)" aria-expanded="true">
+                    <span class="nav-group-label"><i class="fas fa-home nav-icon"></i><span>Inicio</span></span><i class="fas fa-chevron-down nav-chevron"></i>
+                </button>
+                <div class="nav-group-items">
+                    <button onclick="showSection('painel')" class="nav-btn active" data-section="painel">
+                        <i class="fas fa-chart-pie nav-icon"></i><span>Dashboard</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="nav-group" id="navg-infra">
+                <button type="button" class="nav-group-toggle" onclick="toggleNavGroup(this)" aria-expanded="true">
+                    <span class="nav-group-label"><i class="fas fa-server nav-icon"></i><span>Infraestrutura</span></span><i class="fas fa-chevron-down nav-chevron"></i>
+                </button>
+                <div class="nav-group-items">
+                    <button onclick="showSection('computadores')" class="nav-btn" data-section="computadores">
+                        <i class="fas fa-desktop nav-icon"></i><span>Computadores</span>
+                        <span class="nav-badge" id="nav-total">0</span>
+                    </button>
+                    <button onclick="showSection('departamentos')" class="nav-btn" data-section="departamentos">
+                        <i class="fas fa-sitemap nav-icon"></i><span>Setores</span>
+                    </button>
+                    <button onclick="showSection('ramais')" class="nav-btn" data-section="ramais">
+                        <i class="fas fa-phone-alt nav-icon"></i><span>Ramais</span>
+                        <span class="nav-badge" id="nav-ramais-total">0</span>
+                    </button>
+                    <button onclick="showSection('monitoramento')" class="nav-btn" data-section="monitoramento">
+                        <i class="fas fa-heartbeat nav-icon"></i><span>Monitoramento</span>
+                        <span class="nav-badge" id="nav-monitor-alerts" style="background:var(--red);color:#fff;border-color:rgba(255,255,255,0.25);display:none;">0</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="nav-group" id="navg-operacoes">
+                <button type="button" class="nav-group-toggle" onclick="toggleNavGroup(this)" aria-expanded="true">
+                    <span class="nav-group-label"><i class="fas fa-briefcase nav-icon"></i><span>Operacoes</span></span><i class="fas fa-chevron-down nav-chevron"></i>
+                </button>
+                <div class="nav-group-items">
+                    <button onclick="showSection('manutencoes')" class="nav-btn" data-section="manutencoes">
+                        <i class="fas fa-wrench nav-icon"></i><span>Manutencoes</span>
+                    </button>
+                    <button onclick="showSection('ordens-servico')" class="nav-btn" data-section="ordens-servico">
+                        <i class="fas fa-clipboard-list nav-icon"></i><span>Ordens de Servico</span>
+                    </button>
+                    <button onclick="showSection('trocas')" class="nav-btn" data-section="trocas">
+                        <i class="fas fa-exchange-alt nav-icon"></i><span>Trocas</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="nav-group" id="navg-gestao">
+                <button type="button" class="nav-group-toggle" onclick="toggleNavGroup(this)" aria-expanded="true">
+                    <span class="nav-group-label"><i class="fas fa-layer-group nav-icon"></i><span>Gestao</span></span><i class="fas fa-chevron-down nav-chevron"></i>
+                </button>
+                <div class="nav-group-items">
+                    <button onclick="showSection('software-licencas')" class="nav-btn" data-section="software-licencas">
+                        <i class="fas fa-key nav-icon"></i><span>Software/Licencas</span>
+                    </button>
+                    <button onclick="showSection('usuarios')" class="nav-btn" data-section="usuarios">
+                        <i class="fas fa-users nav-icon"></i><span>Usuarios</span>
+                    </button>
+                    <button onclick="showSection('relatorios')" class="nav-btn" data-section="relatorios">
+                        <i class="fas fa-chart-bar nav-icon"></i><span>Relatorios</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="nav-group" id="navg-sistema">
+                <button type="button" class="nav-group-toggle" onclick="toggleNavGroup(this)" aria-expanded="true">
+                    <span class="nav-group-label"><i class="fas fa-sliders-h nav-icon"></i><span>Sistema</span></span><i class="fas fa-chevron-down nav-chevron"></i>
+                </button>
+                <div class="nav-group-items">
+                    <button onclick="showSection('logs')" class="nav-btn" data-section="logs">
+                        <i class="fas fa-history nav-icon"></i><span>Historico</span>
+                    </button>
+                    <button onclick="showSection('admin')" class="nav-btn" data-section="admin">
+                        <i class="fas fa-cogs nav-icon"></i><span>Ferramentas</span>
+                    </button>
+                </div>
+            </div>
         </nav>
 
         <div class="sidebar-footer">
@@ -1038,7 +1077,7 @@
 
     <script src="vendor/jspdf.umd.min.js"></script>
     <script src="vendor/jspdf.plugin.autotable.min.js"></script>
-<script src="js/app.js?v=4702-auth"></script>
+<script src="js/app.js?v=4800-ux"></script>
 <script src="js/monitor.js?v=6703-ip"></script>
 </body>
 </html>
