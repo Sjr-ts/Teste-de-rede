@@ -433,13 +433,37 @@ app.get('/api/computadores/estatisticas', (req, res) => {
         const preventiva = comps.filter(c => c.status === 'MANUTENCAO_PREVENTIVA').length;
         const emergencial = comps.filter(c => c.status === 'MANUTENCAO_EMERGENCIAL').length;
         const concluso = comps.filter(c => c.status === 'CONCLUIDO').length;
+        // Ciclo de manutencao de 240 dias — mesma regra do frontend computeCycle()
+        const fases = { ATIVO: 0, PREDITIVO: 0, PREVENTIVO: 0, ATRASADO: 0 };
+        let vencidos = 0;
+        for (const c of comps) {
+            const inicio = new Date(c.dataInicioCiclo || c.dataCadastro);
+            const dias = isNaN(inicio.getTime()) ? 0 : Math.floor((Date.now() - inicio.getTime()) / 86400000);
+            if (dias > 240) { fases.ATRASADO++; vencidos++; }
+            else if (dias > 180) fases.PREVENTIVO++;
+            else if (dias > 120) fases.PREDITIVO++;
+            else fases.ATIVO++;
+        }
         res.json({
             total: comps.length,
             ativos,
             manutencaoPreditiva: preditiva,
             manutencaoPreventiva: preventiva,
             manutencaoEmergencial: emergencial,
-            concluso
+            concluso,
+            concluidos: concluso,
+            manutencaoVencida: vencidos,
+            faseAtivo: fases.ATIVO,
+            fasePreditivo: fases.PREDITIVO,
+            fasePreventivo: fases.PREVENTIVO,
+            faseAtrasado: fases.ATRASADO,
+            porStatus: {
+                ATIVO: ativos,
+                MANUTENCAO_PREDITIVA: preditiva,
+                MANUTENCAO_PREVENTIVA: preventiva,
+                MANUTENCAO_EMERGENCIAL: emergencial,
+                CONCLUIDO: concluso
+            }
         });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -515,10 +539,23 @@ app.get('/api/manutencoes/estatisticas', (req, res) => {
         const preditiva = mans.filter(m => m.tipo === 'PREDITIVA').length;
         const emergencial = mans.filter(m => m.tipo === 'EMERGENCIAL').length;
         const corretiva = mans.filter(m => m.tipo === 'CORRETIVA').length;
+        const porMes = {};
+        for (const m of mans) {
+            if (!m.dataCadastro) continue;
+            const dt = new Date(m.dataCadastro);
+            if (isNaN(dt.getTime())) continue;
+            const k = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+            porMes[k] = (porMes[k] || 0) + 1;
+        }
         res.json({
             total: mans.length,
             pendente, emAndamento, concluida, cancelada,
-            preventiva, preditiva, emergencial, corretiva
+            preventiva, preditiva, emergencial, corretiva,
+            // aliases no contrato do frontend (plural) — mesma fonte, sem recalculo
+            pendentes: pendente, concluidas: concluida, canceladas: cancelada,
+            porTipo: { CORRETIVA: corretiva, PREVENTIVA: preventiva, PREDITIVA: preditiva, EMERGENCIAL: emergencial },
+            porStatus: { PENDENTE: pendente, EM_ANDAMENTO: emAndamento, CONCLUIDA: concluida, CANCELADA: cancelada },
+            porMes
         });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -540,7 +577,11 @@ app.get('/api/ordens-servico/estatisticas', (req, res) => {
         res.json({
             total: os.length,
             aberta, emAnalise, emExecucao, concluida, cancelada,
-            baixa, media, alta, critica
+            baixa, media, alta, critica,
+            // aliases no contrato do frontend (plural) — mesma fonte, sem recalculo
+            abertas: aberta, concluidas: concluida, canceladas: cancelada,
+            porPrioridade: { BAIXA: baixa, MEDIA: media, ALTA: alta, CRITICA: critica },
+            porStatus: { ABERTA: aberta, EM_ANALISE: emAnalise, EM_EXECUCAO: emExecucao, CONCLUIDA: concluida, CANCELADA: cancelada }
         });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });

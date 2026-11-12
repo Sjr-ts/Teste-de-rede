@@ -149,10 +149,16 @@ function monAtualizarKpiCpu(cpu, ts) {
             kpiGrid.insertAdjacentHTML('afterbegin', cpuKpi);
         }
     } else {
-        const valorEl = el.querySelector('.kpi-value');
-        if (valorEl) valorEl.textContent = cpu.toFixed(1) + '%';
+        const valorEl = el.querySelector('.kpi-num');
+        if (valorEl) {
+            const alvo = cpu.toFixed(1) + '%';
+            if (valorEl.textContent !== alvo) valorEl.textContent = alvo;
+            const cls = 'kpi-num' + (cpu > 80 ? ' crit' : cpu > 60 ? ' warn' : '');
+            if (valorEl.className !== cls) valorEl.className = cls;
+        }
         const cor = cpu > 80 ? 'red' : cpu > 60 ? 'yellow' : 'cyan';
-        el.className = 'kpi-card kpi-card-' + cor;
+        const ic = el.querySelector('.kpi-ic');
+        if (ic) { const want = 'fas fa-microchip kpi-ic kpi-ic-' + cor; if (ic.className !== want) ic.className = want; }
     }
 }
 
@@ -167,10 +173,16 @@ function monAtualizarKpiGpu(gpu, nome, ts) {
             kpiGrid.insertAdjacentHTML('afterbegin', gpuKpi);
         }
     } else {
-        const valorEl = el.querySelector('.kpi-value');
-        if (valorEl) valorEl.textContent = gpu.toFixed(1) + '%';
+        const valorEl = el.querySelector('.kpi-num');
+        if (valorEl) {
+            const alvo = gpu.toFixed(1) + '%';
+            if (valorEl.textContent !== alvo) valorEl.textContent = alvo;
+            const cls = 'kpi-num' + (gpu > 80 ? ' crit' : gpu > 60 ? ' warn' : '');
+            if (valorEl.className !== cls) valorEl.className = cls;
+        }
         const cor = gpu > 80 ? 'red' : gpu > 60 ? 'yellow' : 'purple';
-        el.className = 'kpi-card kpi-card-' + cor;
+        const ic = el.querySelector('.kpi-ic');
+        if (ic) { const want = 'fas fa-tv kpi-ic kpi-ic-' + cor; if (ic.className !== want) ic.className = want; }
     }
 }
 
@@ -1510,7 +1522,10 @@ async function monCarregarMockMetricas(ip) {
 // nos do DOM. Isso elimina o "travamento" a cada ciclo do coletor/SSE.
 function monRenderKPIs(p) {
     const el = document.getElementById('mon-kpis');
-    if (!el || !p || !p.resumo) { if (el) { el.innerHTML = ''; } return; }
+    if (!el) return;
+    // Sem dados agora: mantem o ultimo estado (evita os cards sumirem/piscarem
+    // quando um poll falha). So reconstrui quando ha resumo valido.
+    if (!p || !p.resumo) return;
     const defs = monKpiDefs(p);
     for (const d of defs) monAtualizarKpiCardDom(el, d);
     // KPIs de armazenamento (carrega sob demanda, com cache de 60s)
@@ -1545,20 +1560,20 @@ function monAtualizarKpiCardDom(el, d) {
     let card = el.querySelector('[data-key="' + d.key + '"]');
     if (!card) { el.insertAdjacentHTML('beforeend', monKpiCard(d.icon, d.cor, d.valor, d.label, d.sub, d.key, d.extra)); return; }
     const ativo = card.classList.contains('active');
-    card.className = 'kpi-card kpi-card-' + d.cor + (ativo ? ' active' : '');
-    const ic = card.querySelector('.kpi-icon');
-    if (ic) ic.className = 'kpi-icon kpi-icon-' + d.cor;
-    const val = card.querySelector('.kpi-value');
+    card.className = 'kpi-card' + (ativo ? ' active' : '');
+    const ic = card.querySelector('.kpi-ic');
+    if (ic) { const want = 'fas ' + d.icon + ' kpi-ic kpi-ic-' + d.cor; if (ic.className !== want) ic.className = want; }
+    const val = card.querySelector('.kpi-num');
     const valStr = String(d.valor);
     if (val && val.textContent !== valStr) val.textContent = valStr;
-    const lab = card.querySelector('.kpi-label');
+    const lab = card.querySelector('.kpi-name');
     if (lab && lab.textContent !== d.label) lab.textContent = d.label;
     const sub = card.querySelector('.kpi-sub');
     if (sub && sub._lastSet !== d.sub) { sub.innerHTML = d.sub; sub._lastSet = d.sub; }
     if (d.extra) {
         let ex = card.querySelector('.kpi-extra');
         if (ex) { if (ex._lastSet !== d.extra) { ex.innerHTML = d.extra; ex._lastSet = d.extra; } }
-        else { const hd = card.querySelector('.kpi-header'); if (hd) hd.insertAdjacentHTML('beforeend', '<div class="kpi-extra">' + d.extra + '</div>'); }
+        else { const top = card.querySelector('.kpi-top'); if (top) top.insertAdjacentHTML('beforeend', '<span class="kpi-extra">' + d.extra + '</span>'); }
     }
 }
 
@@ -1591,14 +1606,12 @@ async function monRenderArmazenamentoKPIs() {
 }
 
 function monKpiCard(icon, cor, valor, label, sub, key, extra) {
-    return '<div class="kpi-card kpi-card-' + cor + '" onclick="monToggleKpiDetail(\'' + key + '\')" data-key="' + key + '">' +
-        '<div class="kpi-header">' +
-        '<div class="kpi-icon kpi-icon-' + cor + '"><i class="fas ' + icon + '"></i></div>' +
-        (extra ? '<div class="kpi-extra">' + extra + '</div>' : '') +
-        '</div>' +
-        '<div class="kpi-value" style="font-size:36px;">' + valor + '</div>' +
-        '<div class="kpi-label">' + label + '</div>' +
-        '<div class="kpi-sub" style="font-size:11px;color:var(--text-muted);margin-top:4px;">' + sub + '</div>' +
+    return '<div class="kpi-card" onclick="monToggleKpiDetail(\'' + key + '\')" data-key="' + key + '">' +
+        '<div class="kpi-top"><i class="fas ' + icon + ' kpi-ic kpi-ic-' + cor + '"></i>' +
+        '<span class="kpi-name">' + label + '</span>' +
+        (extra ? '<span class="kpi-extra">' + extra + '</span>' : '') + '</div>' +
+        '<div class="kpi-num">' + valor + '</div>' +
+        '<div class="kpi-sub">' + sub + '</div>' +
         '</div>';
 }
 
