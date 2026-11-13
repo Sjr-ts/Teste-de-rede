@@ -1371,9 +1371,9 @@ function monRenderSistema(s) {
     monSetSysItem('sistema', 'Sistema', (info.plataforma || '?') + ' ' + (info.arquitetura || ''),
         'Kernel ' + (info.release || '?') + ' · Node ' + (info.node || '?'), 'magenta');
 
-    // Acumula historico para grafico cardiaco (ultimos 30 pontos)
-    if (cpu.usoPct != null) { _monCpuHist.push(cpu.usoPct); if (_monCpuHist.length > 30) _monCpuHist.shift(); }
-    if (mem.usoPct != null) { _monRamHist.push(mem.usoPct); if (_monRamHist.length > 30) _monRamHist.shift(); }
+    // Acumula historico para grafico cardiaco (ultimos 60 pontos)
+    if (cpu.usoPct != null) { _monCpuHist.push(cpu.usoPct); if (_monCpuHist.length > 60) _monCpuHist.shift(); }
+    if (mem.usoPct != null) { _monRamHist.push(mem.usoPct); if (_monRamHist.length > 60) _monRamHist.shift(); }
 
     // Acumula graficos para uso no KPI detalhado / relatorio (sem renderizar inline)
     if (_monCpuHist.length >= 2) {

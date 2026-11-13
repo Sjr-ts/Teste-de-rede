@@ -21,6 +21,7 @@ if (typeof Chart !== 'undefined') {
     Chart.defaults.color = '#606070';
     Chart.defaults.borderColor = 'rgba(255,255,255,0.04)';
     Chart.defaults.font.family = "'Inter', sans-serif";
+    Chart.defaults.locale = 'pt-BR';
 }
 
 var _curDate = new Date();
