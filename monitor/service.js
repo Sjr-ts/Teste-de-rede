@@ -16,6 +16,23 @@ const hostmetrics = require('./hostmetrics');
 
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 
+// Limites de alerta PADRAO. Unica fonte dos numeros: monitor/config.json
+// sobrescreve estes valores quando existe; o frontend NAO pode copia-los na
+// mao — ele recebe `limites` em /api/monitor/painel e /api/monitor/historico
+// (ver obterLimites). O teste test/limiares.test.js garante que o fallback
+// do frontend e identico a este objeto.
+const LIMITES_PADRAO = {
+    latenciaMediaMs: 80,
+    latenciaP95Ms: 200,
+    perdaPacotesPct: 10,
+    falhasConsecutivasParaAlerta: 3
+};
+
+/** Limites EFETIVOS: padrao sobrescrito pelo monitor/config.json. */
+function obterLimites() {
+    return Object.assign({}, LIMITES_PADRAO, (config && config.limites) || {});
+}
+
 let config = carregarConfig();
 let rodando = false;
 let timerCiclo = null;
@@ -65,7 +82,7 @@ function carregarConfig() {
     } catch (e) {
         return {
             coletor: { intervaloSegundos: 60, timeoutMs: 2000, tentativasPorCiclo: 3, concorrenciaMaxima: 10, retencaoMedicoesDias: 30 },
-            limites: { latenciaMediaMs: 80, latenciaP95Ms: 200, perdaPacotesPct: 10, falhasConsecutivasParaAlerta: 3 },
+            limites: Object.assign({}, LIMITES_PADRAO),
             zabbix: { habilitado: false },
             servicos: []
         };
@@ -553,6 +570,9 @@ function obterPainel() {
     });
 
     return {
+        // Limites de alerta vigentes: os graficos do frontend desenham as
+        // linhas de limiar a partir daqui (nao de valores fixos no JS).
+        limites: obterLimites(),
         servico: {
             rodando,
             ultimaExecucao,
@@ -659,6 +679,8 @@ module.exports = {
     executarCiclo,
     obterAlvos,
     getConfig: () => config,
+    obterLimites,
+    LIMITES_PADRAO,
     isHostStale,
     isRodando: () => rodando,
     coletarMetricasLocais,

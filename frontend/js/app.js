@@ -1539,8 +1539,57 @@ function setHtml(el, html) {
 
 // upsertChart: reutiliza a instancia Chart.js existente (update in-place),
 // conforme docs.chartjs.org — nunca destroy/recreate so por dados novos.
+// ---------------------------------------------------------------------
+// Opcoes PADRAO de TODO grafico (aplicadas no upsertChart).
+// Padrão de leitura rapida (Grafana / docs Chart.js "interactions"):
+//  - interacao por INDICE (o tooltip acompanha todas as series sob o
+//    cursor, sem precisar acertar o ponto exato — intersect:false);
+//  - barra comecando em zero (barra "flutuando" distorce a comparacao);
+//  - legenda com pontos e caixa fina.
+// O config do proprio grafico SEMPRE sobrescreve (merge: quem chama manda).
+// ---------------------------------------------------------------------
+function cartPadraoOpcoes(config) {
+    var horizontal = !!(config && config.options && config.options.indexAxis === 'y');
+    var opcoes = {
+        interaction: { mode: 'index', intersect: false, axis: horizontal ? 'y' : 'x' },
+        hover: { mode: 'index', intersect: false, axis: horizontal ? 'y' : 'x' },
+        animation: { duration: 400, easing: 'easeOutQuart' },
+        plugins: {
+            legend: {
+                labels: {
+                    usePointStyle: true,
+                    boxWidth: 8,
+                    boxHeight: 8,
+                    padding: 12,
+                    color: CART.tick,
+                    font: { size: 10, weight: '600' }
+                }
+            }
+        }
+    };
+    if (config && config.type === 'bar') {
+        // barra sempre comeca em zero no eixo de VALORES (x para horizontal,
+        // y para vertical) — barra "flutuando" distorce a comparacao.
+        opcoes.scales = horizontal ? { x: { beginAtZero: true } } : { y: { beginAtZero: true } };
+    }
+    return opcoes;
+}
+
+// Formata numero no padrão pt-BR para tooltip/eixo (1.234,5 — sem efeito
+// colateral em contagens pequenas, que continuam "12").
+function cartNum(v, maxDec) {
+    var n = Number(v);
+    if (!isFinite(n)) return String(v);
+    // Por padrao preserva ate 2 casas (1.234,5 em vez de 1.235) e corta
+    // zeros a direita — contagens inteiras continuam "12".
+    var dec = (maxDec != null) ? maxDec : 2;
+    return n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: dec });
+}
+
 function upsertChart(canvas, config) {
     if (!canvas) return null;
+    // opcoes padrao primeiro; o grafico sobrepo as que ele mesmo define
+    config.options = cartMerge(cartPadraoOpcoes(config), config.options || {});
     var c = canvas._chart;
     if (c && c.config.type === config.type) {
         c.data.labels = config.data.labels;
@@ -1600,7 +1649,7 @@ function cartTooltip(sufixo, extra) {
                 var total = 0, i;
                 for (i = 0; i < d.length; i++) total += (Number(d[i]) || 0);
                 var pct = total > 0 ? Math.round((Number(c.raw) || 0) / total * 100) : 0;
-                return c.raw + (sufixo || '') + '  —  ' + pct + '% do total';
+                return cartNum(c.raw) + (sufixo || '') + '  —  ' + pct + '% do total';
             }
         }
     }, extra);
@@ -1611,17 +1660,49 @@ function cartTooltip(sufixo, extra) {
 function cartAxisX(rotulo, extra) {
     return cartMerge({
         title: { display: !!rotulo, text: rotulo || '', color: CART.axisTitle, font: { size: 10, weight: '700' }, padding: { top: 8 } },
-        ticks: { color: CART.tick, font: { size: 10 }, autoSkip: false, maxRotation: 0, minRotation: 0, padding: 2 },
+        ticks: {
+            color: CART.tick, font: { size: 10 }, padding: 2,
+            // Quando nao cabe rotulo para TODAS as categorias, o Chart.js
+            // gira (ate 45) e pula o que nao couber — antes os rotulos se
+            // sobrepoiam e viravam texto ilegivel no painel.
+            autoSkip: true, autoSkipPadding: 6, maxRotation: 45, minRotation: 0,
+            // Rotulo longo (nome de setor/maquina) e cortado no eixo para nao
+            // invadir a vizinha; o tooltip mostra o texto COMPLETO.
+            callback: function (v) {
+                var s = cartEixoRotulo(this, v);
+                if (s == null) s = String(v);
+                return s.length > 16 ? s.slice(0, 15) + '…' : s;
+            }
+        },
         grid: { display: false, drawTicks: false },
         border: { display: false }
     }, extra);
 }
 
 // Eixo de valores (grid horizontal + titulo da unidade).
+// ATENCAO: quando o grafico e de barras HORIZAIS (indexAxis 'y'), o eixo
+// de valores e o X e o eixo de categorias e o Y — o callback abaixo tem de
+// devolver o ROTULO da categoria, nunca o indice. Por isso ele pergunta ao
+// proprio eixo (getLabelForValue) antes de formatar numero.
+function cartEixoRotulo(scale, v) {
+    if (scale && typeof scale.getLabelForValue === 'function') {
+        var r = scale.getLabelForValue(v);
+        if (r != null && r !== v) return String(r);
+    }
+    return null;
+}
 function cartAxisY(rotulo, extra) {
     return cartMerge({
         title: { display: !!rotulo, text: rotulo || '', color: CART.axisTitle, font: { size: 10, weight: '700' }, padding: { top: 4, bottom: 4 } },
-        ticks: { color: CART.tick, font: { size: 10 }, precision: 0, padding: 4 },
+        ticks: {
+            color: CART.tick, font: { size: 10 }, precision: 0, padding: 4,
+            callback: function (v) {
+                var cat = cartEixoRotulo(this, v);
+                if (cat != null) return cat.length > 16 ? cat.slice(0, 15) + '…' : cat;
+                // Milhares no formato pt-BR (1.234) — igual ao tooltip.
+                return (typeof v === 'number' && Math.abs(v) >= 1000) ? cartNum(v, 0) : v;
+            }
+        },
         grid: { color: CART.grid, drawTicks: false },
         border: { display: false }
     }, extra);

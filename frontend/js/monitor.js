@@ -30,6 +30,79 @@ let _monGpuTs = 0;           // epoch ms da ultima GPU
 let _monGpuNome = null;      // nome da GPU (Intel Iris Xe etc.)
 let _monGpuHist = []; // histórico de GPU para gráficos
 
+// ==================== FAIXAS E LIMITES (fonte unica) ====================
+// Toda cor de uso (%), todo "crit/warn" e todo limiar de grafico do frontend
+// leem DAQUI. Antes os numeros estavam soltos em ~10 lugares e DRIFTAVAM
+// (CPU virava "amarelo" a 50% numa tela e a 60% em outra) — agora e
+// impossivel duas telas darem cores diferentes para o MESMO numero.
+const MON_FAIXAS = {
+    uso: { alerta: 60, critico: 80 },              // CPU / GPU / RAM (%)
+    disco: { alerta: 70, critico: 90 },            // volume (%)
+    disponibilidade: { minimo: 70, alvo: 90 }      // % de hosts respondendo
+};
+
+// Limites de alerta REAIS do coletor. O servidor reenvia os valores vigentes
+// no payload (`limites`, vindo de monitor/service.js -> monitor/config.json);
+// este objeto e so o FALLBACK para quando o payload nao os traz — e e
+// identico ao LIMITES_PADRAO do backend (test/limiares.test.js trava os dois).
+const MON_LIMITES_FALLBACK = { latenciaMediaMs: 80, latenciaP95Ms: 200, perdaPacotesPct: 10 };
+let _monLimites = Object.assign({}, MON_LIMITES_FALLBACK);
+
+// Mergeia os limites recebidos do servidor e devolve os vigentes.
+function monAplicarLimites(payload) {
+    if (payload && payload.limites && typeof payload.limites === 'object') {
+        _monLimites = Object.assign({}, _monLimites, payload.limites);
+    }
+    return _monLimites;
+}
+
+// ---- semantica UNICA de cor de uso percentual ----
+// Retorna null quando nao ha dado ("sem dado" != "verde").
+function monNivelUso(pct) {                       // ' crit' | ' warn' | ''
+    return pct > MON_FAIXAS.uso.critico ? ' crit' : pct > MON_FAIXAS.uso.alerta ? ' warn' : '';
+}
+function monCorUso(pct, corOk) {                  // 'red' | 'yellow' | corOk | null
+    if (pct == null || isNaN(pct)) return null;
+    return pct > MON_FAIXAS.uso.critico ? 'red' : pct > MON_FAIXAS.uso.alerta ? 'yellow' : (corOk || 'green');
+}
+function monCorDisco(pct, corOk) {
+    if (pct == null || isNaN(pct)) return null;
+    return pct > MON_FAIXAS.disco.critico ? 'red' : pct > MON_FAIXAS.disco.alerta ? 'yellow' : (corOk || 'green');
+}
+function monCorDisponibilidade(pct) {            // >= alvo verde, >= minimo amarelo
+    return pct >= MON_FAIXAS.disponibilidade.alvo ? 'green' : pct >= MON_FAIXAS.disponibilidade.minimo ? 'yellow' : 'red';
+}
+function monCorPerda(pct) {                      // limite vem do servidor (config)
+    if (pct == null || isNaN(pct)) return null;
+    const lim = Number(_monLimites.perdaPacotesPct);
+    return pct > (isFinite(lim) ? lim : 10) ? 'red' : pct > 0 ? 'yellow' : 'green';
+}
+
+// ---- limiares dos graficos (linhas tracejadas — padrao Grafana "Thresholds") ----
+// CPU/GPU/RAM usam as MESMAS faixas das cores; latencia/perda usam os
+// limites vigentes enviados pelo servidor. Nada aqui e inventado: sao
+// exatamente os valores que o sistema ja usa para decidir cor/alerta.
+function monLimiaresUso() {
+    return [
+        { v: MON_FAIXAS.uso.alerta, cor: '#ffe600', rotulo: MON_FAIXAS.uso.alerta + '% atencao' },
+        { v: MON_FAIXAS.uso.critico, cor: '#ff5252', rotulo: MON_FAIXAS.uso.critico + '% critico' }
+    ];
+}
+function monLimiaresDisco() {
+    return [
+        { v: MON_FAIXAS.disco.alerta, cor: '#ffe600', rotulo: MON_FAIXAS.disco.alerta + '% atencao' },
+        { v: MON_FAIXAS.disco.critico, cor: '#ff5252', rotulo: MON_FAIXAS.disco.critico + '% critico' }
+    ];
+}
+function monLimiaresLatencia() {
+    const v = Number(_monLimites.latenciaMediaMs);
+    return isFinite(v) && v > 0 ? [{ v: v, cor: '#ff9f43', rotulo: 'limite ' + v + 'ms' }] : [];
+}
+function monLimiaresPerda() {
+    const v = Number(_monLimites.perdaPacotesPct);
+    return isFinite(v) && v > 0 ? [{ v: v, cor: '#ff9f43', rotulo: 'limite ' + v + '%' }] : [];
+}
+
 // ==================== INICIALIZACAO ====================
 function monInit() {
     monAtualizar();
@@ -131,7 +204,7 @@ function monAtualizarGpuNaTabela(gpu, nome, ts) {
     const tds = tr.querySelectorAll('td');
     if (tds.length >= 7) {
         const gpuCell = tds[6];
-        const cor = gpu > 80 ? 'var(--red)' : gpu > 60 ? 'var(--yellow)' : 'var(--cyan)';
+        const cor = 'var(--' + (monCorUso(gpu, 'cyan') || 'cyan') + ')';
         gpuCell.innerHTML = '<span style="color:' + cor + ';font-weight:600;">' + gpu.toFixed(1) + '%</span>' +
             '<br><span style="font-size:9px;color:var(--text-muted);">' + esc(nome || 'GPU') + '</span>' +
             '<br>' + monIdadeHtml(ts);
@@ -153,10 +226,10 @@ function monAtualizarKpiCpu(cpu, ts) {
         if (valorEl) {
             const alvo = cpu.toFixed(1) + '%';
             if (valorEl.textContent !== alvo) valorEl.textContent = alvo;
-            const cls = 'kpi-num' + (cpu > 80 ? ' crit' : cpu > 60 ? ' warn' : '');
+            const cls = 'kpi-num' + monNivelUso(cpu);
             if (valorEl.className !== cls) valorEl.className = cls;
         }
-        const cor = cpu > 80 ? 'red' : cpu > 60 ? 'yellow' : 'cyan';
+        const cor = monCorUso(cpu, 'cyan') || 'cyan';
         const ic = el.querySelector('.kpi-ic');
         if (ic) { const want = 'fas fa-microchip kpi-ic kpi-ic-' + cor; if (ic.className !== want) ic.className = want; }
     }
@@ -177,10 +250,10 @@ function monAtualizarKpiGpu(gpu, nome, ts) {
         if (valorEl) {
             const alvo = gpu.toFixed(1) + '%';
             if (valorEl.textContent !== alvo) valorEl.textContent = alvo;
-            const cls = 'kpi-num' + (gpu > 80 ? ' crit' : gpu > 60 ? ' warn' : '');
+            const cls = 'kpi-num' + monNivelUso(gpu);
             if (valorEl.className !== cls) valorEl.className = cls;
         }
-        const cor = gpu > 80 ? 'red' : gpu > 60 ? 'yellow' : 'purple';
+        const cor = monCorUso(gpu, 'purple') || 'purple';
         const ic = el.querySelector('.kpi-ic');
         if (ic) { const want = 'fas fa-tv kpi-ic kpi-ic-' + cor; if (ic.className !== want) ic.className = want; }
     }
@@ -206,6 +279,8 @@ let _monFalhaNotifTs = {};
 let _monArmKPIsTs = 0;
 
 function monRenderTudo(d) {
+    // Limites de alerta vigentes acompanham o servidor (fonte da verdade)
+    monAplicarLimites(d);
     try { monRenderKPIs(d); } catch (e) { console.error('[mon] KPIs:', e); }
     try { monRenderFiltroSetores(d); } catch (e) {}
     try { monRenderTabela(d); } catch (e) {}
@@ -250,7 +325,7 @@ function monRenderDashboardWidget() {
     onEl.textContent = acess + '/' + total;
     const pct = total > 0 ? Math.round((acess / total) * 100) : 0;
     if (pctEl) pctEl.textContent = pct + '%';
-    if (barEl) { barEl.style.width = pct + '%'; barEl.style.background = pct >= 90 ? 'var(--green)' : pct >= 70 ? 'var(--yellow)' : 'var(--red)'; }
+    if (barEl) { barEl.style.width = pct + '%'; barEl.style.background = 'var(--' + monCorDisponibilidade(pct) + ')'; }
     if (!_monProblemasInfo) { monRenderZabbixProblemas(); }
     if (probEl) {
         const info = _monProblemasInfo;
@@ -1271,7 +1346,7 @@ function monRenderSistema(s) {
         const g0 = gpuInfo.gpus[0];
         gpuValor = g0.usoPct != null ? g0.usoPct + '%' : '?';
         gpuSub = g0.nome + (g0.memoriaTotalMb ? ' · ' + g0.memoriaUsadaMb + '/' + g0.memoriaTotalMb + ' MB' : '') + (g0.temperaturaC ? ' · ' + g0.temperaturaC + '°C' : '');
-        gpuCor = g0.usoPct != null ? (g0.usoPct > 80 ? 'red' : g0.usoPct > 50 ? 'yellow' : 'green') : 'muted';
+        gpuCor = monCorUso(g0.usoPct) || 'muted';
     }
 
     const titulo = document.getElementById('mon-sys-titulo');
@@ -1281,14 +1356,14 @@ function monRenderSistema(s) {
 
     monSetSysItem('cpu', 'CPU', cpu.usoPct != null ? cpu.usoPct + '%' : 'Aguardando...',
         cpu.modelo ? cpu.nucleos + ' nucleos · ' + cpu.modelo : '',
-        cpu.usoPct != null ? (cpu.usoPct > 80 ? 'red' : cpu.usoPct > 50 ? 'yellow' : 'green') : 'muted');
+        cpu.usoPct != null ? (monCorUso(cpu.usoPct) || 'green') : 'muted');
     monSetSysItem('gpu', 'GPU', gpuValor, gpuSub, gpuCor);
     monSetSysItem('ram', 'RAM', mem.usoPct != null ? mem.usoPct + '%' : '?',
         mem.usoPct != null ? mem.usadoGb + '/' + mem.totalGb + ' GB (livre: ' + mem.livreGb + ' GB)' : '',
-        mem.usoPct != null ? (mem.usoPct > 80 ? 'red' : mem.usoPct > 50 ? 'yellow' : 'green') : 'muted');
+        mem.usoPct != null ? (monCorUso(mem.usoPct) || 'green') : 'muted');
     monSetSysItem('disco', 'Disco ' + (disco ? disco.letra : '') + ' (espaco)', disco ? disco.usoPct + '%' : 'Indisp.',
         disco ? disco.usadoGb + '/' + disco.totalGb + ' GB (livre: ' + disco.livreGb + ' GB)' : '',
-        disco ? (disco.usoPct > 90 ? 'red' : disco.usoPct > 70 ? 'yellow' : 'green') : 'muted');
+        disco ? (monCorDisco(disco.usoPct) || 'green') : 'muted');
     monSetSysItem('uptime', 'Uptime', up.uptimeHumano || '?',
         'Boot: ' + (up.bootTime ? new Date(up.bootTime).toLocaleString('pt-BR') : '?') + (up.reiniciadoDesdeUltimaColeta ? ' · REINICIADO!' : ''),
         up.reiniciadoDesdeUltimaColeta ? 'red' : 'cyan');
@@ -1302,8 +1377,8 @@ function monRenderSistema(s) {
 
     // Acumula graficos para uso no KPI detalhado / relatorio (sem renderizar inline)
     if (_monCpuHist.length >= 2) {
-        const cpuHtml = monCartesianChart(_monCpuHist, { titulo: 'CPU', unidade: '%', cor: '#00d4ff', altura: 220, minForcado: 0, maxForcado: 100 });
-        const ramHtml = monCartesianChart(_monRamHist, { titulo: 'RAM', unidade: '%', cor: '#a855f7', altura: 220, minForcado: 0, maxForcado: 100 });
+        const cpuHtml = monCartesianChart(_monCpuHist, { titulo: 'CPU', unidade: '%', cor: '#00d4ff', altura: 220, minForcado: 0, maxForcado: 100, limiares: monLimiaresUso() });
+        const ramHtml = monCartesianChart(_monRamHist, { titulo: 'RAM', unidade: '%', cor: '#a855f7', altura: 220, minForcado: 0, maxForcado: 100, limiares: monLimiaresUso() });
         _monKpiCharts['sys-cpu'] = { titulo: 'CPU do PC Local (%)', html: cpuHtml };
         _monKpiCharts['sys-ram'] = { titulo: 'RAM do PC Local (%)', html: ramHtml };
     }
@@ -1405,6 +1480,13 @@ function monNiceScale(min, max, alvoTicks) {
     return { min: arred(nmin), max: arred(nmax), step: arred(passo) };
 }
 
+// Corta rotulo longo do eixo X com reticencias (o tooltip guarda o completo).
+function monCortaRotulo(txt, maxCar) {
+    const s = String(txt == null ? '' : txt);
+    maxCar = Math.max(3, maxCar || 14);
+    return s.length > maxCar ? s.slice(0, maxCar - 1) + '…' : s;
+}
+
 function monCartesianChart(dados, opts) {
     opts = opts || {};
     if (!dados || dados.length < 2) return '<div style="font-size:10px;color:var(--text-muted);padding:8px;">Dados insuficientes</div>';
@@ -1434,17 +1516,35 @@ function monCartesianChart(dados, opts) {
     const w = opts.largura || 1000;
     const h = opts.altura || 300;
 
+    // --- limiares: [{v, cor, rotulo}] — linha de limite configurado no
+    //     estilo Grafana "Thresholds". Aceita tambem um numero puro.
+    const limiares = (Array.isArray(opts.limiares) ? opts.limiares : [])
+        .map(l => (l && typeof l === 'object')
+            ? { v: Number(l.v), cor: l.cor || '#ff5252', rotulo: l.rotulo != null ? String(l.rotulo) : null }
+            : { v: Number(l), cor: '#ff5252', rotulo: null })
+        .filter(l => isFinite(l.v));
+
     // --- limites do eixo Y: respeita minForcado/maxForcado; quando vem
     //     dos dados, adiciona 6% de folga e arredonda para nice ticks.
     const valores = validos.map(p => p.v);
     let lo = opts.minForcado != null ? opts.minForcado : Math.min(...valores);
     let hi = opts.maxForcado != null ? opts.maxForcado : Math.max(...valores);
     if (lo === hi) { lo = lo - 1; hi = hi + 1; }
+    // Limiar fora da faixa dos dados? Abre o eixo ate ele: limite que nao
+    // aparece nao protege nada (soft-max do Grafana). So quando o chamador
+    // nao forcou o eixo.
+    if (limiares.length) {
+        if (opts.maxForcado == null) hi = Math.max(hi, ...limiares.map(l => l.v));
+        if (opts.minForcado == null) lo = Math.min(lo, ...limiares.map(l => l.v));
+    }
     if (opts.minForcado == null || opts.maxForcado == null) {
         const folga = (hi - lo) * 0.06;
         if (opts.minForcado == null) lo -= folga;
         if (opts.maxForcado == null) hi += folga;
     }
+    // Uso de CPU/RAM, latencia e perda nunca sao negativos: escala descendo
+    // de 0 (ex.: -50ms) e ruido visual, nao informacao.
+    if (opts.minForcado == null && lo < 0 && Math.min(...valores) >= 0) lo = 0;
     const escala = monNiceScale(lo, hi, 5);
     const min = escala.min, max = escala.max, passo = escala.step;
 
@@ -1502,13 +1602,17 @@ function monCartesianChart(dados, opts) {
             if (n - 1 - idxs[idxs.length - 1] < salto) idxs[idxs.length - 1] = n - 1;
             else idxs.push(n - 1);
         }
+        // Espaco medio por rotulo desenhado: nomes longos (host/setor) sao
+        // cortados com reticencias para nao invadir a vizinha; o <title> do
+        // ponto mantem o nome COMPLETO no tooltip.
+        const maxCarX = Math.max(6, Math.floor((plotW / Math.max(1, idxs.length)) / 6.2));
         for (let i = 0; i < n; i++) {
             const x = xOf(i);
             gridV += '<line x1="' + x.toFixed(1) + '" y1="' + padT + '" x2="' + x.toFixed(1) + '" y2="' + (padT + plotH) + '" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>';
             if (idxs.indexOf(i) === -1) continue;
             const anchor = i === 0 ? 'start' : (i === n - 1 ? 'end' : 'middle');
             const xx = i === 0 ? padL : (i === n - 1 ? (w - padR) : x);
-            lblX += '<text x="' + xx.toFixed(1) + '" y="' + yLabel + '" text-anchor="' + anchor + '" fill="rgba(255,255,255,0.5)" font-size="10">' + esc(String(rotulos[i])) + '</text>';
+            lblX += '<text x="' + xx.toFixed(1) + '" y="' + yLabel + '" text-anchor="' + anchor + '" fill="rgba(255,255,255,0.5)" font-size="10">' + esc(monCortaRotulo(rotulos[i], maxCarX)) + '</text>';
         }
     } else {
         const nX = Math.max(1, Math.min(6, Math.floor(plotW / 74), pts.length));
@@ -1560,10 +1664,26 @@ function monCartesianChart(dados, opts) {
     const titulo = opts.titulo ? '<text x="' + padL + '" y="16" fill="rgba(255,255,255,0.7)" font-size="11" font-weight="600">' + esc(opts.titulo) + '</text>' : '';
     const legendaValor = '<text x="' + (w - padR) + '" y="16" text-anchor="end" fill="' + cor + '" font-size="13" font-weight="700">' + fmtY(ultimo.v) + (opts.unidade || '') + '</text>';
 
+    // --- linhas de limiar + rotulo (por baixo dos dados, por cima do grid)
+    let svgLimiares = '';
+    limiares.forEach(l => {
+        if (l.v < min || l.v > max) return; // fora da faixa exibida (nao desenha)
+        const y = yOf(l.v);
+        const txt = l.rotulo != null ? l.rotulo : (fmtY(l.v) + (opts.unidade || ''));
+        const ty = y > 30 ? y - 5 : y + 12; // nao deixa o rotulo colidir com o valor atual
+        svgLimiares += '<line x1="' + padL + '" y1="' + y.toFixed(1) + '" x2="' + (w - padR) + '" y2="' + y.toFixed(1) + '" stroke="' + l.cor + '" stroke-width="1.5" stroke-dasharray="7 5" opacity="0.9"/>' +
+            '<text x="' + (w - padR - 4) + '" y="' + ty.toFixed(1) + '" text-anchor="end" fill="' + l.cor + '" font-size="9" font-weight="700">' + esc(txt) + '</text>';
+    });
+
+    // Descricao para leitor de tela (grafico sem <title> fica mudo no NVDA)
+    const aria = esc((opts.titulo || 'Grafico') + '. Valor atual ' + fmtY(ultimo.v) + (opts.unidade || '') +
+        (limiares.length ? '. Limiares: ' + limiares.map(l => l.rotulo != null ? l.rotulo : fmtY(l.v)).join('; ') : ''));
+
     // SVG responsivo: viewBox + width 100% escala o grafico em qualquer container/aba
-    return '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block;background:' + corFundo + ';border-radius:8px;max-width:100%;height:auto;min-height:' + Math.min(h, 260) + 'px;">' +
+    return '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" role="img" aria-label="' + aria + '" preserveAspectRatio="xMidYMid meet" style="display:block;background:' + corFundo + ';border-radius:8px;max-width:100%;height:auto;min-height:' + Math.min(h, 260) + 'px;">' +
         titulo + legendaValor +
         gridH + gridV + lblY + lblX + txtRotY + txtRotX +
+        svgLimiares +
         '<polygon points="' + area + '" fill="' + cor + '" opacity="0.10"/>' +
         '<polyline points="' + linha + '" fill="none" stroke="' + cor + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>' +
         falhas + pontoAtual +
@@ -1624,8 +1744,8 @@ function monKpiDefs(p) {
     const pctDisponivel = r.totalAlvos > 0 ? Math.round((r.acessiveis / r.totalAlvos) * 100) : 0;
     const pctIndisponivel = r.totalAlvos > 0 ? Math.round((r.semResposta / r.totalAlvos) * 100) : 0;
     const cpuReal = _monCpuTempoReal != null ? _monCpuTempoReal.toFixed(1) + '%' : '...';
-    const cpuCor = _monCpuTempoReal != null ? (_monCpuTempoReal > 80 ? 'red' : _monCpuTempoReal > 60 ? 'yellow' : 'green') : 'cyan';
-    const dispCor = pctDisponivel >= 90 ? 'green' : pctDisponivel >= 70 ? 'yellow' : 'red';
+    const cpuCor = _monCpuTempoReal == null ? 'cyan' : (monCorUso(_monCpuTempoReal) || 'green');
+    const dispCor = monCorDisponibilidade(pctDisponivel);
     return [
         { icon: 'fa-microchip', cor: cpuCor, valor: cpuReal, label: 'CPU Tempo Real', sub: 'ao vivo · 1s', key: 'mon-kpi-cpu-tempo-real',
           extra: '<span style="font-size:10px;color:var(--green);"><i class="fas fa-circle" style="font-size:6px;"></i> AO VIVO</span>' },
@@ -1681,7 +1801,7 @@ async function monRenderArmazenamentoKPIs() {
         let discoCor = 'green';
         if (disco0) {
             discoSub = disco0.livreGb + ' GB livre';
-            discoCor = disco0.usoPct > 90 ? 'red' : disco0.usoPct > 70 ? 'yellow' : 'green';
+            discoCor = monCorDisco(disco0.usoPct) || 'green';
         }
         const defs = [
             { icon: 'fa-hard-drive', cor: discoCor, valor: disco0 ? disco0.usadoGb + ' de ' + disco0.totalGb + ' GB' : '?', label: 'Disco ' + (disco0 ? disco0.letra : ''), sub: discoSub, key: 'mon-kpi-disco' },
@@ -1842,8 +1962,8 @@ function monRenderKpiDetail(key) {
         const discos = arm.discos || [];
         itemsHtml = discos.map(d => {
             const pct = d.usoPct || 0;
-            const cor = pct > 90 ? 'red' : pct > 70 ? 'yellow' : 'green';
-            return '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--' + cor + '-bg);color:var(--' + cor + ');"><i class="fas fa-hard-drive"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">Disco ' + esc(d.letra) + '</div><div class="stat-detail-item-sub">Usado: ' + d.usadoGb + ' GB | Livre: ' + d.livreGb + ' GB | Total: ' + d.totalGb + ' GB</div></div><div class="stat-detail-item-badge"><span class="badge badge-' + (pct > 90 ? 'cancelada' : pct > 70 ? 'pendente' : 'ativo') + '">' + pct + '%</span></div></div>';
+            const cor = monCorDisco(pct) || 'green';
+            return '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--' + cor + '-bg);color:var(--' + cor + ');"><i class="fas fa-hard-drive"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">Disco ' + esc(d.letra) + '</div><div class="stat-detail-item-sub">Usado: ' + d.usadoGb + ' GB | Livre: ' + d.livreGb + ' GB | Total: ' + d.totalGb + ' GB</div></div><div class="stat-detail-item-badge"><span class="badge badge-' + (cor === 'red' ? 'cancelada' : cor === 'yellow' ? 'pendente' : 'ativo') + '">' + pct + '%</span></div></div>';
         }).join('');
         itemsHtml += failureSummary(discos, 'Disco local');
     } else if (key === 'mon-kpi-mock-cpu' || key === 'mon-kpi-mock-ram' || key === 'mon-kpi-mock-disco') {
@@ -2295,7 +2415,7 @@ function monRenderArmazenamento(d) {
     if (d.discos && d.discos.length) {
         for (const disco of d.discos) {
             const pct = disco.usoPct || 0;
-            const corBarra = pct > 90 ? 'var(--red)' : pct > 70 ? 'var(--yellow)' : 'var(--green)';
+            const corBarra = 'var(--' + (monCorDisco(disco.usoPct) || 'green') + ')';
             html += '<div style="padding:12px;background:rgba(255,255,255,0.03);border-radius:10px;margin-bottom:8px;border-left:3px solid ' + corBarra + ';">';
             html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
             html += '<b style="font-size:13px;color:var(--text-primary);"><i class="fas fa-hard-drive" style="color:' + corBarra + ';margin-right:6px;"></i>' + esc(disco.letra || '?') + '</b>';
@@ -2442,6 +2562,7 @@ function monRenderHistoricoInner(dados, container) {
 }
 
 function monHistoricoHtml(dados) {
+    monAplicarLimites(dados); // limites vigentes vêm junto com o histórico
     if (!dados || (!dados.serie || !dados.serie.length)) {
         return '<p style="color:var(--text-muted);text-align:center;padding:20px;">Sem dados historicos para este host.</p>';
     }
@@ -2450,7 +2571,7 @@ function monHistoricoHtml(dados) {
     // Tabela resumo
     html += '<table class="data-table" style="font-size:11px;"><thead><tr><th>Dia</th><th>Medicoes</th><th>Sucessos</th><th>Falhas</th><th>Perda</th><th>Lat Media</th><th>Lat Min</th><th>Lat Max</th><th>P95</th></tr></thead><tbody>';
     for (const s of dados.serie) {
-        const perdaCor = s.perdaPct > 10 ? 'var(--red)' : s.perdaPct > 0 ? 'var(--yellow)' : 'var(--green)';
+        const perdaCor = 'var(--' + (monCorPerda(s.perdaPct) || 'green') + ')';
         html += '<tr>' +
             '<td>' + s.dia + '</td>' +
             '<td>' + s.totalMedicoes + '</td>' +
@@ -2472,7 +2593,7 @@ function monHistoricoHtml(dados) {
         const maxPerda = Math.max(1, ...dados.serie.map(s => s.perdaPct));
         for (const s of dados.serie) {
             const altura = Math.max(2, (s.perdaPct / maxPerda) * 100);
-            const cor = s.perdaPct > 10 ? 'var(--red)' : s.perdaPct > 0 ? 'var(--yellow)' : 'var(--green)';
+            const cor = 'var(--' + (monCorPerda(s.perdaPct) || 'green') + ')';
             html += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">';
             html += '<span style="font-size:9px;color:var(--text-muted);">' + s.perdaPct + '%</span>';
             html += '<div style="width:100%;max-width:40px;height:' + altura + '%;background:' + cor + ';border-radius:3px 3px 0 0;min-height:2px;"></div>';
@@ -2506,8 +2627,8 @@ function monHistoricoHtml(dados) {
         const perdas = dados.ultimasMedicoes.map(function(m) {
             return { t: m.timestamp ? new Date(m.timestamp).getTime() : 0, v: m.perdaPct, ok: m.ok };
         }).filter(function(p) { return p.t > 0; });
-        const latHtml = monCartesianChart(lats, { titulo: 'Latencia (ms)', unidade: 'ms', cor: '#2962FF', altura: 320, largura: 1100, formatarY: function(v){return Math.round(v);} });
-        const perdaHtml = monCartesianChart(perdas, { titulo: 'Perda (%)', unidade: '%', cor: '#FF6D00', altura: 300, largura: 1100, minForcado: 0, maxForcado: Math.max(10, ...perdas.map(p=>p.v||0)), formatarY: function(v){return Math.round(v);} });
+        const latHtml = monCartesianChart(lats, { titulo: 'Latencia (ms)', unidade: 'ms', cor: '#2962FF', altura: 320, largura: 1100, formatarY: function(v){return Math.round(v);}, limiares: monLimiaresLatencia() });
+        const perdaHtml = monCartesianChart(perdas, { titulo: 'Perda (%)', unidade: '%', cor: '#FF6D00', altura: 300, largura: 1100, minForcado: 0, maxForcado: Math.max(Number(_monLimites.perdaPacotesPct) || 10, ...perdas.map(p=>p.v||0)), formatarY: function(v){return Math.round(v);}, limiares: monLimiaresPerda() });
         _monKpiCharts['hist-lat'] = { titulo: 'Latencia (ms)', html: latHtml };
         _monKpiCharts['hist-perda'] = { titulo: 'Perda (%)', html: perdaHtml };
         html += '<h4 style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin:16px 0 8px;">Latencia ao Longo do Tempo</h4>';
@@ -2786,15 +2907,15 @@ function monKpiChartBlock(key) {
     if (key === 'mon-kpi-coletor') {
         titulo = 'CPU do PC Local (%)';
         dados = _monCpuHist;
-        opts = { cor: '#00d4ff', minForcado: 0, maxForcado: 100, altura: 200, unidade: '%' };
+        opts = { cor: '#00d4ff', minForcado: 0, maxForcado: 100, altura: 200, unidade: '%', limiares: monLimiaresUso() };
     } else if (key === 'mon-kpi-cpu-tempo-real') {
         titulo = 'CPU em Tempo Real (%)';
         dados = _monCpuHist;
-        opts = { cor: '#00e5c7', minForcado: 0, maxForcado: 100, altura: 200, unidade: '%' };
+        opts = { cor: '#00e5c7', minForcado: 0, maxForcado: 100, altura: 200, unidade: '%', limiares: monLimiaresUso() };
     } else if (key === 'mon-kpi-gpu-tempo-real') {
         titulo = 'GPU em Tempo Real (%)';
         dados = _monGpuHist || [];
-        opts = { cor: '#b24dff', minForcado: 0, maxForcado: 100, altura: 200, unidade: '%' };
+        opts = { cor: '#b24dff', minForcado: 0, maxForcado: 100, altura: 200, unidade: '%', limiares: monLimiaresUso() };
     } else if (key === 'mon-kpi-disponibilidade') {
         const linhas = (_monDados && _monDados.linhas) || [];
         if (linhas.length) {
@@ -2807,7 +2928,7 @@ function monKpiChartBlock(key) {
         if (linhas.length) {
             titulo = 'Latencia dos Hosts (ms)';
             dados = linhas.map(l => l.latenciaMediaMs != null ? l.latenciaMediaMs : 0);
-            opts = { cor: '#2962FF', altura: 200, unidade: 'ms', rotulosX: linhas.map(l => l.nome || l.ip) };
+            opts = { cor: '#2962FF', altura: 200, unidade: 'ms', rotulosX: linhas.map(l => l.nome || l.ip), limiares: monLimiaresLatencia() };
         }
     } else if (key === 'mon-kpi-medicoes') {
         // sem serie temporal direta — usa contagem por dia se disponivel
@@ -2822,7 +2943,7 @@ function monKpiChartBlock(key) {
         if (discos.length) {
             titulo = 'Uso de Disco por Volume (%)';
             dados = discos.map(d => d.usoPct != null ? d.usoPct : 0);
-            opts = { cor: '#22c55e', altura: 180, minForcado: 0, maxForcado: 100, unidade: '%', rotulosX: discos.map(d => d.letra || '?') };
+            opts = { cor: '#22c55e', altura: 180, minForcado: 0, maxForcado: 100, unidade: '%', rotulosX: discos.map(d => d.letra || '?'), limiares: monLimiaresDisco() };
         }
     }
     if (!dados || (Array.isArray(dados) && dados.length < 2)) return '';
@@ -3349,6 +3470,7 @@ function monAbrirRelatorioPC() {
             return fetch('/api/monitor/historico?host=' + encodeURIComponent(_monLocalIp) + '&dias=30')
                 .then(r => r.json())
                 .then(dados => {
+                    monAplicarLimites(dados);
                     // Gera grafico de latencia e perda a partir das ultimas medicoes brutas
                     const lats = (dados.ultimasMedicoes || []).map(function(m) {
                         return { t: m.timestamp ? new Date(m.timestamp).getTime() : 0, v: m.latenciaMediaMs, ok: m.ok };
@@ -3357,8 +3479,8 @@ function monAbrirRelatorioPC() {
                         return { t: m.timestamp ? new Date(m.timestamp).getTime() : 0, v: m.perdaPct, ok: m.ok };
                     }).filter(function(p) { return p.t > 0; });
 
-                    const latChart = monCartesianChart(lats, { titulo: 'Latencia (ms)', unidade: 'ms', cor: '#2962FF', altura: 200, formatarY: function(v){return Math.round(v);} });
-                    const perdaChart = monCartesianChart(perdas, { titulo: 'Perda (%)', unidade: '%', cor: '#FF6D00', altura: 180, minForcado: 0, maxForcado: 100, formatarY: function(v){return Math.round(v);} });
+                    const latChart = monCartesianChart(lats, { titulo: 'Latencia (ms)', unidade: 'ms', cor: '#2962FF', altura: 200, formatarY: function(v){return Math.round(v);}, limiares: monLimiaresLatencia() });
+                    const perdaChart = monCartesianChart(perdas, { titulo: 'Perda (%)', unidade: '%', cor: '#FF6D00', altura: 180, minForcado: 0, maxForcado: 100, formatarY: function(v){return Math.round(v);}, limiares: monLimiaresPerda() });
 
                     // Monta HTML completo do relatorio
                     let html = '';
@@ -3657,6 +3779,8 @@ function monAbrirRelatorioPC() {
         const alertas = s.alertas || [];
         const linhas = (s.linhas) ? s.linhas : [];
 
+        monAplicarLimites(hist); // limites vigentes para os limiares dos graficos
+
         // --- Extrair dados para graficos (arrays de valores) ---
         function extrairValores(registros, propriedade) {
             if (!registros) return [];
@@ -3666,11 +3790,16 @@ function monAbrirRelatorioPC() {
         const perdas = extrairValores(ultimas || [], 'perdaPct');
 
         // --- Gerar graficos com monCartesianChart ---
+        // O eixo de latencia nunca pode "cortar" um pico real: o maximo e o
+        // maior entre o chao tipico (100ms), o limite configurado e o pico
+        // observado nos dados.
+        const latMaxDados = latencias.length ? Math.max(...latencias) : 0;
+        const limLat = Number(_monLimites.latenciaMediaMs) || 80;
         const chartLat = (latencias && latencias.length >= 2) ?
-            monCartesianChart(latencias, { titulo: 'Latencia (ms)', unidade: 'ms', cor: '#2962FF', altura: 180, minForcado: 0, maxForcado: 100 }) :
+            monCartesianChart(latencias, { titulo: 'Latencia (ms)', unidade: 'ms', cor: '#2962FF', altura: 180, minForcado: 0, maxForcado: Math.max(100, limLat, Math.ceil(latMaxDados)), formatarY: function(v){return Math.round(v);}, limiares: monLimiaresLatencia() }) :
             '<div style="font-size:10px;color:var(--text-muted);padding:4px;">Dados insuficientes</div>';
         const chartPerda = (perdas && perdas.length >= 2) ?
-            monCartesianChart(perdas, { titulo: 'Perda (%)', unidade: '%', cor: '#FF6D00', altura: 150, minForcado: 0, maxForcado: 100 }) :
+            monCartesianChart(perdas, { titulo: 'Perda (%)', unidade: '%', cor: '#FF6D00', altura: 150, minForcado: 0, maxForcado: 100, formatarY: function(v){return Math.round(v);}, limiares: monLimiaresPerda() }) :
             '<div style="font-size:10px;color:var(--text-muted);padding:4px;">Dados insuficientes</div>';
 
         // --- Montar HTML do Relatorio ---
@@ -3781,6 +3910,8 @@ function monAbrirRelatorioPC() {
         const info = s.info || {};
         const alertas = s.alertas || [];
         const linhas = (s.linhas) ? s.linhas : [];
+
+        monAplicarLimites(hist);
 
         // Extrair valores de latencia e perda do historico
         const latValues = [];
@@ -3893,7 +4024,7 @@ if (typeof document !== 'undefined' && document.addEventListener) {
         try {
             fetch('/api/monitor/local').then(function (r) { return r.json(); }).then(function (d) { if (d && d.ip) _monLocalIp = d.ip; }).catch(function () {});
             fetch('/api/monitor/painel').then(function (r) { return r.json(); }).then(function (d) {
-                if (d && d.resumo) { _monDados = d; monRenderDashboardWidget(); }
+                if (d && d.resumo) { monAplicarLimites(d); _monDados = d; monRenderDashboardWidget(); }
             }).catch(function () {});
             monRenderZabbixProblemas();
         } catch (e) {}

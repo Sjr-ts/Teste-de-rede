@@ -1106,7 +1106,7 @@ app.get('/api/monitor/historico', (req, res) => {
             // Analise detalhada das falhas (por tipo de erro, com causa e recomendacao)
             let falhasDetalhadas = null;
             try { falhasDetalhadas = store.falhasHost(host, dias, 100); } catch (e) {}
-            res.json({ host: host, dias: dias, serie: serie, ultimasMedicoes: ultimas, falhasDetalhadas: falhasDetalhadas });
+            res.json({ host: host, dias: dias, serie: serie, ultimasMedicoes: ultimas, falhasDetalhadas: falhasDetalhadas, limites: monitor.obterLimites() });
         } else {
             res.json({ error: 'Parametro host e necessario' });
         }
