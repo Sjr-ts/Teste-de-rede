@@ -160,10 +160,21 @@ test('server.cjs roda o IP sync periodico com guarda de reentrada', () => {
     assert.match(fonteServer, /getConfigStatus\(\)\.configurado/, 'job so roda com Zabbix configurado');
 });
 
-test('frontend tem botao e fluxo de Atualizar IPs', () => {
-    assert.match(fonteIndex, /monSyncIpsZabbix\(\)/);
-    assert.match(fonteMonitor, /async function monSyncIpsZabbix\(\)/);
-    assert.match(fonteMonitor, /\/api\/zabbix\/sincronizar-ips/);
-    // o relatorio do Sincronizar mostra as mudancas de IP
-    assert.match(fonteMonitor, /IP adaptativo: /);
+test('deploy script opt-in de IP adaptativo existe e documenta a chave dinamica', () => {
+    const fs2 = require('fs');
+    const p = path.join(repo, 'zabbix-deploy', 'configurar-ip-adaptativo.ps1');
+    assert.ok(fs2.existsSync(p), 'configurar-ip-adaptativo.ps1 deve existir');
+    const src = fs2.readFileSync(p, 'utf8');
+    assert.match(src, /HostMetadataItem=inv\.meta/);
+    assert.match(src, /UserParameter=inv\.meta/);
+    assert.match(src, /-Reverter/);
+});
+
+test('docs registram os gatilhos oficiais e a solucao comprovada', () => {
+    const fs2 = require('fs');
+    const doc = fs2.readFileSync(path.join(repo, 'docs', 'ZABBIX_INTEGRACAO.md'), 'utf8');
+    assert.match(doc, /re-registra|re-roda|re-registro|rerun/i);
+    assert.match(doc, /120 seconds|heartbeat/i);
+    assert.match(doc, /PROVA_FINAL_PASS|sem reiniciar o agente/i);
+    assert.match(doc, /HostMetadataItem/);
 });

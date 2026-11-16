@@ -401,6 +401,53 @@ reportado pelo próprio agente e regrava o cadastro:
 - Teste: `test/ip-adaptativo.test.js` (12 casos) trava validação de IP,
   detecção, aplicação, idempotência, endpoint, job e botão do frontend.
 
+### 3.1 Como o IP chega ao Zabbix (gatilhos oficiais — testados em laboratório)
+
+Pesquisa na doc oficial (Zabbix 7.0, *Active agent autoregistration* + *zabbix_agentd.conf*):
+
+- O auto-registro **não** é contínuo: a action só re-roda se:
+  - metadados mudam (`HostMetadata` alterado + agente reiniciado, ou valor de
+    `HostMetadataItem` mudou);
+  - host criado manualmente sem metadados;
+  - host passa a ser monitorado por outro proxy;
+  - auto-registro vem de um proxy novo.
+- **Heartbeat = 120s**: em ~2 min um host removido se re-registra sozinho.
+- **Mudança de IP sem restart NÃO propaga** (confirmado empiricamente em
+  16/11/2026: container de agente ativo mudou de IP 172.22.0.91 → 172.22.0.92
+  sem reiniciar; a interface do host no Zabbix **ficou em 172.22.0.91** após
+  4 min / 9 amostras). A doc confirma: "To send the new value, the agent must
+  be restarted so that it re-initiates the autoregistration process."
+- **Solução comprovada em laboratório (sem restart)**: `HostMetadataItem` cuja
+  key devolve um valor que **contém o IP atual** (ex.: `inventario-ti <IP>`).
+  Quando o IP muda, o metadata muda → o agente re-registra sozinho (medido
+  em **<20 s**) → a action atualiza a interface para o IP da conexão nova →
+  nosso job de 5 min leva ao cadastro. Prova final: HostMetadataItem=
+  `inv.meta` (UserParameter lendo o IP real) → IP mudou 172.22.0.91 →
+  172.22.0.93 **sem reiniciar o agente**; interface do host atualizou em
+  <20 s. **PASS**.
+- `HostMetadata` e `HostMetadataItem` são mutuamente exclusivos (MetadataItem
+  só é usado se HostMetadata não estiver definido).
+
+Receita por plataforma:
+
+- **Linux (comprovada)** — `zabbix_agent2.conf`:
+  ```
+  UserParameter=inv.meta,echo inventario-ti $(ip -4 -o addr show scope global | awk '{print $4}' | cut -d/ -f1 | head -1)
+  HostMetadataItem=inv.meta
+  ```
+  (remover `HostMetadata=inventario-ti`).
+- **Windows (opt-in, requer agente como servico)** — script
+  `zabbix-deploy/configurar-ip-adaptativo.ps1` (switch `-IpAdaptativo`)
+  instala um `UserParameter=inv.meta` em PowerShell + `HostMetadataItem=inv.meta`.
+  A execucao do UserParameter foi validada em Linux; em Windows o agent roda como
+  servico (LocalSystem), onde o spawn de PowerShell funciona (em modo console
+  pode falhar com "Acesso negado" por restricao de token).
+- **Mitigacao universal sem UserParameter (proven)** — manter
+  `HostMetadata=inventario-ti` e **reiniciar o agente no evento de mudanca de
+  rede** (Windows: Tarefa Agendada no evento de renew DHCP; Linux: hook do
+  dhclient). Reiniciar dispara o auto-registro e a action atualiza a interface.
+  Este e o modo padrao (seguro) mantido em `zabbix_agent2.conf.template`.
+
 ### 4. Conf do agente corrigida (IP do servidor)
 
 Os arquivos de deploy apontavam para o servidor **antigo** (`192.168.0.94` /
