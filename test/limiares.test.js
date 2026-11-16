@@ -172,3 +172,17 @@ test('todo grafico Chart.js nasce com interacao por indice e tooltip pt-BR', () 
     // upsertChart aplica os defaults antes de criar/atualizar
     assert.match(fonteApp, /cartMerge\(cartPadraoOpcoes\(config\),\s*config\.options \|\| \{\}\)/);
 });
+
+// ---------------------------------------------------------------------------
+// 5) Cor do ciclo de vida: fonte unica (4 pontos de exibicao, 1 helper)
+// ---------------------------------------------------------------------------
+test('cor do ciclo de vida vem de cartCorCiclo (sem ternario duplicado)', () => {
+    assert.match(fonteApp, /function cartCorCiclo\(pct\)/);
+    assert.match(fonteApp, /return p < 50 \? 'var\(--green\)' : p < 75 \? 'var\(--yellow\)' : 'var\(--red\)';/);
+    // nenhum ponto de exibicao pode ter voltado a embutir a regra de cor
+    const copias = fonteApp.match(/pct < 50 \? 'var\(--green\)'/g) || [];
+    assert.equal(copias.length, 0, copias.length + ' ternario(s) de ciclo duplicado(s) fora do helper');
+    // os 4 lugares chamam o helper
+    const chamadas = fonteApp.match(/cartCorCiclo\(pct\)/g) || [];
+    assert.ok(chamadas.length >= 4, 'esperava >=4 chamadas, achei ' + chamadas.length);
+});

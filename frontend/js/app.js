@@ -1587,6 +1587,15 @@ function cartNum(v, maxDec) {
     return n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: dec });
 }
 
+// Cor da barra de CICLO de vida (240 dias no card, 365 no relatorio) em funcao
+// do % decorrido. Fonte unica: os 4 pontos de exibicao usavam copia identica
+// do ternario (green<50 / yellow<75 / red>=75) — drift real se um mudasse.
+function cartCorCiclo(pct) {
+    var p = Number(pct);
+    if (!isFinite(p)) return 'var(--text-muted)';
+    return p < 50 ? 'var(--green)' : p < 75 ? 'var(--yellow)' : 'var(--red)';
+}
+
 function upsertChart(canvas, config) {
     if (!canvas) return null;
     // opcoes padrao primeiro; o grafico sobrepo as que ele mesmo define
@@ -2216,7 +2225,7 @@ function renderComputadoresCards(data) {
         var cicloHtml = '';
         if (eq.diasDesdeInicioCiclo !== null && eq.diasDesdeInicioCiclo !== undefined) {
             var pct = Math.min(100, Math.max(0, (eq.diasDesdeInicioCiclo / 240) * 100));
-            var corCiclo = pct < 50 ? 'var(--green)' : pct < 75 ? 'var(--yellow)' : 'var(--red)';
+            var corCiclo = cartCorCiclo(pct);
             var cicloTexto = eq.diasRestantes > 0 ? eq.diasRestantes + 'd restantes' : eq.diasRestantes === 0 ? 'Vence hoje' : Math.abs(eq.diasRestantes) + 'd atrasado';
             var faseLabel = { 'ATIVO': 'Ativo', 'PREDITIVO': 'Preditivo', 'PREVENTIVO': 'Preventivo', 'ATRASADO': 'Atrasado' };
             cicloHtml = '<div class="pc-card-ciclo"><div class="ciclo-bar"><div class="ciclo-fill" style="width:' + pct + '%;background:' + corCiclo + ';"></div></div><div class="ciclo-info"><span class="ciclo-fase" style="color:' + corCiclo + ';">' + (faseLabel[eq.faseCiclo] || eq.faseCiclo) + '</span><span class="ciclo-dias">' + cicloTexto + '</span></div></div>';
@@ -2272,7 +2281,7 @@ async function showComputadorDetail(id) {
         if (eq.notas) extraItems.push(['Notas', escapeHtml(eq.notas)]);
         if (eq.diasDesdeInicioCiclo !== null && eq.diasDesdeInicioCiclo !== undefined) {
             var pct = Math.min(100, Math.max(0, (eq.diasDesdeInicioCiclo / 240) * 100));
-            var corCiclo = pct < 50 ? 'var(--green)' : pct < 75 ? 'var(--yellow)' : 'var(--red)';
+            var corCiclo = cartCorCiclo(pct);
             var faseLabel = { 'ATIVO': 'Ativo (0-4m)', 'PREDITIVO': 'Preditivo (5-6m)', 'PREVENTIVO': 'Preventivo (7-8m)', 'ATRASADO': 'Atrasado (8m+)' };
             var cicloInfo = '<div style="margin-top:4px;"><div style="height:8px;background:rgba(255,255,255,0.05);border-radius:4px;overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:' + corCiclo + ';border-radius:4px;transition:width 0.3s;"></div></div><div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;"><span style="color:' + corCiclo + ';font-weight:600;">' + (faseLabel[eq.faseCiclo] || eq.faseCiclo) + '</span><span style="color:var(--text-muted);">' + eq.diasDesdeInicioCiclo + ' dias / 240 dias</span></div><div style="font-size:11px;color:' + (eq.diasRestantes > 0 ? 'var(--text-muted)' : 'var(--red)') + ';margin-top:2px;">' + (eq.diasRestantes > 0 ? eq.diasRestantes + ' dias restantes' : 'Atrasado ha ' + Math.abs(eq.diasRestantes) + ' dias') + '</div></div>';
             extraItems.push(['Ciclo Manutencao (8 meses)', cicloInfo]);
@@ -4369,7 +4378,7 @@ function renderRamais(ramais) {
         var cicloHtml = '';
         if (r.diasDesdeInicioCiclo !== null && r.diasDesdeInicioCiclo !== undefined) {
             var pct = Math.min(100, Math.max(0, (r.diasDesdeInicioCiclo / 365) * 100));
-            var corCiclo = pct < 50 ? 'var(--green)' : pct < 75 ? 'var(--yellow)' : 'var(--red)';
+            var corCiclo = cartCorCiclo(pct);
             var cicloTexto = r.diasRestantes > 0 ? r.diasRestantes + 'd restantes' : r.diasRestantes === 0 ? 'Vence hoje' : Math.abs(r.diasRestantes) + 'd atrasado';
             var faseLabel = { 'ATIVO': 'Ativo', 'PREDITIVO': 'Preditivo', 'PREVENTIVO': 'Preventivo', 'ATRASADO': 'Atrasado' };
             cicloHtml = '<div class="pc-card-ciclo">' +
@@ -4452,7 +4461,7 @@ async function showRamalDetail(id) {
             (function() {
                 if (r.diasDesdeInicioCiclo === null || r.diasDesdeInicioCiclo === undefined) return '';
                 var pct = Math.min(100, Math.max(0, (r.diasDesdeInicioCiclo / 365) * 100));
-                var cor = pct < 50 ? 'var(--green)' : pct < 75 ? 'var(--yellow)' : 'var(--red)';
+                var cor = cartCorCiclo(pct);
                 var faseLabels = { 'ATIVO': 'Ativo (0-6m)', 'PREDITIVO': 'Preditivo (6-9m)', 'PREVENTIVO': 'Preventivo (9-12m)', 'ATRASADO': 'Atrasado (12m+)' };
                 var diasTxt = r.diasRestantes > 0 ? r.diasRestantes + ' dias restantes' : r.diasRestantes === 0 ? 'Vence hoje' : 'Atrasado ha ' + Math.abs(r.diasRestantes) + ' dias';
                 var dotsHtml = '';
