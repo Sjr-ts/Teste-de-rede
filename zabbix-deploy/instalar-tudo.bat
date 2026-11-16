@@ -1,24 +1,33 @@
 @echo off
 REM ============================================================================
-REM  INSTALADOR UNICO - Zabbix Agent 2 + IP Adaptativo
+REM  INSTALADOR UNICO - Zabbix Agent 2 + IP Adaptativo (Silencioso)
 REM  Inventário TI - Monitoramento de TI
 REM
-REM  O que faz:
-REM    1) Verifica privilegios de Administrador
-REM    2) Instala o Zabbix Agent 2 (MSI silencioso) se necessario
-REM    3) Configura o agente para conectar ao servidor Zabbix
-REM    4) Habilita IP adaptativo (auto-registro)
-REM    5) Cria tarefa de reinicio automatico ao mudar de rede/IP
-REM    6) Inicia/reinicia o servico
-REM    7) Testa a conexao e abre o painel
+REM  Modos:
+REM    Normal:   duplo-clique -> mostra progresso, abre painel ao final
+REM    Silencioso: instalar-silencioso.vbs ou "instalar-tudo.bat /silent"
+REM               -> sem janela, sem interacao, log em C:\zabbix-install.log
 REM
-REM  USO: clique com botao direito -> "Executar como administrador"
-REM  IMPORTANTE: coloque o arquivo .msi na MESMA pasta deste .bat
+REM  USO MANUAL: clique com botao direito -> "Executar como administrador"
+REM  USO AUTOMATICO: a Tarefa Agendada roda silenciosamente no boot
+REM
+REM  IMPORTANTE: coloque o .msi na MESMA pasta deste .bat
 REM ============================================================================
 
 setlocal enabledelayedexpansion
-title Instalador Zabbix Agent 2 - Inventário TI
-color 0A
+
+REM ---- Detecta modo silencioso ----
+set "SILENT=0"
+if /i "%~1"=="/silent" set "SILENT=1"
+if /i "%~1"=="/s" set "SILENT=1"
+
+if "%SILENT%"=="1" (
+    set "LOGFILE=C:\zabbix-install.log"
+) else (
+    set "LOGFILE="
+    title Instalador Zabbix Agent 2 - Inventário TI
+    color 0A
+)
 
 REM ---- Configuracoes ----
 set "ZBX_SERVER=192.168.0.102"
@@ -29,62 +38,69 @@ set "ZBX_EXE=%ZBX_CONF_DIR%\zabbix_agent2.exe"
 set "MSI_NAME=zabbix_agent2-7.0-latest-windows-amd64-openssl.msi"
 set "SCRIPT_DIR=%~dp0"
 set "MSI_PATH=%SCRIPT_DIR%%MSI_NAME%"
+set "VBS_PATH=%SCRIPT_DIR%instalar-silencioso.vbs"
 
-echo.
-echo  ============================================================
-echo   INSTALADOR UNICO - Zabbix Agent 2 + IP Adaptativo
-echo   Servidor: %ZBX_SERVER%  ^|  Host: %ZBX_HOSTNAME%
-echo  ============================================================
-echo.
+REM ---- Funcao de log ----
+goto :main
+
+:log
+if "%SILENT%"=="1" (
+    echo [%date% %time%] %~1 >> "%LOGFILE%"
+) else (
+    echo %~1
+)
+goto :eof
+
+:main
+
+if "%SILENT%"=="0" (
+    echo.
+    echo  ============================================================
+    echo   INSTALADOR UNICO - Zabbix Agent 2 + IP Adaptativo
+    echo   Servidor: %ZBX_SERVER%  ^|  Host: %ZBX_HOSTNAME%
+    echo  ============================================================
+    echo.
+)
 
 REM ---- 1) Verifica Administrador ----
 net session >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [ERRO] Execute como Administrador!
-    echo        Clique com botao direito no arquivo e escolha
-    echo        "Executar como administrador".
-    echo.
-    pause
+    call :log "[ERRO] Execute como Administrador!"
+    if "%SILENT%"=="0" pause
     exit /b 1
 )
-echo [OK] Privilegios de Administrador confirmados.
+call :log "[OK] Privilegios de Administrador confirmados."
 
 REM ---- 2) Verifica MSI ----
 if not exist "%MSI_PATH%" (
-    echo [ERRO] MSI nao encontrado!
-    echo        Esperado em: %MSI_PATH%
-    echo.
-    echo        Coloque o arquivo %MSI_NAME% na mesma pasta deste .bat
-    echo.
-    pause
+    call :log "[ERRO] MSI nao encontrado: %MSI_PATH%"
+    if "%SILENT%"=="0" pause
     exit /b 1
 )
-echo [OK] MSI encontrado: %MSI_NAME%
+call :log "[OK] MSI encontrado: %MSI_NAME%"
 
 REM ---- 3) Instala (se necessario) ----
 sc query "Zabbix Agent 2" >nul 2>&1
 if %errorlevel% equ 0 (
-    echo [INFO] Agente ja instalado. Atualizando configuracao...
+    call :log "[INFO] Agente ja instalado. Atualizando configuracao..."
 ) else (
-    echo [INFO] Instalando Zabbix Agent 2...
+    call :log "[INFO] Instalando Zabbix Agent 2..."
     msiexec /i "%MSI_PATH%" /qn /norestart SERVER=%ZBX_SERVER% SERVERACTIVE=%ZBX_SERVER% HOSTNAME=%ZBX_HOSTNAME% HOSTMETADATA=inventario-ti
     if %errorlevel% neq 0 (
-        echo [ERRO] Falha na instalacao. Codigo: %errorlevel%
-        pause
+        call :log "[ERRO] Falha na instalacao. Codigo: %errorlevel%"
+        if "%SILENT%"=="0" pause
         exit /b 1
     )
-    echo [OK] Instalacao concluida.
+    call :log "[OK] Instalacao concluida."
     timeout /t 3 /nobreak >nul
 )
 
-REM ---- 4) Configura o agente (via PowerShell para evitar problemas de escape) ----
-echo [INFO] Configurando agente...
+REM ---- 4) Configura o agente ----
+call :log "[INFO] Configurando agente..."
 if not exist "%ZBX_CONF_DIR%" mkdir "%ZBX_CONF_DIR%"
 
-REM Backup
 if exist "%ZBX_CONF%" copy /y "%ZBX_CONF%" "%ZBX_CONF%.bak" >nul 2>&1
 
-REM Escreve o conf via PowerShell (evita problemas com caracteres especiais)
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "$conf = '%ZBX_CONF%';" ^
     "$hostname = '%ZBX_HOSTNAME%';" ^
@@ -98,26 +114,28 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "$lines += \"Hostname=$hostname\";" ^
     "$lines += 'HostMetadata=inventario-ti';" ^
     "$lines += '';" ^
-    "$lines += '# IP Adaptativo: reinicio automatico ao mudar de rede/IP';" ^
+    "$lines += '# IP Adaptativo';" ^
     "$lines += '';" ^
     "$lines += 'LogFile=C:\Program Files\Zabbix Agent 2\zabbix_agent2.log';" ^
     "$lines += 'LogFileSize=10';" ^
     "$lines += 'Timeout=30';" ^
     "$lines += '';" ^
-    "$lines += '# UserParameter para IP adaptativo (HostMetadataItem)';" ^
-    "$lines += 'UserParameter=inv.meta,powershell -NoProfile -ExecutionPolicy Bypass -Command \"' + chr(36) + 'ip=(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue ^^^| Where-Object {' + chr(36) + '_.IPAddress -notlike ''127.*'' -and ' + chr(36) + '_.IPAddress -notlike ''169.254.*''} ^^^| Select-Object -First 1).IPAddress; if(-not ' + chr(36) + 'ip){' + chr(36) + 'ip=''sem-ip''}; Write-Output (''inventario-ti '' + ' + chr(36) + 'ip)\"';" ^
+    "$lines += '# UserParameter para IP adaptativo';" ^
+    "$d = [char]36;" ^
+    "$up = 'UserParameter=inv.meta,powershell -NoProfile -ExecutionPolicy Bypass -Command \"' + $d + 'ip=(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object {' + $d + '_.IPAddress -notlike ''127.*'' -and ' + $d + '_.IPAddress -notlike ''169.254.*''} | Select-Object -First 1).IPAddress; if(-not ' + $d + 'ip){' + $d + 'ip=''sem-ip''}; Write-Output (''inventario-ti '' + ' + $d + 'ip)\"';" ^
+    "$lines += $up;" ^
     "$lines += 'HostMetadataItem=inv.meta';" ^
     "$lines += '';" ^
-    "[System.IO.File]::WriteAllLines($conf, $lines, [System.Text.Encoding]::ASCII);" ^
-    "Write-Host '[OK] Configuracao gravada.'"
+    "[System.IO.File]::WriteAllLines($conf, $lines, [System.Text.Encoding]::ASCII);" | Out-Null
 
 if %errorlevel% neq 0 (
-    echo [ERRO] Falha ao escrever configuracao.
-    pause
+    call :log "[ERRO] Falha ao escrever configuracao."
+    if "%SILENT%"=="0" pause
     exit /b 1
 )
+call :log "[OK] Configuracao gravada."
 
-REM ---- 5) Cria script auxiliar de IP ----
+REM ---- 5) Script auxiliar de IP ----
 set "SCRIPTS_DIR=%ZBX_CONF_DIR%\scripts"
 if not exist "%SCRIPTS_DIR%" mkdir "%SCRIPTS_DIR%"
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
@@ -127,20 +145,26 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "$c += 'try { $ip = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop | Where-Object { $_.IPAddress -notlike ''127.*'' -and $_.IPAddress -notlike ''169.254.*'' } | Select-Object -First 1).IPAddress } catch { $ip = $null }';" ^
     "$c += 'if (-not $ip) { $ip = ''sem-ip'' }';" ^
     "$c += 'Write-Output (\"inventario-ti \" + $ip)';" ^
-    "[System.IO.File]::WriteAllLines($p, $c, [System.Text.Encoding]::UTF8);" ^
-    "Write-Host '[OK] Script auxiliar criado.'"
+    "[System.IO.File]::WriteAllLines($p, $c, [System.Text.Encoding]::UTF8);" | Out-Null
 
-REM ---- 6) Tarefa agendada: reinicia o agente quando o IP muda ----
-echo [INFO] Criando tarefa de reinicio automatico no evento de rede...
+REM ---- 6) Tarefa: reinicio automatico ao mudar de rede ----
 schtasks /create /tn "ZabbixAgent-RestartOnIPChange" /tr "cmd /c net stop \"Zabbix Agent 2\" && net start \"Zabbix Agent 2\"" /sc onevent /ec "Microsoft-Windows-NetworkProfile/Operational" /mo "*[System[EventID=10000]]" /ru SYSTEM /f >nul 2>&1
 if %errorlevel% equ 0 (
-    echo [OK] Tarefa de reinicio automatico criada.
+    call :log "[OK] Tarefa de reinicio automatico criada."
 ) else (
-    echo [AVISO] Tarefa agendada nao criada. O agente ainda funciona.
+    call :log "[AVISO] Tarefa agendada nao criada."
 )
 
-REM ---- 7) Inicia/reinicia o servico ----
-echo [INFO] Iniciando servico Zabbix Agent 2...
+REM ---- 7) Tarefa: execucao silenciosa no boot ----
+if exist "%VBS_PATH%" (
+    schtasks /create /tn "ZabbixAgent-SilentInstall" /tr "wscript.exe \"%VBS_PATH%\"" /sc onlogon /ru SYSTEM /rl HIGHEST /f >nul 2>&1
+    if %errorlevel% equ 0 (
+        call :log "[OK] Tarefa de execucao silenciosa no boot criada."
+    )
+)
+
+REM ---- 8) Inicia/reinicia o servico ----
+call :log "[INFO] Iniciando servico Zabbix Agent 2..."
 net stop "Zabbix Agent 2" >nul 2>&1
 timeout /t 2 /nobreak >nul
 net start "Zabbix Agent 2" >nul 2>&1
@@ -148,42 +172,42 @@ timeout /t 3 /nobreak >nul
 
 sc query "Zabbix Agent 2" | findstr /i "RUNNING" >nul 2>&1
 if %errorlevel% equ 0 (
-    echo [OK] Servico Zabbix Agent 2 rodando.
+    call :log "[OK] Servico Zabbix Agent 2 rodando."
 ) else (
-    echo [AVISO] Servico pode nao estar rodando. Verifique manualmente.
+    call :log "[AVISO] Servico pode nao estar rodando."
 )
 
-REM ---- 8) Testa a conexao ----
-echo.
-echo [INFO] Testando conexao (aguarde 5s)...
-timeout /t 5 /nobreak >nul
-"%ZBX_EXE%" -c "%ZBX_CONF%" -t "agent.ping" 2>&1
+REM ---- 9) Testa (apenas modo normal) ----
+if "%SILENT%"=="0" (
+    echo.
+    echo [INFO] Testando conexao (aguarde 5s)...
+    timeout /t 5 /nobreak >nul
+    "%ZBX_EXE%" -c "%ZBX_CONF%" -t "agent.ping" 2>&1
+    echo.
+    echo [INFO] Testando metadata (IP adaptativo)...
+    "%ZBX_EXE%" -c "%ZBX_CONF%" -t "inv.meta" 2>&1
+    echo.
+    echo  ============================================================
+    echo   INSTALACAO CONCLUIDA!
+    echo.
+    echo   Servidor Zabbix: %ZBX_SERVER%
+    echo   Host registrado: %ZBX_HOSTNAME%
+    echo   Metadata:        inventario-ti (IP adaptativo ativo)
+    echo.
+    echo   Painel Zabbix:   http://%ZBX_SERVER%:8081
+    echo   Painel Inv. TI:  http://%ZBX_SERVER%:5903
+    echo.
+    echo   Login Zabbix:    Admin / Monitor2026!
+    echo   Login Inv. TI:   admin / admin123
+    echo.
+    echo   O agente reinicia automaticamente ao mudar de rede/IP.
+    echo   Execucao silenciosa ativa no boot.
+    echo  ============================================================
+    echo.
+    echo [INFO] Abrindo painel do Inventário TI no navegador...
+    start "" "http://%ZBX_SERVER%:5903"
+    echo.
+    pause
+)
 
-echo.
-echo [INFO] Testando metadata (IP adaptativo)...
-"%ZBX_EXE%" -c "%ZBX_CONF%" -t "inv.meta" 2>&1
-
-REM ---- 9) Abre o painel ----
-echo.
-echo  ============================================================
-echo   INSTALACAO CONCLUIDA!
-echo.
-echo   Servidor Zabbix: %ZBX_SERVER%
-echo   Host registrado: %ZBX_HOSTNAME%
-echo   Metadata:        inventario-ti (IP adaptativo ativo)
-echo.
-echo   Painel Zabbix:   http://%ZBX_SERVER%:8081
-echo   Painel Inv. TI:  http://%ZBX_SERVER%:5903
-echo.
-echo   Login Zabbix:    Admin / Monitor2026!
-echo   Login Inv. TI:   admin / admin123
-echo.
-echo   O agente reinicia automaticamente ao mudar de rede/IP.
-echo   O servidor detecta o novo IP em ate 2 minutos.
-echo  ============================================================
-echo.
-echo [INFO] Abrindo painel do Inventário TI no navegador...
-start "" "http://%ZBX_SERVER%:5903"
-echo.
-pause
 exit /b 0
