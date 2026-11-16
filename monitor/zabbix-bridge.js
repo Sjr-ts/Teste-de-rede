@@ -1099,6 +1099,155 @@ async function sincronizarManutencoes(computadores, ordens) {
     return resultado;
 }
 
+// ==================== IP ADAPTATIVO (Zabbix -> Inventario TI) ====================
+// O agente ATIVO de cada PC avisa o servidor Zabbix quando o IP muda
+// (auto-registro) e o servidor atualiza a interface do host. Aqui a gente
+// LE esse IP novo de volta e atualiza o cadastro (data.json) — assim o
+// monitoramento agentless (ping) e o cadastro acompanham o IP real do PC.
+//
+// Regras de seguranca:
+//  - so hosts HABILITADOS (status=0) e so o grupo "Inventario TI";
+//  - nunca copia IP de loopback (127.x / ::1) para o cadastro;
+//  - vinculo forte pela tag inventario_id; fallback pelo NOME normalizado;
+//  - o IP reportado pelo proprio agente e a fonte da verdade (ele sabe o
+//    proprio endereco), entao ele sobrescreve o cadastro quando divergir.
+
+/** e loopback? (127.0.0.0/8, ::1, localhost) */
+function ehLoopback(ip) {
+    const s = String(ip || '').trim().toLowerCase();
+    if (!s || s === 'localhost') return true;
+    if (s.startsWith('127.')) return true;
+    if (s === '::1' || s === '0:0:0:0:0:0:0:1') return true;
+    return false;
+}
+
+/** Valida IP v4/v6 minimo (nao aceita lixo vindo do agente). */
+function ehIpValido(ip) {
+    const s = String(ip || '').trim();
+    if (!s || ehLoopback(s)) return false;
+    // v4
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(s)) {
+        return s.split('.').every(o => Number(o) >= 0 && Number(o) <= 255);
+    }
+    // v6 (aceita : + hex, forma simplificada)
+    if (/^[0-9a-f:]+$/i.test(s) && s.includes(':')) return true;
+    return false;
+}
+
+/**
+ * Busca os hosts do grupo "Inventario TI" (ou, se o grupo nao existir, os hosts
+ * com a tag de auto-registro) com a interface principal e as tags.
+ */
+async function listarHostsComIp() {
+    let groupids = null;
+    try {
+        const grupos = await authCall('hostgroup.get', { output: ['groupid'], filter: { name: 'Inventario TI' } });
+        if (grupos.length) groupids = [grupos[0].groupid];
+    } catch (e) {}
+    const params = {
+        output: ['hostid', 'host', 'name', 'status'],
+        selectInterfaces: ['interfaceid', 'ip', 'dns', 'useip', 'main', 'type'],
+        selectTags: ['tag', 'value'],
+        limit: 500
+    };
+    if (groupids) params.groupids = groupids;
+    else params.tag = { tag: 'inventario_origem', value: 'autoreg' };
+    return authCall('host.get', params);
+}
+
+/**
+ * Detecta mudancas de IP no sentido Zabbix -> cadastro (pura, testavel).
+ * @param {Array} computadores registros do Inventario TI (data.json)
+ * @param {Array} hosts hosts do Zabbix (host.get com interfaces/tags)
+ * @returns {{alteracoes:Array, semVinculo:Array}} alteracoes = [{inventario_id, nome, hostid, ipAntigo, ipNovo, fonte}]
+ */
+function detectarMudancasIp(computadores, hosts) {
+    const porId = {}, porNome = {};
+    for (const c of (Array.isArray(computadores) ? computadores : [])) {
+        if (c && c.id != null) porId[String(c.id)] = c;
+        const n = normalizarNome(c && (c.nomePc || c.nome));
+        if (n && !porNome[n]) porNome[n] = c;
+    }
+
+    const alteracoes = [];
+    const semVinculo = [];
+
+    for (const h of (Array.isArray(hosts) ? hosts : [])) {
+        if (!h || String(h.status) !== '0') continue; // so hosts habilitados
+        const ifaces = h.interfaces || [];
+        const iface = ifaces.find(i => String(i.main) === '1' && String(i.type) === '1')
+            || ifaces.find(i => String(i.main) === '1') || ifaces[0];
+        const ipZabbix = iface && iface.ip ? String(iface.ip).trim() : '';
+        if (!ehIpValido(ipZabbix)) continue; // loopback/lixo nunca vira cadastro
+
+        // 1) vinculo forte: tag inventario_id
+        const tagId = (h.tags || []).find(t => t.tag === 'inventario_id' && t.value);
+        let comp = tagId && porId[String(tagId.value)] ? porId[String(tagId.value)] : null;
+        let fonte = comp ? 'tag' : '';
+        // 2) fallback: nome normalizado (host.name/host)
+        if (!comp) {
+            const n = normalizarNome(h.name || h.host);
+            if (n && porNome[n]) { comp = porNome[n]; fonte = 'nome'; }
+        }
+        if (!comp) {
+            semVinculo.push({ hostid: h.hostid, host: h.host, name: h.name || '', ip: ipZabbix });
+            continue;
+        }
+
+        const ipCad = String(comp.ipAddress || comp.ip || '').trim();
+        if (ipCad === ipZabbix) continue; // ja sincronizado
+        alteracoes.push({
+            inventario_id: comp.id,
+            nome: comp.nomePc || comp.nome || ('PC-' + comp.id),
+            hostid: h.hostid,
+            ipAntigo: ipCad,
+            ipNovo: ipZabbix,
+            fonte
+        });
+    }
+
+    return { alteracoes, semVinculo };
+}
+
+/**
+ * Aplica as mudancas de IP no objeto db (computadores) — pura, testavel.
+ * Nunca escreve loopback e nao mexe em computador inexistente.
+ * @returns {{aplicados:Array, ignorados:Array}}
+ */
+function aplicarMudancasIp(alteracoes, db) {
+    const comps = (db && Array.isArray(db.computadores)) ? db.computadores : [];
+    const porId = {};
+    for (const c of comps) if (c && c.id != null) porId[String(c.id)] = c;
+
+    const aplicados = [], ignorados = [];
+    for (const a of (Array.isArray(alteracoes) ? alteracoes : [])) {
+        const comp = porId[String(a.inventario_id)];
+        if (!comp) { ignorados.push({ ...a, motivo: 'computador nao encontrado' }); continue; }
+        if (!ehIpValido(a.ipNovo)) { ignorados.push({ ...a, motivo: 'IP invalido/loopback' }); continue; }
+        const atual = String(comp.ipAddress || comp.ip || '').trim();
+        if (atual === a.ipNovo) { ignorados.push({ ...a, motivo: 'ja esta no cadastro' }); continue; }
+        comp.ipAddress = a.ipNovo;
+        aplicados.push({ ...a, ipAntigo: atual });
+    }
+    return { aplicados, ignorados };
+}
+
+/**
+ * Rotina completa (com I/O): le os hosts do Zabbix, detecta e aplica no db.
+ * Idempotente: segunda execucao nao acha nada para aplicar.
+ * @returns {{aplicados, ignorados, semVinculo, erros}}
+ */
+async function sincronizarIpsDoZabbix(db) {
+    let hosts = [];
+    try { hosts = await listarHostsComIp(); }
+    catch (e) { return { aplicados: [], ignorados: [], semVinculo: [], erros: [e.message] }; }
+
+    const computadores = (db && Array.isArray(db.computadores)) ? db.computadores : [];
+    const det = detectarMudancasIp(computadores, hosts);
+    const ap = aplicarMudancasIp(det.alteracoes, db);
+    return { ...ap, semVinculo: det.semVinculo, erros: [] };
+}
+
 /**
  * Garante o dashboard "Inventario TI" no Zabbix com widgets uteis:
  * problemas (ao vivo), problemas por severidade, disponibilidade dos hosts e
@@ -1424,5 +1573,12 @@ module.exports = {
     monitoramentoHost,
     getConfigStatus,
     loadConfig,
-    saveConfig
+    saveConfig,
+    // IP adaptativo (Zabbix -> cadastro)
+    listarHostsComIp,
+    detectarMudancasIp,
+    aplicarMudancasIp,
+    sincronizarIpsDoZabbix,
+    ehLoopback,
+    ehIpValido
 };

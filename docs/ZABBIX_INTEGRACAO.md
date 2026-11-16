@@ -376,6 +376,31 @@ o mesmo nome, o servidor Zabbix **atualiza a interface existente** (não duplica
   no grupo com a tag; reiniciado com `HostInterface=10.99.88.77` → mesmo host
   atualizado de `172.22.0.3` → `10.99.88.77` sem duplicar. **PASS**
 
+**Via 3 — propagação Zabbix → cadastro (`data.json`)** — o elo que faltava:
+a Via 2 atualiza o IP **no Zabbix**, mas o monitoramento agentless (ping em
+`data.json`) continuaria mirando o IP morto. Agora o servidor lê de volta o IP
+reportado pelo próprio agente e regrava o cadastro:
+
+- `monitor/zabbix-bridge.js`: `listarHostsComIp()` (host.get do grupo
+  "Inventario TI" com interfaces + tags), `detectarMudancasIp()` (pura) e
+  `aplicarMudancasIp()` (pura) + `sincronizarIpsDoZabbix()` (I/O).
+  Regras de segurança: só hosts **habilitados** (`status=0`); nunca copia
+  **loopback** (`127.x`, `::1`, `localhost`) ou IP malformado; vínculo forte
+  pela tag `inventario_id` com fallback pelo **nome normalizado**; o agente é a
+  fonte da verdade do próprio endereço.
+- `server.cjs`: `gravarIpsNoDados()` faz **read fresco → aplicar só os IPs →
+  `_rev+1` → write síncrono** (janela mínima de corrida com o `POST /api/data`
+  do frontend). Endpoints:
+  - `POST /api/zabbix/sincronizar-ips` — sob demanda (botão **Atualizar IPs**
+    na aba Monitorar);
+  - `POST /api/zabbix/sincronizar` — já roda o IP sync junto (campo `ips` na
+    resposta; desligável com `{"ips": false}`).
+- **Job periódico**: 1º tiro 45 s após subir, depois a cada **5 min**, com
+  guarda de reentrada (`ipSyncEmAndamento`) e só roda com Zabbix configurado —
+  o cadastro se mantém atualizado sem ninguém clicar em nada.
+- Teste: `test/ip-adaptativo.test.js` (12 casos) trava validação de IP,
+  detecção, aplicação, idempotência, endpoint, job e botão do frontend.
+
 ### 4. Conf do agente corrigida (IP do servidor)
 
 Os arquivos de deploy apontavam para o servidor **antigo** (`192.168.0.94` /

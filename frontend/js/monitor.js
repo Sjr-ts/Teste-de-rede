@@ -2356,13 +2356,58 @@ async function monSyncZabbix() {
             partes.push('manutencoes: ' + (m.criadas || 0) + ' criada(s), ' + (m.atualizadas || 0) + ' atualizada(s), ' + (m.removidas || 0) + ' vencida(s) limpa(s)');
             if (m.semVinculo) partes.push(m.semVinculo + ' manutencao(s) sem host vinculado');
         }
-        const erros = [...(h.erros || []), ...((m && m.erros) || [])];
+        // IP adaptativo: IPs lidos de volta do Zabbix (auto-registro) e aplicados no cadastro
+        const ips = r.ips || null;
+        if (ips) {
+            if ((ips.aplicados || []).length) {
+                partes.push('IP adaptativo: ' + ips.aplicados.map(a => a.nome + ' ' + (a.ipAntigo || '?') + '→' + a.ipNovo).join(', '));
+            }
+            if ((ips.semVinculo || []).length) partes.push(ips.semVinculo.length + ' host(s) sem vinculo ao cadastro');
+        }
+        const erros = [...(h.erros || []), ...((m && m.erros) || []), ...((ips && ips.erros) || [])];
         const msg = 'Sincronizado (' + (r.computadores || 0) + ' computadores): ' + partes.join(', ') + '.';
         if (typeof showToast === 'function') showToast(erros.length ? msg + ' ' + erros.length + ' erro(s): ' + erros[0] : msg, erros.length ? 'error' : 'success');
         if (typeof pushLog === 'function') pushLog('ALTERACAO', 'MONITORAMENTO', null, 'Sincronizacao Zabbix: ' + partes.join('; '));
         monRenderZabbixHosts(true);
     } catch (e) {
         if (typeof showToast === 'function') showToast('Erro ao sincronizar: ' + e.message, 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.style.opacity = 1; }
+    }
+}
+
+// IP adaptativo: le os IPs dos agentes ativos no Zabbix (auto-registro) e
+// atualiza o cadastro (data.json) — para o ping/monitoramento seguir o IP real.
+async function monSyncIpsZabbix() {
+    const btn = document.querySelector('[onclick*="monSyncIpsZabbix"]');
+    try {
+        if (btn) { btn.disabled = true; btn.style.opacity = 0.6; }
+        const r = await fetch('/api/zabbix/sincronizar-ips', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        }).then(x => x.json());
+        if (!r.ok) throw new Error(r.error || 'erro desconhecido');
+
+        const ap = r.aplicados || [];
+        const ig = r.ignorados || [];
+        const sv = r.semVinculo || [];
+        const erros = r.erros || [];
+        let msg;
+        if (ap.length) {
+            msg = 'IP adaptativo: ' + ap.map(a => a.nome + ': ' + (a.ipAntigo || '?') + ' → ' + a.ipNovo).join(', ');
+        } else {
+            msg = 'IP adaptativo: cadastro já está com o IP atual de todos os hosts' +
+                (ig.length ? ' (' + ig.length + ' sem mudança)' : '') +
+                (sv.length ? '; ' + sv.length + ' host(s) sem vínculo' : '') + '.';
+        }
+        if (typeof showToast === 'function') showToast(erros.length ? msg + ' Erro(s): ' + erros[0] : msg, erros.length ? 'error' : 'success');
+        if (typeof pushLog === 'function' && ap.length) {
+            pushLog('ALTERACAO', 'MONITORAMENTO', null, 'IP adaptativo: ' + ap.map(a => a.nome + ' ' + (a.ipAntigo || '?') + '→' + a.ipNovo).join('; '));
+        }
+        if (ap.length) monRenderZabbixHosts(true);
+    } catch (e) {
+        if (typeof showToast === 'function') showToast('Erro ao atualizar IPs: ' + e.message, 'error');
     } finally {
         if (btn) { btn.disabled = false; btn.style.opacity = 1; }
     }

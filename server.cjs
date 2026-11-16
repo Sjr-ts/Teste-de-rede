@@ -418,6 +418,35 @@ function carregarDados() {
     try { return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch (e) { return {}; }
 }
 
+/** Grava data.json preservando as demais secoes e incrementando _rev. */
+function gravarDados(db) {
+    const atual = carregarDados();
+    const novo = Object.assign({}, atual, db);
+    novo._rev = (atual._rev || 0) + 1;
+    fs.writeFileSync(DATA_FILE, JSON.stringify(novo, null, 2), 'utf8');
+    return novo._rev;
+}
+
+/**
+ * Persiste APENAS as mudancas de IP vindas do Zabbix no data.json.
+ * Re-le o arquivo fresco (minimiza corrida com o POST /api/data do frontend),
+ * aplica so os IPs via zb.aplicarMudancasIp e grava sincrono com _rev+1.
+ * @returns {Array} lista de alteracoes efetivamente aplicadas
+ */
+function gravarIpsNoDados(alteracoes) {
+    if (!Array.isArray(alteracoes) || alteracoes.length === 0) return [];
+    const zb = require('./monitor/zabbix-bridge');
+    const fresco = carregarDados();
+    const r = zb.aplicarMudancasIp(alteracoes, fresco);
+    if (r.aplicados.length) {
+        fresco._rev = (fresco._rev || 0) + 1;
+        fs.writeFileSync(DATA_FILE, JSON.stringify(fresco, null, 2), 'utf8');
+        console.log('[zabbix] IP(s) do cadastro atualizado(s): '
+            + r.aplicados.map(a => a.nome + ': ' + (a.ipAntigo || '?') + ' -> ' + a.ipNovo).join('; '));
+    }
+    return r.aplicados;
+}
+
 function paginar(array, page, size) {
     const start = (page || 0) * (size || 10);
     return array.slice(start, start + (size || 10));
@@ -906,7 +935,17 @@ app.post('/api/zabbix/sincronizar', async (req, res) => {
             try { manutencoes = await zb.sincronizarManutencoes(computadores, ordens); }
             catch (e) { manutencoes = { erros: [e.message] }; }
         }
-        res.json({ ok: true, computadores: computadores.length, hosts, manutencoes, atualizadoEm: new Date().toISOString() });
+        // IP adaptativo no MESMO fluxo: o Zabbix ja recebeu o IP novo do agente
+        // (auto-registro) — aqui a gente le de volta e atualiza o cadastro.
+        let ips = null;
+        if (!req.body || req.body.ips !== false) {
+            try {
+                ips = await zb.sincronizarIpsDoZabbix(db);
+                // persiste so os IPs num read fresco (nao sobrescreve edicoes do frontend)
+                ips.aplicados = gravarIpsNoDados(ips.aplicados);
+            } catch (e) { ips = { aplicados: [], ignorados: [], semVinculo: [], erros: [e.message] }; }
+        }
+        res.json({ ok: true, computadores: computadores.length, hosts, manutencoes, ips, atualizadoEm: new Date().toISOString() });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -955,6 +994,19 @@ app.post('/api/zabbix/sincronizar-manutencoes', async (req, res) => {
             Array.isArray(db.ordens) ? db.ordens : []
         );
         res.json(r);
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ---- Zabbix: sincronizar IPs do cadastro a partir do Zabbix (IP adaptativo) ----
+// Le os IPs reportados pelos agentes ativos (auto-registro) e atualiza
+// data.json. Idempotente — so escreve quando ha diferenca real.
+app.post('/api/zabbix/sincronizar-ips', async (req, res) => {
+    try {
+        const zb = require('./monitor/zabbix-bridge');
+        const db = carregarDados();
+        const r = await zb.sincronizarIpsDoZabbix(db);
+        const aplicados = gravarIpsNoDados(r.aplicados);
+        res.json(Object.assign({ ok: true, aplicados, atualizadoEm: new Date().toISOString() }, r));
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1204,3 +1256,31 @@ app.listen(PORT, () => {
         } catch (e) { console.log('[zabbix] pre-aquecimento falhou:', e.message); }
     }, 5000);
 });
+
+// ==================== IP ADAPTATIVO: job periodico ====================
+// Mantem o cadastro (data.json) sempre com o IP real dos PCs: quando o agente
+// ATIVO de um PC muda de IP (DHCP), o auto-registro atualiza a interface no
+// Zabbix e aqui a gente le esse IP de volta para o cadastro — sem isso o
+// monitoramento agentless (ping) passaria a mirar um IP morto.
+// - 1o tiro 45s apos subir (deixa o Zabbix terminar de registrar);
+// - depois a cada 5 min; guarda de reentrada; so roda com Zabbix configurado.
+let ipSyncEmAndamento = false;
+async function ipSyncPeriodico() {
+    if (ipSyncEmAndamento) return;
+    try {
+        const zb = require('./monitor/zabbix-bridge');
+        if (!zb.getConfigStatus || !zb.getConfigStatus().configurado) return;
+        ipSyncEmAndamento = true;
+        const db = carregarDados();
+        const r = await zb.sincronizarIpsDoZabbix(db);
+        const aplicados = gravarIpsNoDados(r.aplicados);
+        if (aplicados.length) console.log('[zabbix] ip-sync periodico: ' + aplicados.length + ' IP(s) atualizado(s)');
+        if (r.erros && r.erros.length) console.log('[zabbix] ip-sync periodico erros:', r.erros.join('; '));
+    } catch (e) {
+        console.log('[zabbix] ip-sync periodico falhou:', e.message);
+    } finally {
+        ipSyncEmAndamento = false;
+    }
+}
+setTimeout(ipSyncPeriodico, 45000);
+setInterval(ipSyncPeriodico, 5 * 60 * 1000);
