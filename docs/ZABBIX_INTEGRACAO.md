@@ -448,6 +448,14 @@ Receita por plataforma:
   dhclient). Reiniciar dispara o auto-registro e a action atualiza a interface.
   Este e o modo padrao (seguro) mantido em `zabbix_agent2.conf.template`.
 
+### 5. Instalador unico (um clique)
+
+Para usuarios nao tecnicos, existe um instalador unico que faz tudo automaticamente:
+- `zabbix-deploy/instalar-tudo.bat` — instala o agente, configura, habilita IP adaptativo,
+  cria tarefa de reinicio automatico e abre o painel do Inventário TI.
+
+Uso: clique com botao direito -> "Executar como administrador". Nenhum ajuste manual.
+
 ### 4. Conf do agente corrigida (IP do servidor)
 
 Os arquivos de deploy apontavam para o servidor **antigo** (`192.168.0.94` /
