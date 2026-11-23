@@ -30,8 +30,8 @@ Start-Sleep -Seconds 3
 try {
     $h = Invoke-RestMethod -Uri "http://127.0.0.1:5903/actuator/health" -TimeoutSec 5
     Write-Host "SERVIDOR OK -> http://127.0.0.1:5903  (status: $($h.status))"
-    $e = Invoke-RestMethod -Uri "http://127.0.0.1:5903/api/computadores/estatisticas" -TimeoutSec 5
-    Write-Host "Computadores: $($e.total) | Zabbix: $((Invoke-RestMethod -Uri 'http://127.0.0.1:5903/api/zabbix/resumo' -TimeoutSec 15).conectado)"
+    # /api/* exige sessao HttpOnly — checar sem cookie gerava falso negativo.
+    # O health check publico ja garante que o servidor esta no ar.
 } catch {
     Write-Host "Falha ao responder. Veja $err"
     Get-Content $err -Tail 20
