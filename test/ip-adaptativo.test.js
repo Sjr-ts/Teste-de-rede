@@ -46,6 +46,19 @@ test('ehLoopback/ehIpValido barram loopback, vazio e lixo', () => {
     assert.equal(zb.ehIpValido('999.1.1.1'), false);   // octeto fora do intervalo
     assert.equal(zb.ehIpValido('abc'), false);
     assert.equal(zb.ehIpValido('ip novo'), false);
+
+    // nao-unicast / reservado: um agente mal configurado nao pode sobrescrever
+    // o IP valido do PC no cadastro com um destes
+    assert.equal(zb.ehIpValido('0.0.0.0'), false);
+    assert.equal(zb.ehIpValido('0.1.2.3'), false);
+    assert.equal(zb.ehIpValido('169.254.121.56'), false);  // APIPA (sem DHCP)
+    assert.equal(zb.ehIpValido('169.254.1.1'), false);
+    assert.equal(zb.ehIpValido('224.0.0.1'), false);       // multicast
+    assert.equal(zb.ehIpValido('239.255.255.250'), false);
+    assert.equal(zb.ehIpValido('240.0.0.1'), false);       // reservado
+    assert.equal(zb.ehIpValido('::'), false);              // unspecified v6
+    assert.equal(zb.ehLoopback('::ffff:127.0.0.1'), true); // loopback mapeado
+    assert.equal(zb.ehIpValido('::ffff:127.0.0.1'), false);
 });
 
 // ---------------------------------------------------------------------------

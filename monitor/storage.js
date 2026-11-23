@@ -125,16 +125,26 @@ function lerAggregados(dias = 7) {
     return saida;
 }
 
-/** Limpeza de arquivos raw antigos (retencao configuravel). */
-function limparAntigos(retencaoDias) {
-    const corte = Date.now() - retencaoDias * 86400000;
+/**
+ * Limpeza de arquivos antigos. RAW e AGREGADOS tem retencoes DIFERENTES:
+ * medicoes brutas (30d) e agregados historicos (365d). Aplicar o mesmo corte
+ * apagava todo o historico de 1 ano todo dia.
+ */
+function limparAntigos(retencaoDiasRaw, retencaoDiasAgg) {
+    const aggDias = (retencaoDiasAgg != null) ? retencaoDiasAgg : retencaoDiasRaw;
+    const tarefas = [
+        [RAW_DIR, retencaoDiasRaw],
+        [AGG_DIR, aggDias]
+    ];
     let removidos = 0;
-    for (const tipo of [RAW_DIR, AGG_DIR]) {
-        for (const f of fs.readdirSync(tipo)) {
+    for (const [dir, dias] of tarefas) {
+        const corte = Date.now() - dias * 86400000;
+        if (!fs.existsSync(dir)) continue;
+        for (const f of fs.readdirSync(dir)) {
             const m = f.match(/^(\d{4}-\d{2}-\d{2})/);
             if (!m) continue;
             if (new Date(m[1] + 'T00:00:00Z').getTime() < corte) {
-                try { fs.unlinkSync(path.join(tipo, f)); removidos++; } catch (e) {}
+                try { fs.unlinkSync(path.join(dir, f)); removidos++; } catch (e) {}
             }
         }
     }

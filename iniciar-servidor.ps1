@@ -25,12 +25,13 @@ Start-Process -FilePath "node" `
 
 Start-Sleep -Seconds 3
 
-# 3) Confere se responde
+# 3) Confere se responde (sempre por loopback: IP fixo da LAN muda com DHCP e
+#    gerava falso negativo mesmo com o servidor no ar)
 try {
-    $h = Invoke-RestMethod -Uri "http://192.168.0.186:5903/actuator/health" -TimeoutSec 5
-    Write-Host "SERVIDOR OK -> http://192.168.0.186:5903  (status: $($h.status))"
-    $e = Invoke-RestMethod -Uri "http://192.168.0.186:5903/api/computadores/estatisticas" -TimeoutSec 5
-    Write-Host "Computadores: $($e.total) | Zabbix: $((Invoke-RestMethod -Uri 'http://192.168.0.186:5903/api/zabbix/resumo' -TimeoutSec 15).conectado)"
+    $h = Invoke-RestMethod -Uri "http://127.0.0.1:5903/actuator/health" -TimeoutSec 5
+    Write-Host "SERVIDOR OK -> http://127.0.0.1:5903  (status: $($h.status))"
+    $e = Invoke-RestMethod -Uri "http://127.0.0.1:5903/api/computadores/estatisticas" -TimeoutSec 5
+    Write-Host "Computadores: $($e.total) | Zabbix: $((Invoke-RestMethod -Uri 'http://127.0.0.1:5903/api/zabbix/resumo' -TimeoutSec 15).conectado)"
 } catch {
     Write-Host "Falha ao responder. Veja $err"
     Get-Content $err -Tail 20

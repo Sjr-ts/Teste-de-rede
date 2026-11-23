@@ -115,16 +115,21 @@ function verificarSessao(token) {
     } catch (e) { return null; }
 }
 
-// ---------- tokens de automacao (Bearer agt_...) ----------
-// Alternativa a sessao de navegador para SCRIPTS/AGENTES (o estagiario de
-// automacao). Revogavel: apague o token em monitor/api-tokens.json (ou o arquivo).
+// Tokens de automacao: validade e revogação em tempo real.
+// Antes: cache memoizado para sempre => apagar o token só surtia efeito após
+// restart. Agora: recarrega quando o arquivo muda (mtime), então revogar um
+// token ADMIN vazado tem efeito imediato.
 let _tokensCache = null;
+let _tokensMtime = 0;
 function carregarTokens() {
-    if (_tokensCache) return _tokensCache;
+    let mtime = 0;
+    try { mtime = fs.statSync(TOKENS_FILE).mtimeMs; } catch (e) { mtime = -1; }
+    if (_tokensCache && mtime === _tokensMtime) return _tokensCache;
     try {
         const t = JSON.parse(fs.readFileSync(TOKENS_FILE, 'utf8'));
         _tokensCache = Array.isArray(t) ? t : [];
     } catch (e) { _tokensCache = []; }
+    _tokensMtime = mtime;
     return _tokensCache;
 }
 

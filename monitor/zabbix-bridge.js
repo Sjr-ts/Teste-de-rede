@@ -1112,25 +1112,38 @@ async function sincronizarManutencoes(computadores, ordens) {
 //  - o IP reportado pelo proprio agente e a fonte da verdade (ele sabe o
 //    proprio endereco), entao ele sobrescreve o cadastro quando divergir.
 
-/** e loopback? (127.0.0.0/8, ::1, localhost) */
+/** e loopback / nao-unicast? (127/8, ::1, ::ffff:127.x, localhost) */
 function ehLoopback(ip) {
-    const s = String(ip || '').trim().toLowerCase();
+    let s = String(ip || '').trim().toLowerCase();
+    // normaliza IPv4-mapped (::ffff:127.0.0.1 -> 127.0.0.1)
+    if (s.startsWith('::ffff:')) s = s.slice(7);
+    if (s.startsWith('0:0:0:0:0:0:ffff:')) s = s.slice(15);
     if (!s || s === 'localhost') return true;
     if (s.startsWith('127.')) return true;
     if (s === '::1' || s === '0:0:0:0:0:0:0:1') return true;
     return false;
 }
 
-/** Valida IP v4/v6 minimo (nao aceita lixo vindo do agente). */
+/** Valida IP v4/v6 unicast (nao aceita lixo, APIPA, multicast ou reservado). */
 function ehIpValido(ip) {
-    const s = String(ip || '').trim();
+    let s = String(ip || '').trim();
     if (!s || ehLoopback(s)) return false;
+    if (s.startsWith('::ffff:')) s = s.slice(7); // IPv4-mapped: valida como v4
     // v4
     if (/^\d{1,3}(\.\d{1,3}){3}$/.test(s)) {
-        return s.split('.').every(o => Number(o) >= 0 && Number(o) <= 255);
+        const o = s.split('.').map(Number);
+        if (!o.every(n => n >= 0 && n <= 255)) return false;
+        if (o[0] === 0) return false;                       // 0.0.0.0/8 (nao roteavel)
+        if (o[0] === 169 && o[1] === 254) return false;      // APIPA (sem DHCP)
+        if (o[0] >= 224 && o[0] <= 239) return false;        // multicast
+        if (o[0] >= 240) return false;                       // reservado
+        return true;
     }
-    // v6 (aceita : + hex, forma simplificada)
-    if (/^[0-9a-f:]+$/i.test(s) && s.includes(':')) return true;
+    // v6 (aceita : + hex, forma simplificada; ja excluiu ::1 e mapped-loopback)
+    if (/^[0-9a-f:]+$/i.test(s) && s.includes(':')) {
+        if (s === '::' || s === '0:0:0:0:0:0:0:0') return false; // unspecified
+        return true;
+    }
     return false;
 }
 

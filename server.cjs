@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const compression = require('compression');
 const { ping, tcpCheck } = require('./monitor/pinger');
 const store = require('./monitor/storage');
@@ -9,7 +10,9 @@ const monitorConfig = require('./monitor/config.json');
 const mockEngine = require('./monitor/mock-engine');
 
 const app = express();
-const PORT = 5903;
+// Porta configuravel (padrao 5903) — permite subir instancias de teste em
+// portas temporarias sem conflitar com a producao.
+const PORT = Number(process.env.PORT || 5903);
 
 // Seguranca basica e profissional: nao expor stack, protecao MIME/clickjacking
 app.disable('x-powered-by');
@@ -90,7 +93,11 @@ function _registrarFalhaLogin(ip) {
 }
 
 app.post('/api/auth/login', (req, res) => {
-    const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?');
+    // Usa SEMPRE o IP real do socket: X-Forwarded-For pode ser forjado pelo
+    // cliente para burlar o rate limit. So confia nele se trust proxy estiver
+    // configurado explicitamente (o que nao e o caso aqui).
+    const ipReal = String(req.socket.remoteAddress || '?');
+    const ip = crypto.createHash('sha256').update(ipReal).digest('hex').slice(0, 16);
     const bloqueio = _loginTentativas.get(ip);
     if (bloqueio && bloqueio.n >= 10 && (Date.now() - bloqueio.primeiro) < 10 * 60 * 1000) {
         return res.status(429).json({ error: 'Muitas tentativas. Aguarde 10 minutos.' });
@@ -366,6 +373,32 @@ setInterval(async () => {
 
 // ---- dados do inventario (cadastro de computadores) ----
 const DATA_FILE = path.join(__dirname, 'data.json');
+
+/**
+ * Escrita ATOMICA de JSON: grava num arquivo temporario (no mesmo diretorio)
+ * e renomeia. Nunca deixa data.json truncado/invalido se o processo cair no
+ * meio da escrita — o proximo save nao apaga o cadastro.
+ */
+function gravarJsonAtomico(file, obj) {
+    const tmp = file + '.tmp-' + process.pid + '-' + crypto.randomBytes(4).toString('hex');
+    let fd = fs.openSync(tmp, 'w');
+    try {
+        fs.writeFileSync(fd, JSON.stringify(obj, null, 2), 'utf8');
+        fs.fsyncSync(fd);
+    } finally {
+        fs.closeSync(fd);
+    }
+    fs.renameSync(tmp, file);
+}
+
+/** Le data.json com seguranca (BOM, JSON invalido, arquivo ausente). */
+function lerJsonSeguro(file, fallback) {
+    try {
+        let raw = fs.readFileSync(file, 'utf8');
+        if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
+        return JSON.parse(raw);
+    } catch (e) { return fallback; }
+}
 app.get('/api/rev', (req, res) => {
     try {
         const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
@@ -381,10 +414,13 @@ app.get('/api/data', (req, res) => {
 app.post('/api/data', (req, res) => {
     try {
         const body = req.body || {};
-        let current = {};
-        try { current = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch (e) { current = {}; }
+        const current = lerJsonSeguro(DATA_FILE, {});
         const baseRev = (body.baseRev != null) ? body.baseRev : null;
-        const merged = baseRev != null && current._rev != null && baseRev !== current._rev;
+        // Controle de concorrência OTIMISTA REAL: se a revisão do cliente está
+        // desatualizada, rejeita (409) em vez de sobrescrever silenciosamente.
+        if (baseRev != null && current._rev != null && baseRev !== current._rev) {
+            return res.status(409).json({ error: 'Conflito de revisão: o cadastro foi alterado em outra aba/sessão.', rev: current._rev, baseRev });
+        }
         const newData = {
             computadores: Array.isArray(body.computadores) ? body.computadores : (current.computadores || []),
             manutencoes: Array.isArray(body.manutencoes) ? body.manutencoes : (current.manutencoes || []),
@@ -397,8 +433,8 @@ app.post('/api/data', (req, res) => {
             logs: Array.isArray(body.logs) ? body.logs : (current.logs || []),
             _rev: (current._rev || 0) + 1
         };
-        fs.writeFileSync(DATA_FILE, JSON.stringify(newData, null, 2), 'utf8');
-        res.json({ rev: newData._rev, merged });
+        gravarJsonAtomico(DATA_FILE, newData);
+        res.json({ rev: newData._rev, merged: false });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.post('/api/upload', (req, res) => {
@@ -415,7 +451,7 @@ app.post('/api/upload', (req, res) => {
 
 // ==================== INVENTÁRIO REST API (compatibilidade frontend) ====================
 function carregarDados() {
-    try { return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch (e) { return {}; }
+    return lerJsonSeguro(DATA_FILE, {});
 }
 
 /** Grava data.json preservando as demais secoes e incrementando _rev. */
@@ -423,7 +459,7 @@ function gravarDados(db) {
     const atual = carregarDados();
     const novo = Object.assign({}, atual, db);
     novo._rev = (atual._rev || 0) + 1;
-    fs.writeFileSync(DATA_FILE, JSON.stringify(novo, null, 2), 'utf8');
+    gravarJsonAtomico(DATA_FILE, novo);
     return novo._rev;
 }
 
@@ -440,7 +476,7 @@ function gravarIpsNoDados(alteracoes) {
     const r = zb.aplicarMudancasIp(alteracoes, fresco);
     if (r.aplicados.length) {
         fresco._rev = (fresco._rev || 0) + 1;
-        fs.writeFileSync(DATA_FILE, JSON.stringify(fresco, null, 2), 'utf8');
+        gravarJsonAtomico(DATA_FILE, fresco);
         console.log('[zabbix] IP(s) do cadastro atualizado(s): '
             + r.aplicados.map(a => a.nome + ': ' + (a.ipAntigo || '?') + ' -> ' + a.ipNovo).join('; '));
     }
@@ -1239,7 +1275,7 @@ app.use('/vendor', express.static('frontend/vendor', { maxAge: 7776000000, immut
 // Demais arquivos estaticos: ETag do Express + sem cache longo (front anda rapido)
 app.use(express.static('frontend', { maxAge: 0 }));
 
-app.listen(PORT, () => {
+const servidorHttp = app.listen(PORT, () => {
     console.log('Servidor rodando em http://localhost:' + PORT + ' (acesso externo: http://<IP-desta-maquina>:' + PORT + ')');
     // Inicia o coletor em background (ciclos automaticos + SSE)
     try { monitor.iniciar(); } catch (e) { console.error('[server] falha ao iniciar monitor:', e.message); }
@@ -1257,13 +1293,20 @@ app.listen(PORT, () => {
     }, 5000);
 });
 
+// Se a porta ja estiver em uso (instancia antiga), ENCERRA o processo em vez
+// de virar zumbim: o handler global de uncaughtException so logava e mantinha
+// os timers de IP sync rodando sem ninguem escutar HTTP.
+servidorHttp.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error('[server] PORTA ' + PORT + ' JA EM USO. Encerre a instancia antiga (taskkill /PID <pid> /F) e reinicie.');
+    } else {
+        console.error('[server] falha ao abrir servidor:', err.message);
+    }
+    process.exit(1);
+});
+
 // ==================== IP ADAPTATIVO: job periodico ====================
-// Mantem o cadastro (data.json) sempre com o IP real dos PCs: quando o agente
-// ATIVO de um PC muda de IP (DHCP), o auto-registro atualiza a interface no
-// Zabbix e aqui a gente le esse IP de volta para o cadastro — sem isso o
-// monitoramento agentless (ping) passaria a mirar um IP morto.
-// - 1o tiro 45s apos subir (deixa o Zabbix terminar de registrar);
-// - depois a cada 5 min; guarda de reentrada; so roda com Zabbix configurado.
+// (registrado dentro do listen via iniciarIpSync — so roda se o HTTP subiu)
 let ipSyncEmAndamento = false;
 async function ipSyncPeriodico() {
     if (ipSyncEmAndamento) return;
@@ -1282,5 +1325,10 @@ async function ipSyncPeriodico() {
         ipSyncEmAndamento = false;
     }
 }
-setTimeout(ipSyncPeriodico, 45000);
-setInterval(ipSyncPeriodico, 5 * 60 * 1000);
+function iniciarIpSync() {
+    setTimeout(ipSyncPeriodico, 45000);
+    setInterval(ipSyncPeriodico, 5 * 60 * 1000);
+}
+// so agenda se o servidor HTTP realmente subiu
+if (servidorHttp && servidorHttp.listening) iniciarIpSync();
+else servidorHttp.once('listening', iniciarIpSync);
