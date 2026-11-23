@@ -46,10 +46,13 @@
     "janelasEsperadas": [
       { "id": "EXPEDIENTE", "dias": [1,2,3,4,5], "inicio": "08:00", "fim": "18:00", "toleranciaMin": 15 }
     ],
+    "janelasDesligamento": [],
     "feriados": [],
     "regras": {
       "minFalhasParaDesligadoEsperado": 3,
       "maxHorizontalidadePct": 40,
+      "minHostsParaParadaColetiva": 5,
+      "minFalhasParaIpObsoleto": 24,
       "minDiasRecorrencia": 3,
       "janelaRecorrenciaDias": 30,
       "foraDaJanelaSempreAlerta": true

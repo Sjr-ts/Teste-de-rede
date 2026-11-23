@@ -42,10 +42,16 @@ const CLASSIFICACAO_PADRAO = {
     janelasEsperadas: [
         { id: 'EXPEDIENTE', dias: [1, 2, 3, 4, 5], inicio: '08:00', fim: '18:00', toleranciaMin: 15 }
     ],
+    // Janelas em que o desligamento e AUTORIZADO durante o expediente.
+    // Exemplo: desligar no almoco para reduzir ciclo de formatacao.
+    // Vazio por padrao = nada e suprimido dentro do expediente sem evidencia.
+    janelasDesligamento: [],
     feriados: [],
     regras: {
         minFalhasParaDesligadoEsperado: 3,
         maxHorizontalidadePct: 40,
+        minHostsParaParadaColetiva: 5,
+        minFalhasParaIpObsoleto: 24,
         minDiasRecorrencia: 3,
         janelaRecorrenciaDias: 30,
         foraDaJanelaSempreAlerta: true
@@ -273,6 +279,11 @@ function classificarEstados(alvos, estado, config) {
     const setorDe = {};
     for (const a of alvos) setorDe[a.ip] = a.setor || 'GERAL';
 
+    // agregados historicos (para detectar desligamento HABITUAL por recorrencia)
+    const janelaDias = (config.classificacao && config.classificacao.regras && config.classificacao.regras.janelaRecorrenciaDias) || 30;
+    let agregados = [];
+    try { agregados = store.lerAggregados ? store.lerAggregados(janelaDias) : []; } catch (e) {}
+
     const totalPorSetor = {}, foraPorSetor = {};
     for (const a of alvos) {
         const setor = setorDe[a.ip];
@@ -298,7 +309,10 @@ function classificarEstados(alvos, estado, config) {
             estadoAnterior: st,
             config,
             horizontalidadePct: horizontalidade,
-            erroPinger: st.erroPinger
+            totalSetor: total,
+            foraNoSetor: foraPorSetor[setor] || 0,
+            erroPinger: st.erroPinger,
+            agregados
         });
 
         st.ultimoResultado = decisao.estado;
@@ -343,7 +357,7 @@ async function executarCiclo() {
                         tentativas: coletor.tentativasPorCiclo,
                         timeoutMs: coletor.timeoutMs
                     });
-const reg = {
+                    const reg = {
                         host: alvo.ip,
                         nome: alvo.nome,
                         setor: alvo.setor,
@@ -358,11 +372,15 @@ const reg = {
                         metodo: 'ICMP_PING_NATIVO_SO',
                         timestamp: r.timestamp
                     };
+                    // CORRIGIDO: resultados sempre ficava vazio -> Zabbix recebia
+                    // array vazio e estatisticas do ciclo eram zero.
+                    resultados.push(reg);
+                    estatisticas.medicoes++;
 
-                    // Usa reg.ok para considerar dados
-                    const usouMock = r.ok;
+                    // Usa o resultado real do ping (antes chamado usouMock — nome enganoso)
+                    const respondeu = r.ok;
                     const st = estado[alvo.ip] || { falhasConsecutivas: 0, downSince: null, upSince: null, historicoRecente: [] };
-                    if (!usouMock) {
+                    if (!respondeu) {
                         st.falhasConsecutivas = (st.falhasConsecutivas || 0) + 1;
                         if (!st.downSince) st.downSince = reg.timestamp || r.timestamp;
                         st.upSince = null;
@@ -375,7 +393,7 @@ const reg = {
                         st.downSince = null;
                         st.upSince = (reg.timestamp || r.timestamp);
                     }
-                    st.ultimoResultado = usouMock ? 'ACESSIVEL' : 'SEM_RESPOSTA'; // classificado depois do ciclo
+                    st.ultimoResultado = respondeu ? 'ACESSIVEL' : 'SEM_RESPOSTA'; // classificado depois do ciclo
                     st.erroPinger = r.erro || null;
                     st.ultimoHorario = reg.timestamp || r.timestamp;
                     st.latenciaMediaMs = reg.latenciaMediaMs !== undefined ? reg.latenciaMediaMs : r.latenciaMediaMs;
@@ -550,6 +568,12 @@ function avaliarEAlertar(estado) {
                     quando: new Date(agora).toISOString(), evento: 'SUPRIMIDO',
                     detalhe: 'Desligamento/classificacao esperada: ' + (st.classificacao.motivo || '')
                 });
+                // CORRIGIDO: apenas registrar SUPRIMIDo no historico nao bastava —
+                // o alerta antigo continuava ABERTO, inflando o KPI "Alertas" e
+                // gerando toast via SSE. Resolve o alerta com motivo explicito.
+                anterior.estado = 'RESOLVIDO';
+                anterior.resolvidoEm = new Date(agora).toISOString();
+                anterior.motivoResolucao = 'SUPRIMIDO_PELA_CLASSIFICACAO';
             }
         }
         novosDiagnostico[host] = {
@@ -651,7 +675,16 @@ function obterPainel() {
     // KPIs MUTUAMENTE EXCLUSIVOS — a soma dos estados = totalAlvos.
     // Antes: semResposta (1 falha) e instaveis (1 falha) contavam o MESMO host,
     // e um PC desligado derrubava a disponibilidade na 1a falha.
-    const estados = Object.values(estado).map(s => s.ultimoResultado);
+    // ESTADO EFETIVO UNICO: aplica stale (dados velhos) e fallback SEM_DADOS
+    // uma vez, para que KPI, detalhe, grafico e tabela usem a MESMA fonte.
+    // Antes o stale era aplicado so na linha da tabela, divergindo do card.
+    const estadoEfetivo = {};
+    for (const [ip, s] of Object.entries(estado)) {
+        estadoEfetivo[ip] = (isHostStale(s, Date.now()) && s.ultimoResultado === 'ACESSIVEL')
+            ? 'SEM_DADOS'
+            : (s.ultimoResultado || 'SEM_DADOS');
+    }
+    const estados = Object.values(estadoEfetivo);
     const acessiveis = estados.filter(e => e === 'ACESSIVEL').length;
     const semResposta = estados.filter(e => e === 'SEM_RESPOSTA').length;
     const desligadosEsperados = estados.filter(e => e === 'DESLIGADO_ESPERADO').length;
@@ -663,7 +696,7 @@ function obterPainel() {
     const instaveis = Object.values(estado).filter(s =>
         s.ultimoResultado === 'SEM_RESPOSTA' &&
         (s.falhasConsecutivas > 0) &&
-        (s.falhasConsecutivas < (config.limites.falhasConsecutivasParaAlerta || 3))
+        (s.falhasConsecutivas < (obterLimites().falhasConsecutivasParaAlerta || 3))
     ).length;
     // semResposta "real" = falhas que passaram do limiar (as outras viram instaveis)
     const semRespostaReal = Math.max(0, semResposta - instaveis);
@@ -671,6 +704,19 @@ function obterPainel() {
         alvos.length - desligadosEsperados - empresaParada - ipObsoleto - semDados);
     const dispOperacional = respondiveis > 0 ? Math.round((acessiveis / respondiveis) * 100) : 0;
     const dispBruta = alvos.length > 0 ? Math.round((acessiveis / alvos.length) * 100) : 0;
+
+    // KPIs de VALOR (dados ja persistidos, antes nao expostos):
+    // MTTR = media do tempo de indisponibilidade recuperada;
+    // alertasEvitados = hosts com classificacao que suprimiu alerta;
+    // tempoForaPlanejadoMs = soma do tempo fora de desligamentos esperados.
+    const recuperacoes = Object.values(estado).filter(s => s.duracaoIndisponivelMs != null && s.recuperadoApos);
+    const mttrMs = recuperacoes.length
+        ? Math.round(recuperacoes.reduce((a, s) => a + s.duracaoIndisponivelMs, 0) / recuperacoes.length) : null;
+    const alertasEvitados = Object.values(estado).filter(s =>
+        s.classificacao && s.classificacao.suprimeAlerta).length;
+    const tempoForaPlanejadoMs = Object.values(estado)
+        .filter(s => s.classificacao && (s.classificacao.janelaId === 'FORA_EXPEDIENTE' || s.classificacao.janelaId === 'FERIADO' || s.ultimoResultado === 'DESLIGADO_ESPERADO'))
+        .reduce((a, s) => a + (s.duracaoIndisponivelMs || 0), 0);
 
     // Persiste estado limpo (remove IPs fantasma)
     if (Object.keys(estadoBruto).length !== Object.keys(estado).length) {
@@ -690,12 +736,13 @@ function obterPainel() {
             mac: a.mac,
             local,
             stale,
-            estado: stale && st.ultimoResultado === 'ACESSIVEL' ? 'SEM_DADOS' : (st.ultimoResultado || 'SEM_DADOS'),
+            estado: estadoEfetivo[a.ip] || 'SEM_DADOS',
             classificacao: st.classificacao || null,
             latenciaMediaMs: st.latenciaMediaMs != null ? st.latenciaMediaMs : null,
             falhasConsecutivas: st.falhasConsecutivas || 0,
             downSince: st.downSince || null,
             recuperadoApos: st.recuperadoApos || null,
+            duracaoIndisponivelMs: st.duracaoIndisponivelMs != null ? st.duracaoIndisponivelMs : null,
             ultimoHorario: st.ultimoHorario || null,
             alertasAtivos: alertas.filter(al => al.host === a.ip || al.host === (ml && ml.hostname)).length,
             fonte: local ? 'ICMP + METRICAS_LOCAIS' : 'ICMP_PING_NATIVO_SO',
@@ -732,7 +779,10 @@ function obterPainel() {
             respondiveis,
             disponibilidadeOperacional: dispOperacional,
             disponibilidadeBruta: dispBruta,
-            planejadoPct: alvos.length > 0 ? Math.round((desligadosEsperados / alvos.length) * 100) : 0,
+            planejadoPct: alvos.length > 0 ? Math.round(((desligadosEsperados + empresaParada) / alvos.length) * 100) : 0,
+            mttrMs,
+            alertasEvitados,
+            tempoForaPlanejadoMs,
             alertasAbertos: alertas.length,
             incidentesSetor: incidentesCache.length,
             coletadoEm: new Date().toISOString()

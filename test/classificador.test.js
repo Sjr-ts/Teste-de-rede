@@ -53,35 +53,66 @@ test('sem medicoes => SEM_DADOS (nao e falha)', () => {
     assert.equal(r.estado, 'SEM_DADOS');
 });
 
-test('PC desligado DENTRO da janela (12h) => DESLIGADO_ESPERADO, sem alerta', () => {
-    const r = cls.classificar({ ip: '192.168.0.108', now: brt('2026-11-23', 12, 30), medicoesRecentes: medicoes(5), config: config() });
+test('janela de desligamento explicita (almoco) suprime falha dentro do expediente', () => {
+    const c = config();
+    c.classificacao.janelasDesligamento = [
+        { id: 'ALMOCO', dias: [1,2,3,4,5], inicio: '12:00', fim: '13:00', toleranciaMin: 10 }
+    ];
+    const r = cls.classificar({ ip: '192.168.0.108', now: brt('2026-11-23', 12, 30), medicoesRecentes: medicoes(5), config: c });
     assert.equal(r.estado, 'DESLIGADO_ESPERADO');
     assert.equal(r.suprimeAlerta, true);
-    assert.equal(r.janelaId, 'EXPEDIENTE');
-    assert.match(r.motivo, /janela/i);
+    assert.equal(r.janelaId, 'ALMOCO');
+    // fora da janela de desligamento, ainda e falha real
+    const fora = cls.classificar({ ip: '192.168.0.108', now: brt('2026-11-23', 14, 0), medicoesRecentes: medicoes(5), config: c });
+    assert.equal(fora.estado, 'SEM_RESPOSTA');
 });
 
-test('PC desligado FORA da janela (22h) => SEM_RESPOSTA (falha real)', () => {
-    const r = cls.classificar({ ip: '192.168.0.108', now: brt('2026-11-23', 22, 0), medicoesRecentes: medicoes(5), config: config() });
+test('detecta recorrencia no mesmo bucket horario em >=3 dias', () => {
+    const agregados = [];
+    for (const dia of ['2026-11-10','2026-11-11','2026-11-12','2026-11-13']) {
+        agregados.push({ dia, hosts: { '192.168.0.108': { buckets: {
+            [dia + 'T12']: { n: 10, ok: 0, falhas: 10, perdaPct: 100 }
+        } } } });
+    }
+    const rec = cls.detectarRecorrencia('192.168.0.108', brt('2026-11-23', 12, 30), config(), agregados);
+    assert.equal(rec.recorrente, true);
+    assert.equal(rec.dias, 4);
+    assert.equal(rec.hora, '12');
+    // sem padrao, nao classifica como recorrente
+    const sem = cls.detectarRecorrencia('192.168.0.108', brt('2026-11-23', 12, 30), config(), []);
+    assert.equal(sem.recorrente, false);
+});
+
+test('FALHA REAL dentro do expediente (12h) => SEM_RESPOSTA (gera alerta)', () => {
+    // O PC DEVERIA estar ligado as 12h de uma terca: falha aqui e real.
+    const r = cls.classificar({ ip: '192.168.0.108', now: brt('2026-11-23', 12, 30), medicoesRecentes: medicoes(5), config: config() });
     assert.equal(r.estado, 'SEM_RESPOSTA');
     assert.equal(r.suprimeAlerta, false);
     assert.equal(r.categoriaAlerta, 'CONECTIVIDADE');
 });
 
-test('tolerancia de janela: 07:50 (inicio 08:00, tol 15) ainda e esperado', () => {
-    const r = cls.classificar({ ip: '192.168.0.108', now: brt('2026-11-23', 7, 50), medicoesRecentes: medicoes(4), config: config() });
+test('PC desligado FORA do expediente (22h) => DESLIGADO_ESPERADO, sem alerta', () => {
+    const r = cls.classificar({ ip: '192.168.0.108', now: brt('2026-11-23', 22, 0), medicoesRecentes: medicoes(5), config: config() });
     assert.equal(r.estado, 'DESLIGADO_ESPERADO');
+    assert.equal(r.suprimeAlerta, true);
+    assert.equal(r.janelaId, 'FORA_EXPEDIENTE');
+    assert.match(r.motivo, /Fora do expediente/i);
 });
 
-test('fim de semana nao e janela (dias 1-5) => SEM_RESPOSTA', () => {
-    // 2026-11-28 e sabado
-    const local = cls.horaLocal(brt('2026-11-28', 12, 0));
-    assert.equal(local.diaSemana, 6);
-    const r = cls.classificar({ ip: '192.168.0.108', now: brt('2026-11-28', 12, 0), medicoesRecentes: medicoes(5), config: config() });
+test('tolerancia de janela: 07:50 (inicio 08:00, tol 15) ainda e EXPEDIENTE => falha real', () => {
+    const r = cls.classificar({ ip: '192.168.0.108', now: brt('2026-11-23', 7, 50), medicoesRecentes: medicoes(4), config: config() });
     assert.equal(r.estado, 'SEM_RESPOSTA');
 });
 
-test('feriado => DESLIGADO_ESPERADO mesmo fora da janela de dias', () => {
+test('fim de semana (sabado 12h) => DESLIGADO_ESPERADO', () => {
+    // 2026-11-28 e sabado — nao ha expediente, desligamento e esperado
+    const local = cls.horaLocal(brt('2026-11-28', 12, 0));
+    assert.equal(local.diaSemana, 6);
+    const r = cls.classificar({ ip: '192.168.0.108', now: brt('2026-11-28', 12, 0), medicoesRecentes: medicoes(5), config: config() });
+    assert.equal(r.estado, 'DESLIGADO_ESPERADO');
+});
+
+test('feriado => DESLIGADO_ESPERADO (dia sem expediente)', () => {
     const c = config();
     c.classificacao.feriados = ['2026-12-25'];
     const r = cls.classificar({ ip: '192.168.0.108', now: brt('2026-12-25', 22, 0), medicoesRecentes: medicoes(5), config: c });
@@ -89,16 +120,20 @@ test('feriado => DESLIGADO_ESPERADO mesmo fora da janela de dias', () => {
     assert.equal(r.janelaId, 'FERIADO');
 });
 
-test('parada coletiva (>=40% do setor fora) => EMPRESA_PARADA', () => {
-    const r = cls.classificar({ ip: '192.168.0.108', now: brt('2026-11-23', 22, 0), medicoesRecentes: medicoes(5), config: config(), horizontalidadePct: 60 });
-    assert.equal(r.estado, 'EMPRESA_PARADA');
-    assert.equal(r.suprimeAlerta, true);
+test('parada coletiva exige setor grande (>=5 hosts, >=2 fora, >=40%)', () => {
+    // setor com 1 host nao pode virar "empresa parada"
+    const um = cls.classificar({ ip: '1', now: brt('2026-11-23', 12, 0), medicoesRecentes: medicoes(5), config: config(), horizontalidadePct: 100, totalSetor: 1, foraNoSetor: 1 });
+    assert.equal(um.estado, 'SEM_RESPOSTA'); // 1 host so = falha individual
+    // setor com 10 hosts, 6 fora => parada coletiva
+    const muitos = cls.classificar({ ip: '1', now: brt('2026-11-23', 12, 0), medicoesRecentes: medicoes(5), config: config(), horizontalidadePct: 60, totalSetor: 10, foraNoSetor: 6 });
+    assert.equal(muitos.estado, 'EMPRESA_PARADA');
+    assert.equal(muitos.suprimeAlerta, true);
 });
 
-test('modo EXPLICITO sem excecao => SEM_RESPOSTA mesmo dentro da janela', () => {
+test('modo EXPLICITO sem excecao => SEM_RESPOSTA mesmo fora do expediente', () => {
     const c = config();
     c.classificacao.modo = 'EXPLICITO';
-    const r = cls.classificar({ ip: '192.168.0.108', now: brt('2026-11-23', 12, 30), medicoesRecentes: medicoes(5), config: c });
+    const r = cls.classificar({ ip: '192.168.0.108', now: brt('2026-11-23', 22, 0), medicoesRecentes: medicoes(5), config: c });
     assert.equal(r.estado, 'SEM_RESPOSTA');
 });
 
@@ -106,15 +141,16 @@ test('modo EXPLICITO com excecao ativa => DESLIGADO_ESPERADO', () => {
     const c = config();
     c.classificacao.modo = 'EXPLICITO';
     c.classificacao.excecoes = [{ ip: '192.168.0.108', motivo: 'Reduz ciclo de formatacao', ate: '2027-12-31' }];
-    const r = cls.classificar({ ip: '192.168.0.108', now: brt('2026-11-23', 12, 30), medicoesRecentes: medicoes(5), config: c });
+    const r = cls.classificar({ ip: '192.168.0.108', now: brt('2026-11-23', 22, 0), medicoesRecentes: medicoes(5), config: c });
     assert.equal(r.estado, 'DESLIGADO_ESPERADO');
     assert.equal(r.confianca, 'ALTA');
 });
 
-test('IP obsoleto (host_nao_encontrado por 24h) => IP_OBSOLETO, sem alerta', () => {
+test('IP obsoleto (host_nao_encontrado por 25 amostras) => alerta CADASTRO (acionavel)', () => {
     const r = cls.classificar({ ip: '192.168.0.99', now: brt('2026-11-23', 22, 0), medicoesRecentes: medicoes(25), config: config(), erroPinger: 'host_nao_encontrado' });
     assert.equal(r.estado, 'IP_OBSOLETO');
-    assert.equal(r.suprimeAlerta, true);
+    assert.equal(r.suprimeAlerta, false);
+    assert.equal(r.categoriaAlerta, 'CADASTRO');
 });
 
 test('falhas consecutivas sao contadas pelo fim do historico', () => {

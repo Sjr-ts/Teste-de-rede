@@ -851,8 +851,9 @@ app.post('/api/monitor/alertas', (req, res) => {
 });
 
 // Registra callback para emitir SSE apos cada ciclo
-let _alertasConhecidos = new Set();
-try { store.lerAlertas().forEach(a => _alertasConhecidos.add(a.id)); } catch (e) {}
+// Map<id, estado> (nao Set): detecta reabertura de alerta com o mesmo id.
+let _alertasConhecidos = new Map();
+try { store.lerAlertas().forEach(a => _alertasConhecidos.set(a.id, a.estado)); } catch (e) {}
 let _zbStatusAnterior = null; // rastreia se Zabbix estava online/offline
 monitor.aoFinalizarCiclo(async function(painel) {
     // Inclui metricas mock de todos os hosts mock
@@ -872,9 +873,14 @@ monitor.aoFinalizarCiclo(async function(painel) {
     // Notifica clientes SSE sobre alertas novos (falhas diagnosticadas)
     try {
         const alertas = store.lerAlertas().filter(a => a.estado === 'ABERTO' || a.estado === 'ACK');
+        // estados classificados como desligamento esperado nao disparam toast
+        const suprimidos = new Set((painel.linhas || [])
+            .filter(l => l.classificacao && l.classificacao.suprimeAlerta)
+            .map(l => l.ip));
         for (const a of alertas) {
-            if (_alertasConhecidos.has(a.id)) continue;
-            _alertasConhecidos.add(a.id);
+            if (suprimidos.has(a.host)) continue;
+            if (_alertasConhecidos.get(a.id) === a.estado) continue; // ja emitido, sem mudanca
+            _alertasConhecidos.set(a.id, a.estado);
             a.fonte = a.fonte || 'COLETOR';
             sseBroadcast('alerta', a);
         }
@@ -965,14 +971,10 @@ app.post('/api/zabbix/sincronizar', async (req, res) => {
         const computadores = Array.isArray(db.computadores) ? db.computadores : [];
         const ordens = Array.isArray(db.ordensServico) ? db.ordensServico
             : (Array.isArray(db.ordens) ? db.ordens : []);
-        const hosts = await zb.sincronizarHostsInventario(computadores);
-        let manutencoes = null;
-        if (!req.body || req.body.manutencoes !== false) {
-            try { manutencoes = await zb.sincronizarManutencoes(computadores, ordens); }
-            catch (e) { manutencoes = { erros: [e.message] }; }
-        }
-        // IP adaptativo no MESMO fluxo: o Zabbix ja recebeu o IP novo do agente
-        // (auto-registro) — aqui a gente le de volta e atualiza o cadastro.
+        // IP adaptativo PRIMEIRO (Zabbix -> cadastro): o agente ja avisou o
+        // servidor sobre o IP novo via auto-registro. Se rodarmos o host sync
+        // antes, ele empurraria o IP VELHO do cadastro para o Zabbix e apagaria
+        // a mudanca que o agente acabou de registrar (falso negativo).
         let ips = null;
         if (!req.body || req.body.ips !== false) {
             try {
@@ -980,6 +982,13 @@ app.post('/api/zabbix/sincronizar', async (req, res) => {
                 // persiste so os IPs num read fresco (nao sobrescreve edicoes do frontend)
                 ips.aplicados = gravarIpsNoDados(ips.aplicados);
             } catch (e) { ips = { aplicados: [], ignorados: [], semVinculo: [], erros: [e.message] }; }
+        }
+        // Depois: hosts + manutencoes (cadastro -> Zabbix), ja com IP atualizado.
+        const hosts = await zb.sincronizarHostsInventario(computadores);
+        let manutencoes = null;
+        if (!req.body || req.body.manutencoes !== false) {
+            try { manutencoes = await zb.sincronizarManutencoes(computadores, ordens); }
+            catch (e) { manutencoes = { erros: [e.message] }; }
         }
         res.json({ ok: true, computadores: computadores.length, hosts, manutencoes, ips, atualizadoEm: new Date().toISOString() });
     } catch (e) { res.status(500).json({ error: e.message }); }
