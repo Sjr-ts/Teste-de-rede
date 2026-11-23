@@ -75,21 +75,6 @@ services:
     networks:
       - zbx-net
 
-  # Opcional: Zabbix Agent 2 no próprio servidor Docker (auto-monitoramento)
-  zabbix-agent-local:
-    image: zabbix/zabbix-agent2:alpine-7.0-latest
-    container_name: zbx-agent-local
-    restart: unless-stopped
-    depends_on:
-      - zabbix-server
-    environment:
-      ZBX_SERVER_HOST: zabbix-server
-      ZBX_HOSTNAME: servidor-monitoramento
-    # Sem ports 10050: o agente Windows instalado no host ja usa essa porta.
-    # O auto-monitoramento funciona pela rede interna zbx-net (server -> container).
-    networks:
-      - zbx-net
-
 volumes:
   zbx-db:
   zbx-server-data:
