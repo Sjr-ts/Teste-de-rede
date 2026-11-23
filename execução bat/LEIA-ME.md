@@ -4,19 +4,22 @@ Esta pasta contém o instalador único para os computadores Windows monitorados.
 
 ## 📌 ARQUIVO ÚNICO — é só dar 2 cliques
 
-**`INSTALAR-1-CLIQUE.vbs`** — duplo-clique nele e **não digita nada**:
-1. Auto-eleva a Administrador (se sua conta já for admin, o Windows só pede "Sim" — sem senha)
+**`INSTALAR.cmd`** — duplo-clique nele e **não digita nada**:
+1. Auto-eleva a Administrador (CMD + PowerShell, sem VBS — se sua conta já for admin, só aparece o UAC "Sim")
 2. Baixa o MSI do Zabbix da internet e instala o agente
 3. Configura IP adaptativo + auto-heal (sobrevive a reboot/DHCP)
 4. Cria os atalhos na Área de Trabalho
-5. Abre o Inventário TI e o Zabbix **já logados** (senha embutida no `acesso-automatico.html`)
+5. Descobre o servidor na rede (127.0.0.1 + faixa 192.168.0.100-129)
+6. Abre o Inventário TI e o Zabbix **já logados** (senha embutida no `acesso-automatico.html`)
 
- Tudo que é preciso estar na pasta (ela inteira):
+> **Por que CMD e não VBS?** O VBScript falhava com erros de compilação por aspas/encoding (`800A0405`, `800A01B6`, `800A0409`). O CMD com PowerShell embutido em base64 elimina esses problemas — validado com `cmd /c` (sem erros).
+
+Tudo que é preciso estar na pasta (ela inteira):
 
 | Arquivo | O que faz |
 |---------|-----------|
-| **`INSTALAR-1-CLIQUE.vbs`** | **← duplo-clique aqui, não digita nada** |
-| `instalar-tudo.bat` | Instalador principal (chamado pelo VBS) |
+| **`INSTALAR.cmd`** | **← duplo-clique aqui, não digita nada** |
+| `instalar-tudo.bat` | Instalador principal (chamado pelo CMD) |
 | `auto-heal.ps1` | Mantém agente vivo (boot + 5min) |
 
 ## Como abrir o painel (SEM digitar IP — o servidor muda por DHCP)
