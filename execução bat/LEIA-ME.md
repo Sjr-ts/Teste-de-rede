@@ -2,12 +2,22 @@
 
 Esta pasta contém o instalador único para os computadores Windows monitorados.
 
-## Arquivos
+## 📌 ARQUIVO ÚNICO — é só dar 2 cliques
+
+**`INSTALAR-1-CLIQUE.vbs`** — duplo-clique nele e **não digita nada**:
+1. Auto-eleva a Administrador (se sua conta já for admin, o Windows só pede "Sim" — sem senha)
+2. Baixa o MSI do Zabbix da internet e instala o agente
+3. Configura IP adaptativo + auto-heal (sobrevive a reboot/DHCP)
+4. Cria os atalhos na Área de Trabalho
+5. Abre o Inventário TI e o Zabbix **já logados** (senha embutida no `acesso-automatico.html`)
+
+ Tudo que é preciso estar na pasta (ela inteira):
 
 | Arquivo | O que faz |
 |---------|-----------|
-| `instalar-tudo.bat` | Instalador principal (você executa **uma vez**) |
-| `instalar-silencioso.vbs` | Executa o bat sem janela (usado pela tarefa agendada no boot) |
+| **`INSTALAR-1-CLIQUE.vbs`** | **← duplo-clique aqui, não digita nada** |
+| `instalar-tudo.bat` | Instalador principal (chamado pelo VBS) |
+| `auto-heal.ps1` | Mantém agente vivo (boot + 5min) |
 
 ## Como abrir o painel (SEM digitar IP — o servidor muda por DHCP)
 

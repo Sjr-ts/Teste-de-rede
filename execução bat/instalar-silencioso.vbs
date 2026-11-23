@@ -1,9 +1,7 @@
 ' ============================================================================
-'  EXECUTOR SILENCIOSO - Instalador Zabbix Agent 2 (IP adaptativo)
-'  Executa o instalar-tudo.bat em modo oculto, sem janela e sem interacao.
-'  Usado pela tarefa agendada no boot do Windows.
+'  EXECUTOR SILENCIOSO — chamado pelas tarefas agendadas no boot
+'  Executa o instalar-tudo.bat SEM JANELA e sem interacao.
 ' ============================================================================
-
 Set WshShell = CreateObject("WScript.Shell")
 Set FSO = CreateObject("Scripting.FileSystemObject")
 
@@ -15,5 +13,5 @@ If Not FSO.FileExists(batPath) Then
 End If
 
 ' 0 = SW_HIDE (sem janela). /silent evita pause e abertura de navegador.
-' bWaitOnReturn = False: nao prende a tarefa agendada.
+' False = nao prende a tarefa agendada.
 WshShell.Run "cmd /c """ & batPath & """ /silent", 0, False

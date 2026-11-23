@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Inventário TI — Acesso Automático</title>
+<style>
+  body { font-family: 'Segoe UI', sans-serif; background:#0d1117; color:#e6edf3; display:flex;
+         align-items:center; justify-content:center; height:100vh; margin:0; }
+  .box { background:#161b22; border:1px solid #30363d; border-radius:12px; padding:32px; text-align:center; max-width:520px; }
+  h2 { color:#58a6ff; margin-top:0; }
+  .spin { color:#8b949e; font-size:14px; }
+  .ok { color:#3fb950; }
+  .err { color:#f85149; }
+  code { background:#21262d; padding:2px 6px; border-radius:4px; color:#79c0ff; }
+</style>
+</head>
+<body>
+<div class="box">
+  <h2>⚙️ Inventário TI — Acesso Automático</h2>
+  <p class="spin" id="status">Conectando e abrindo os painéis com login automático...</p>
+  <div id="detalhes" style="font-size:12px;color:#8b949e;text-align:left;margin-top:16px;"></div>
+</div>
+
+<script>
+// ============================================================
+//  LOGIN AUTOMÁTICO — credenciais já embutidas (não digita nada)
+//  Descobre o IP do servidor sozinho e abre os 2 painéis logados.
+// ============================================================
+const CREDenciais = { inventario: { u: 'admin', s: 'admin123' }, zabbix: { u: 'Admin', s: 'Monitor2026!' } };
+const IPs = [location.hostname, '127.0.0.1', '192.168.0.167', '192.168.0.108'];
+const det = document.getElementById('detalhes');
+const status = document.getElementById('status');
+function log(m) { det.innerHTML += '› ' + m + '<br>'; }
+
+async function tentar(base) {
+  // health (público) para achar o servidor
+  try {
+    const h = await fetch(base + '/actuator/health', { signal: AbortSignal.timeout(2000) });
+    if (!h.ok) return null;
+    log('Servidor encontrado: <code>' + base + '</code>');
+    return base;
+  } catch (e) { return null; }
+}
+
+async function loginInventario(base) {
+  const r = await fetch(base + '/api/auth/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: CREDenciais.inventario.u, senha: CREDenciais.inventario.s })
+  });
+  return r.ok;
+}
+
+(async () => {
+  let base = null;
+  for (const ip of IPs) {
+    if (!ip || ip === 'null') continue;
+    base = await tentar('http://' + ip + ':5903');
+    if (base) break;
+  }
+  if (!base) {
+    status.className = 'err';
+    status.textContent = 'Não foi possível encontrar o servidor. Verifique se ele está ligado.';
+    return;
+  }
+  const invOk = await loginInventario(base);
+  log('Login Inventário TI: ' + (invOk ? '<span class="ok">OK</span>' : '<span class="err">falhou</span>'));
+  // Abre o painel do inventário e o Zabbix (Zabbix mantém a sessão via cookie próprio)
+  const host = new URL(base).hostname;
+  window.open(base + '/index.html', '_blank');
+  log('Painel Inventário TI aberto.');
+  // Zabbix: tenta login via API para validar credenciais embutidas
+  try {
+    const zr = await fetch('http://' + host + ':8081/api_jsonrpc.php', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', method: 'user.login',
+        params: { username: CREDenciais.zabbix.u, password: CREDenciais.zabbix.s }, id: 1 })
+    });
+    const zj = await zr.json();
+    log('Login Zabbix: ' + (zj.result ? '<span class="ok">OK</span>' : '<span class="err">falhou</span>'));
+    window.open('http://' + host + ':8081/', '_blank');
+    log('Painel Zabbix aberto.');
+  } catch (e) { log('Zabbix: ' + e.message); }
+  status.className = 'ok';
+  status.textContent = '✅ Tudo pronto! Os painéis foram abertos-logados.';
+})();
+</script>
+</body>
+</html>
