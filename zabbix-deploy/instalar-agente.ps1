@@ -1,13 +1,13 @@
 # =============================================================================
 # Instalacao remota do Zabbix Agent 2 em computadores Windows
-# Uso: .\instalar-agente.ps1 -ServidorZabbix "192.168.0.186" -Computadores "PC1","PC2"
+# Uso: .\instalar-agente.ps1 -ServidorZabbix "192.168.0.102" -Computadores "PC1","PC2"
 #      .\instalar-agente.ps1 -Usuario "ADMINISTRADOR" -Senha "***" -Computadores "192.168.0.131"
 # Requer: credenciais administrativas nos alvos, compartilhamento ADMIN$ acessivel
 # Obs: sem -Usuario/-Senha usa a conta logada nesta maquina; contas sem senha
 #      NAO conseguem logar na rede (Windows bloqueia) -> informe as credenciais.
 # =============================================================================
 param(
-    [string]$ServidorZabbix = "192.168.0.186",
+    [string]$ServidorZabbix = "192.168.0.102",
     [string]$Usuario = "",
     [string]$Senha = "",
     [string]$PSKIdentity = "",
