@@ -111,6 +111,12 @@ for /f "usebackq tokens=1,2 delims==" %%A in ("%ZBX_CONF_DIR%\zabbix_agent2.conf
 )
 if not defined ZBX_SERVER set "ZBX_SERVER=(detectado)"
 
+REM ---- Atalhos na Area de Trabalho (abrem painel sem depender de IP) ----
+if exist "%SCRIPT_DIR%CRIAR-ATALHOS.ps1" (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%CRIAR-ATALHOS.ps1" >nul 2>&1
+    call :log "[OK] Atalhos 'INVENTARIO TI' e 'ZABBIX' criados na Area de Trabalho."
+)
+
 REM ---- Tarefas agendadas (BOOT + logon) ----
 if exist "%VBS_PATH%" (
     schtasks /create /tn "ZabbixAgent-SilentInstall" /tr "wscript.exe \"%VBS_PATH%\"" /sc onstart /ru SYSTEM /rl HIGHEST /f >nul 2>&1

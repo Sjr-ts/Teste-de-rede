@@ -9,6 +9,17 @@ Esta pasta contém o instalador único para os computadores Windows monitorados.
 | `instalar-tudo.bat` | Instalador principal (você executa **uma vez**) |
 | `instalar-silencioso.vbs` | Executa o bat sem janela (usado pela tarefa agendada no boot) |
 
+## Como abrir o painel (SEM digitar IP — o servidor muda por DHCP)
+
+Na Área de Trabalho foram criados **2 atalhos**:
+
+- **INVENTARIO TI - Abrir Painel** → abre `http://<IP-ATUAL>:5903`
+- **ZABBIX - Abrir Painel** → abre `http://<IP-ATUAL>:8081`
+
+Eles detectam o IP do servidor automaticamente (testam `127.0.0.1` e a interface LAN real, ignorando WSL/virtual). **Não use mais os IPs antigos `192.168.0.102` ou `192.168.0.186`** — eles mudaram e dão `ERR_CONNECTION_TIMED_OUT`. O IP atual desta máquina é detectado no boot.
+
+Se precisar recriar os atalhos: execute `CRIAR-ATALHOS.ps1` (botão direito → Executar com PowerShell).
+
 ## Como usar (usuário final, sem conhecimento técnico)
 
 1. Copie **esta pasta inteira** para o computador.
