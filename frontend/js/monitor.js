@@ -293,7 +293,13 @@ function monRenderTudo(d) {
 
 // Notificacoes de falha com throttle (1x a cada 10 min por host/contagem)
 function monNotificarFalhas(d) {
-    const falhas = (d && d.linhas || []).filter(function (l) { return (l.falhasConsecutivas || 0) > 2 || l.estado === 'SEM_RESPOSTA'; });
+    // Nao notificar desligamento esperado/parada coletiva/IP obsoleto — esses
+    // estados tem classificacao.suprimeAlerta=true e NAO sao falhas.
+    const falhas = (d && d.linhas || []).filter(function (l) {
+        if (l.classificacao && l.classificacao.suprimeAlerta) return false;
+        if (l.estado === 'DESLIGADO_ESPERADO' || l.estado === 'EMPRESA_PARADA' || l.estado === 'IP_OBSOLETO') return false;
+        return (l.falhasConsecutivas || 0) > 2 || l.estado === 'SEM_RESPOSTA';
+    });
     const agora = Date.now();
     for (const f of falhas) {
         const key = (f.ip || '?') + ':' + (f.falhasConsecutivas || 0) + ':' + (f.estado || '');
@@ -339,7 +345,21 @@ function monRenderDashboardWidget() {
 
 // Escapa valor para embutir em handler inline JS entre aspas simples
 function monJsAttr(s) {
-    return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/</g, '\\x3C').replace(/>/g, '\\x3E');
+    return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/</g, '\\x3C').replace(/>/g, '\\x3E').replace(/"/g, '&quot;').replace(/&/g, (m) => m === '&quot;' ? m : '&amp;');
+}
+
+/**
+ * Escape completo para valor interpolado DENTRO de um atributo HTML delimitado
+ * por aspas duplas QUE CONTEM um handler JS (ex.: onclick="fn('VALOR')").
+ * Cobre & " ' < > — impede quebrar o atributo ou a string JS (XSS).
+ */
+function monAttr(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
 }
 
 // Base do Zabbix Web — sempre dinamica pelo hostname de onde o usuario abriu o app
@@ -1239,7 +1259,7 @@ function monRenderZabbixStatus(z) {
             '<div style="padding:14px 18px;display:flex;align-items:center;gap:12px;">' +
             '<i class="fas fa-plug-circle-xmark" style="color:var(--yellow);font-size:18px;"></i>' +
             '<div><b style="font-size:13px;color:var(--text-primary);">Zabbix: desabilitado</b>' +
-            '<p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">' + z.mensagem + '</p></div>' +
+            '<p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">' + esc(z.mensagem) + '</p></div>' +
             '</div></div>');
         return;
     }
@@ -1248,7 +1268,7 @@ function monRenderZabbixStatus(z) {
             '<div style="padding:14px 18px;display:flex;align-items:center;gap:12px;">' +
             '<i class="fas fa-plug-circle-xmark" style="color:var(--red);font-size:18px;"></i>' +
             '<div><b style="font-size:13px;color:var(--text-primary);">Zabbix: desconectado</b>' +
-            '<p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">' + (z && z.erro ? z.erro : 'Configure monitor/zabbix-config.json e reinicie o servidor.') + '</p>' +
+            '<p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">' + esc(z && z.erro ? z.erro : 'Configure monitor/zabbix-config.json e reinicie o servidor.') + '</p>' +
             '<p style="font-size:10px;color:var(--text-muted);margin-top:4px;"><i class="fas fa-info-circle"></i> Para restaurar: inicie Docker Desktop e rode <code>docker compose -f docker-compose.zabbix.yml up -d</code></p></div>' +
             '</div></div>');
         return;
@@ -1741,20 +1761,29 @@ function monRenderKPIs(p) {
 function monKpiDefs(p) {
     const r = p.resumo;
     const servico = p.servico || {};
-    const pctDisponivel = r.totalAlvos > 0 ? Math.round((r.acessiveis / r.totalAlvos) * 100) : 0;
-    const pctIndisponivel = r.totalAlvos > 0 ? Math.round((r.semResposta / r.totalAlvos) * 100) : 0;
+    // KPIs agora vem do backend (classificacao de contexto), mutuamente
+    // exclusivos. Desligado esperado NAO conta como indisponibilidade.
+    const pctDisponivel = r.disponibilidadeOperacional != null ? r.disponibilidadeOperacional
+        : (r.totalAlvos > 0 ? Math.round((r.acessiveis / r.totalAlvos) * 100) : 0);
+    const pctBruta = r.disponibilidadeBruta != null ? r.disponibilidadeBruta : pctDisponivel;
+    const totalAlvos = r.totalAlvos || 0;
+    const qtdDesligados = r.desligadosEsperados || 0;
+    const respondiveis = r.respondiveis != null ? r.respondiveis : totalAlvos;
+    const pctIndisponivel = respondiveis > 0 ? Math.round((r.semResposta || 0) / respondiveis * 100) : 0;
     const cpuReal = _monCpuTempoReal != null ? _monCpuTempoReal.toFixed(1) + '%' : '...';
     const cpuCor = _monCpuTempoReal == null ? 'cyan' : (monCorUso(_monCpuTempoReal) || 'green');
     const dispCor = monCorDisponibilidade(pctDisponivel);
     return [
         { icon: 'fa-microchip', cor: cpuCor, valor: cpuReal, label: 'CPU Tempo Real', sub: 'ao vivo · 1s', key: 'mon-kpi-cpu-tempo-real',
           extra: '<span style="font-size:10px;color:var(--green);"><i class="fas fa-circle" style="font-size:6px;"></i> AO VIVO</span>' },
-        { icon: 'fa-chart-pie', cor: dispCor, valor: pctDisponivel + '%', label: 'Disponibilidade', sub: r.acessiveis + ' de ' + r.totalAlvos + ' respondendo', key: 'mon-kpi-disponibilidade',
+        { icon: 'fa-chart-pie', cor: dispCor, valor: pctDisponivel + '%', label: 'Disponibilidade', sub: r.acessiveis + ' de ' + respondiveis + ' respondiveis' + (qtdDesligados ? ' · ' + qtdDesligados + ' desligado(s) fora do SLO' : ''), key: 'mon-kpi-disponibilidade',
           extra: '<div style="width:60px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;"><div style="width:' + pctDisponivel + '%;height:100%;background:var(--' + dispCor + ');"></div></div>' },
-        { icon: 'fa-desktop', cor: 'cyan', valor: r.totalAlvos, label: 'Equipamentos', sub: 'Total com IP cadastrado', key: 'mon-kpi-total' },
+        { icon: 'fa-desktop', cor: 'cyan', valor: totalAlvos, label: 'Equipamentos', sub: 'Total com IP cadastrado', key: 'mon-kpi-total' },
         { icon: 'fa-circle-check', cor: 'green', valor: r.acessiveis, label: 'Acessiveis', sub: 'Respondendo agora', key: 'mon-kpi-acessiveis' },
-        { icon: 'fa-circle-xmark', cor: 'red', valor: r.semResposta, label: 'Sem Resposta', sub: pctIndisponivel + '% do total', key: 'mon-kpi-semresposta' },
+        { icon: 'fa-moon', cor: 'cyan', valor: qtdDesligados, label: 'Desligados (esperado)', sub: qtdDesligados ? 'Janela/config · nao e falha' : 'Nenhum desligamento previsto', key: 'mon-kpi-desligados' },
+        { icon: 'fa-circle-xmark', cor: 'red', valor: r.semResposta, label: 'Sem Resposta', sub: pctIndisponivel + '% dos respondiveis', key: 'mon-kpi-semresposta' },
         { icon: 'fa-wave-square', cor: 'yellow', valor: r.instaveis, label: 'Instaveis', sub: 'Oscilando na rede', key: 'mon-kpi-instaveis' },
+        { icon: 'fa-building-circle-xmark', cor: 'orange', valor: r.empresaParada || 0, label: 'Parada Coletiva', sub: 'Setor inteiro fora', key: 'mon-kpi-empresa-parada' },
         { icon: 'fa-triangle-exclamation', cor: r.alertasAbertos > 0 ? 'orange' : 'green', valor: r.alertasAbertos, label: 'Alertas', sub: r.alertasAbertos > 0 ? 'Requer atencao' : 'Tudo normal', key: 'mon-kpi-alertas' },
         { icon: 'fa-share-nodes', cor: 'purple', valor: r.incidentesSetor, label: 'Incidentes', sub: 'Falha em massa por setor', key: 'mon-kpi-incidentes' },
         { icon: 'fa-circle-question', cor: 'magenta', valor: r.semDados, label: 'Sem Dados', sub: 'Ainda nao verificados', key: 'mon-kpi-semdados' },
@@ -1864,7 +1893,11 @@ function monRenderKpiDetail(key) {
 
     // Helper to create failure summary
     function failureSummary(items, label) {
-        const fails = items.filter(i => i.ok === false || i.estado === 'SEM_RESPOSTA' || i.falhasConsecutivas > 0);
+        const fails = items.filter(i => {
+            if (i.classificacao && i.classificacao.suprimeAlerta) return false;
+            if (i.estado === 'DESLIGADO_ESPERADO' || i.estado === 'EMPRESA_PARADA' || i.estado === 'IP_OBSOLETO') return false;
+            return i.ok === false || i.estado === 'SEM_RESPOSTA' || i.falhasConsecutivas > 0;
+        });
         if (!fails.length) return '<div class="stat-detail-item"><div style="font-size:10px;color:var(--green);">✓ Nenhuma falha registrada</div></div>';
         return '<div class="stat-detail-item"><div style="font-size:10px;color:var(--red);">✗ ' + fails.length + ' falha(s) — ' + label + '</div></div>';
     }
@@ -2011,7 +2044,7 @@ function monRenderKpiDetail(key) {
 function monKpiDetailItem(l, icon, color) {
     const estadoBadge = monEstadoBadge(l.estado);
     const lat = l.latenciaMediaMs != null ? Math.round(l.latenciaMediaMs) + 'ms' : '—';
-    return '<div class="stat-detail-item" onclick="monVerDetalhe(\'' + esc(l.ip) + '\')">' +
+    return '<div class="stat-detail-item" onclick="monVerDetalhe(\'' + monAttr(l.ip) + '\')">' +
         '<div class="stat-detail-item-icon" style="background:var(--' + color + '-bg);color:var(--' + color + ');"><i class="fas ' + icon + '"></i></div>' +
         '<div class="stat-detail-item-info"><div class="stat-detail-item-name">' + esc(l.nome || l.ip) + '</div>' +
         '<div class="stat-detail-item-sub">' + esc(l.ip) + ' | ' + esc(l.setor || '-') + ' | Lat: ' + lat + '</div></div>' +
@@ -2163,7 +2196,7 @@ function monRenderTabela(p) {
             '<td>' + discoCell + '</td>' +
             '<td>' + alertas + '</td>' +
             '<td><span style="font-size:10px;color:var(--cyan);">' + esc(l.fonte || '-') + '</span></td>' +
-            '<td><button class="action-btn action-btn-edit" onclick="monVerDetalhe(\'' + esc(l.ip) + '\')" title="Detalhes"><i class="fas fa-chart-line"></i></button></td>' +
+            '<td><button class="action-btn action-btn-edit" onclick="monVerDetalhe(\'' + monAttr(l.ip) + '\')" title="Detalhes"><i class="fas fa-chart-line"></i></button></td>' +
             '</tr>';
     }).join('');
 
@@ -2181,6 +2214,9 @@ function monEstadoBadge(estado) {
         case 'SEM_RESPOSTA': return '<span class="badge badge-cancelada">Sem Resposta</span>';
         case 'INSTAVEL': return '<span class="badge badge-pendente">Instavel</span>';
         case 'SEM_DADOS': return '<span class="badge badge-inativo">Sem Dados</span>';
+        case 'DESLIGADO_ESPERADO': return '<span class="badge badge-inativo" title="Desligado em janela/esperado — nao e falha"><i class="fas fa-moon"></i> Desligado (esperado)</span>';
+        case 'EMPRESA_PARADA': return '<span class="badge badge-pendente" title="Parada coletiva do setor"><i class="fas fa-building-circle-xmark"></i> Parada Coletiva</span>';
+        case 'IP_OBSOLETO': return '<span class="badge badge-pendente" title="Revisar IP no cadastro"><i class="fas fa-map-pin"></i> IP Obsoleto</span>';
         default: return '<span class="badge badge-desconhecido">' + esc(estado || '?') + '</span>';
     }
 }
@@ -2965,14 +3001,23 @@ function monKpiChartBlock(key) {
         const linhas = (_monDados && _monDados.linhas) || [];
         if (linhas.length) {
             titulo = 'Disponibilidade por Host (%)';
-            dados = linhas.map(l => l.estado === 'ACESSIVEL' ? 100 : 0);
+            // null = SEM MEDICAO (nao inventa 0% para host instavel/sem dados)
+            // null = sem medicao (nao inventa 0). Desligado esperado tambem
+            // nao conta como 0%: ele fica fora do SLO (null), nao e falha.
+            dados = linhas.map(l => {
+                if (l.estado === 'ACESSIVEL') return 100;
+                if (l.estado === 'SEM_DADOS' || l.estado === 'IP_OBSOLETO') return null;
+                if (l.estado === 'DESLIGADO_ESPERADO' || l.estado === 'EMPRESA_PARADA') return null;
+                return 0; // SEM_RESPOSTA / INSTAVEL = falha real
+            });
             opts = { cor: '#00e676', minForcado: 0, maxForcado: 100, altura: 200, unidade: '%', rotulosX: linhas.map(l => l.nome || l.ip) };
         }
     } else if (['mon-kpi-total','mon-kpi-acessiveis','mon-kpi-semresposta','mon-kpi-instaveis','mon-kpi-semdados','mon-kpi-alertas','mon-kpi-incidentes'].indexOf(key) >= 0) {
         const linhas = (_monDados && _monDados.linhas) || [];
         if (linhas.length) {
             titulo = 'Latencia dos Hosts (ms)';
-            dados = linhas.map(l => l.latenciaMediaMs != null ? l.latenciaMediaMs : 0);
+            // null = sem medicao (0 ms seria um valor otimo enganoso)
+            dados = linhas.map(l => l.latenciaMediaMs != null ? l.latenciaMediaMs : null);
             opts = { cor: '#2962FF', altura: 200, unidade: 'ms', rotulosX: linhas.map(l => l.nome || l.ip), limiares: monLimiaresLatencia() };
         }
     } else if (key === 'mon-kpi-medicoes') {
@@ -2987,7 +3032,7 @@ function monKpiChartBlock(key) {
         const discos = (_monArmKPIs && _monArmKPIs.discos) || [];
         if (discos.length) {
             titulo = 'Uso de Disco por Volume (%)';
-            dados = discos.map(d => d.usoPct != null ? d.usoPct : 0);
+            dados = discos.map(d => d.usoPct != null ? d.usoPct : null);
             opts = { cor: '#22c55e', altura: 180, minForcado: 0, maxForcado: 100, unidade: '%', rotulosX: discos.map(d => d.letra || '?'), limiares: monLimiaresDisco() };
         }
     }
@@ -4058,7 +4103,7 @@ function monAbrirRelatorioPC() {
 // ==================== UTIL ====================
 function esc(s) {
     if (s == null) return '';
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 // ==================== BOOTSTRAP (widget do Painel) ====================

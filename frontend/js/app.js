@@ -276,6 +276,21 @@ function serverSnapshot() {
     };
 }
 
+/**
+ * Snapshot VAZIO para instalacao limpa: NUNCA semeia os arrays MOCK_* no
+ * cadastro real. Os dados de demonstracao existem apenas na memoria do
+ * frontend ate o usuario cadastrar algo de verdade. Gravá-los criaria
+ * equipamentos/usuarios/manutencoes FICTICIOS que depois sincronizam com o
+ * Zabbix como se fossem reais.
+ */
+function emptySnapshot() {
+    return {
+        computadores: [], manutencoes: [], ordens: [], usuarios: [],
+        departamentos: [], software: [], ramais: [], trocas: [], logs: [],
+        baseRev: _serverRev
+    };
+}
+
 function persistNow() {
     if (_persistTimer) { clearTimeout(_persistTimer); _persistTimer = null; }
     if (!_dataLoaded) return Promise.resolve();
@@ -350,10 +365,11 @@ async function loadServerData() {
 }
 
 function saveInitialData() {
+    // Instalacao limpa: grava snapshot VAZIO (nunca os MOCK_* ficticios).
     fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(serverSnapshot())
+        body: JSON.stringify(emptySnapshot())
     }).then(function(r) { return (r && typeof r.json === 'function') ? r.json() : null; }).then(function(j) {
         if (j && typeof j.rev === 'number') { _serverRev = j.rev; broadcastRev(); }
     }).catch(function() {});
@@ -1604,6 +1620,10 @@ function upsertChart(canvas, config) {
     if (c && c.config.type === config.type) {
         c.data.labels = config.data.labels;
         c.data.datasets = config.data.datasets;
+        // Reaplica as opcoes calculadas: sem isso, mudancas em scales/indexAxis/
+        // tooltips/beginAtZero da primeira renderizacao ficavam "gravadas" e o
+        // grafico exibia configs obsoletas (ex.: eixo duplicado ao trocar tipo).
+        Object.keys(config.options).forEach(function(k) { c.options[k] = config.options[k]; });
         c.update();
         return c;
     }

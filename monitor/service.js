@@ -11,6 +11,7 @@ const os = require('os');
 const { ping, tcpCheck } = require('./pinger');
 const store = require('./storage');
 const { avaliarHost, correlacionarSetor } = require('./alerts');
+const classificador = require('./classificador');
 const zabbix = require('./zabbix');
 const hostmetrics = require('./hostmetrics');
 
@@ -32,6 +33,25 @@ const LIMITES_PADRAO = {
 function obterLimites() {
     return Object.assign({}, LIMITES_PADRAO, (config && config.limites) || {});
 }
+
+// Fonte unica da classificacao de contexto (desligado esperado vs falha).
+// Declarada ANTES de carregarConfig() (que e chamada no load do modulo).
+const CLASSIFICACAO_PADRAO = {
+    timezone: 'America/Sao_Paulo',
+    modo: 'CONSERVADOR',
+    janelasEsperadas: [
+        { id: 'EXPEDIENTE', dias: [1, 2, 3, 4, 5], inicio: '08:00', fim: '18:00', toleranciaMin: 15 }
+    ],
+    feriados: [],
+    regras: {
+        minFalhasParaDesligadoEsperado: 3,
+        maxHorizontalidadePct: 40,
+        minDiasRecorrencia: 3,
+        janelaRecorrenciaDias: 30,
+        foraDaJanelaSempreAlerta: true
+    },
+    excecoes: []
+};
 
 let config = carregarConfig();
 let rodando = false;
@@ -75,18 +95,27 @@ function isHostStale(hostState, now = Date.now(), staleWindowMs = null) {
 }
 
 function carregarConfig() {
+    let cfg;
     try {
         let raw = fs.readFileSync(CONFIG_PATH, 'utf8');
         if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
-        return JSON.parse(raw);
+        cfg = JSON.parse(raw);
     } catch (e) {
-        return {
+        cfg = {
             coletor: { intervaloSegundos: 60, timeoutMs: 2000, tentativasPorCiclo: 3, concorrenciaMaxima: 10, retencaoMedicoesDias: 30 },
             limites: Object.assign({}, LIMITES_PADRAO),
             zabbix: { habilitado: false },
             servicos: []
         };
     }
+    // mescla classificacao padrao (config antigo / POST parcial nao a remove)
+    if (!cfg.classificacao || typeof cfg.classificacao !== 'object') {
+        cfg.classificacao = Object.assign({}, CLASSIFICACAO_PADRAO);
+    } else {
+        cfg.classificacao = Object.assign({}, CLASSIFICACAO_PADRAO, cfg.classificacao);
+    }
+    if (!cfg.alertas || typeof cfg.alertas !== 'object') cfg.alertas = { silenciarRepetidosMinutos: 15 };
+    return cfg;
 }
 
 function recarregarConfig() {
@@ -234,6 +263,56 @@ function gerarSequenciaMock(ip) {
     return resultado;
 }
 
+/**
+ * Aplica o classificador de contexto a TODOS os hosts apos um ciclo completo.
+ * Preenche ultimoResultado com um dos estados finais e guarda st.classificacao
+ * (motivo/confianca/janela/suprimeAlerta) para auditoria e uso pelo frontend.
+ * Calcula a horizontalidade por setor antes de classificar (parada coletiva).
+ */
+function classificarEstados(alvos, estado, config) {
+    const setorDe = {};
+    for (const a of alvos) setorDe[a.ip] = a.setor || 'GERAL';
+
+    const totalPorSetor = {}, foraPorSetor = {};
+    for (const a of alvos) {
+        const setor = setorDe[a.ip];
+        totalPorSetor[setor] = (totalPorSetor[setor] || 0) + 1;
+        const st = estado[a.ip];
+        if (st && st.ultimoResultado === 'SEM_RESPOSTA') {
+            foraPorSetor[setor] = (foraPorSetor[setor] || 0) + 1;
+        }
+    }
+
+    const agora = Date.now();
+    for (const a of alvos) {
+        const st = estado[a.ip];
+        if (!st) continue;
+        const setor = setorDe[a.ip];
+        const total = totalPorSetor[setor] || 1;
+        const horizontalidade = ((foraPorSetor[setor] || 0) / total) * 100;
+
+        const decisao = classificador.classificar({
+            ip: a.ip,
+            now: agora,
+            medicoesRecentes: st.historicoRecente || [],
+            estadoAnterior: st,
+            config,
+            horizontalidadePct: horizontalidade,
+            erroPinger: st.erroPinger
+        });
+
+        st.ultimoResultado = decisao.estado;
+        st.classificacao = {
+            motivo: decisao.motivo,
+            confianca: decisao.confianca,
+            janelaId: decisao.janelaId,
+            suprimeAlerta: decisao.suprimeAlerta,
+            categoriaAlerta: decisao.categoriaAlerta,
+            avaliadaEm: new Date(agora).toISOString()
+        };
+    }
+}
+
 async function executarCiclo() {
     if (emCiclo) return;
     emCiclo = true;
@@ -296,7 +375,8 @@ const reg = {
                         st.downSince = null;
                         st.upSince = (reg.timestamp || r.timestamp);
                     }
-                    st.ultimoResultado = usouMock ? 'ACESSIVEL' : 'SEM_RESPOSTA';
+                    st.ultimoResultado = usouMock ? 'ACESSIVEL' : 'SEM_RESPOSTA'; // classificado depois do ciclo
+                    st.erroPinger = r.erro || null;
                     st.ultimoHorario = reg.timestamp || r.timestamp;
                     st.latenciaMediaMs = reg.latenciaMediaMs !== undefined ? reg.latenciaMediaMs : r.latenciaMediaMs;
                     // janela deslizante para avaliacao
@@ -347,6 +427,14 @@ const reg = {
                     timestamp: t.timestamp
                 });
             } catch (e) {}
+        }
+
+        // ---- CLASSIFICACAO DE CONTEXTO: desligado esperado vs falha real ----
+        // Roda DEPOIS de todos os pings (para saber a horizontalidade do setor)
+        // e ANTES de gerar alertas/KPIs. Um PC desligado em horario esperado nao
+        // vira "erro" e nao derruba a disponibilidade.
+        try { classificarEstados(alvos, estado, config); } catch (e) {
+            console.error('[classificador] falha:', e && e.message ? e.message : e);
         }
 
         store.salvarEstado(estado);
@@ -431,15 +519,42 @@ const reg = {
 
 function avaliarEAlertar(estado) {
     const alertas = store.lerAlertas();
+    // normaliza: alertas vindos de fontes externas/webhook podem nao ter
+    // historico como array — sem isso o .push() abaixo derruba o ciclo.
+    for (const a of alertas) if (!Array.isArray(a.historico)) a.historico = [];
     const agora = Date.now();
-    const silencioMs = (config.alertas.silenciarRepetidosMinutos || 15) * 60000;
+    // guarda: config.alertas pode faltar se config.json foi reescrito por
+    // POST /api/monitor/config com um corpo parcial — sem isso o motor de
+    // alertas lanca TypeError a cada ciclo e para de gerar/resolver alertas.
+    const silencioMin = (config.alertas && config.alertas.silenciarRepetidosMinutos) || 15;
+    const silencioMs = silencioMin * 60000;
     const novosDiagnostico = {};
 
     for (const [host, st] of Object.entries(estado)) {
         const medicoes = st.historicoRecente || [];
-        const { novos, resolucoes } = avaliarHost(host, medicoes, st, config, null);
+        const suprime = !!(st.classificacao && st.classificacao.suprimeAlerta);
+        const { novos: novosBrutos, resolucoes } = avaliarHost(host, medicoes, st, config, null);
+        // SUPRESSAO: se o classificador disse "desligado esperado / parada
+        // coletiva / IP obsoleto", nao abre alerta de conectividade. Alertas de
+        // latencia/perda (host UP) e resolucoes continuam valendo.
+        const novos = suprime
+            ? novosBrutos.filter(n => n.categoria !== 'CONECTIVIDADE' && n.categoria !== 'INFRA' && n.categoria !== 'INSTABILIDADE')
+            : novosBrutos;
+        if (suprime && novosBrutos.length > novos.length) {
+            // registra SUPRIMIDO no historico de um alerta aberto anterior
+            // (auditoria sem poluir a lista de alertas ativos)
+            const anterior = alertas.find(a => a.host === host && a.estado === 'ABERTO' &&
+                ['CONECTIVIDADE', 'INFRA', 'INSTABILIDADE'].indexOf(a.categoria) >= 0);
+            if (anterior) {
+                anterior.historico.push({
+                    quando: new Date(agora).toISOString(), evento: 'SUPRIMIDO',
+                    detalhe: 'Desligamento/classificacao esperada: ' + (st.classificacao.motivo || '')
+                });
+            }
+        }
         novosDiagnostico[host] = {
             observado: st,
+            classificacao: st.classificacao || null,
             hipoteses: novos.map(n => ({ titulo: n.titulo, confianca: n.confianca })),
             indisponiveis: [
                 'Uso de RAM: indisponivel — monitoramento interno do Windows nao disponivel.',
@@ -503,7 +618,12 @@ function iniciar() {
         if (h === 3) {
             const ontem = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
             try { store.agregarDia(ontem); } catch (e) {}
-            try { store.limparAntigos(config.coletor.retencaoMedicoesDias || 30); } catch (e) {}
+            try {
+                store.limparAntigos(
+                    config.coletor.retencaoMedicoesDias || 30,
+                    config.coletor.retencaoAggregadosDias || 365
+                );
+            } catch (e) {}
         }
     }, 3600000);
 }
@@ -528,10 +648,29 @@ function obterPainel() {
     }
     const alertas = store.lerAlertas().filter(a => a.estado === 'ABERTO' || a.estado === 'ACK');
 
-    const acessiveis = Object.values(estado).filter(s => s.ultimoResultado === 'ACESSIVEL').length;
-    const semResposta = Object.values(estado).filter(s => s.ultimoResultado === 'SEM_RESPOSTA').length;
-    const instaveis = Object.values(estado).filter(s => s.falhasConsecutivas > 0 && s.falhasConsecutivas < (config.limites.falhasConsecutivasParaAlerta || 3)).length;
-    const semDados = alvos.length - Object.keys(estado).length;
+    // KPIs MUTUAMENTE EXCLUSIVOS — a soma dos estados = totalAlvos.
+    // Antes: semResposta (1 falha) e instaveis (1 falha) contavam o MESMO host,
+    // e um PC desligado derrubava a disponibilidade na 1a falha.
+    const estados = Object.values(estado).map(s => s.ultimoResultado);
+    const acessiveis = estados.filter(e => e === 'ACESSIVEL').length;
+    const semResposta = estados.filter(e => e === 'SEM_RESPOSTA').length;
+    const desligadosEsperados = estados.filter(e => e === 'DESLIGADO_ESPERADO').length;
+    const empresaParada = estados.filter(e => e === 'EMPRESA_PARADA').length;
+    const ipObsoleto = estados.filter(e => e === 'IP_OBSOLETO').length;
+    const semDados = alvos.length - Object.keys(estado).length + estados.filter(e => e === 'SEM_DADOS').length;
+    // instaveis = hosts com oscilacao (falha+ok na janela) mas que NAO estao
+    // classificados como desligado esperado, para nao dupla-contar
+    const instaveis = Object.values(estado).filter(s =>
+        s.ultimoResultado === 'SEM_RESPOSTA' &&
+        (s.falhasConsecutivas > 0) &&
+        (s.falhasConsecutivas < (config.limites.falhasConsecutivasParaAlerta || 3))
+    ).length;
+    // semResposta "real" = falhas que passaram do limiar (as outras viram instaveis)
+    const semRespostaReal = Math.max(0, semResposta - instaveis);
+    const respondiveis = Math.max(0,
+        alvos.length - desligadosEsperados - empresaParada - ipObsoleto - semDados);
+    const dispOperacional = respondiveis > 0 ? Math.round((acessiveis / respondiveis) * 100) : 0;
+    const dispBruta = alvos.length > 0 ? Math.round((acessiveis / alvos.length) * 100) : 0;
 
     // Persiste estado limpo (remove IPs fantasma)
     if (Object.keys(estadoBruto).length !== Object.keys(estado).length) {
@@ -552,6 +691,7 @@ function obterPainel() {
             local,
             stale,
             estado: stale && st.ultimoResultado === 'ACESSIVEL' ? 'SEM_DADOS' : (st.ultimoResultado || 'SEM_DADOS'),
+            classificacao: st.classificacao || null,
             latenciaMediaMs: st.latenciaMediaMs != null ? st.latenciaMediaMs : null,
             falhasConsecutivas: st.falhasConsecutivas || 0,
             downSince: st.downSince || null,
@@ -583,9 +723,16 @@ function obterPainel() {
         resumo: {
             totalAlvos: alvos.length,
             acessiveis,
-            semResposta,
+            semResposta: semRespostaReal,
             instaveis,
             semDados: Math.max(0, semDados),
+            desligadosEsperados,
+            empresaParada,
+            ipObsoleto,
+            respondiveis,
+            disponibilidadeOperacional: dispOperacional,
+            disponibilidadeBruta: dispBruta,
+            planejadoPct: alvos.length > 0 ? Math.round((desligadosEsperados / alvos.length) * 100) : 0,
             alertasAbertos: alertas.length,
             incidentesSetor: incidentesCache.length,
             coletadoEm: new Date().toISOString()

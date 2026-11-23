@@ -398,8 +398,45 @@ reportado pelo próprio agente e regrava o cadastro:
 - **Job periódico**: 1º tiro 45 s após subir, depois a cada **5 min**, com
   guarda de reentrada (`ipSyncEmAndamento`) e só roda com Zabbix configurado —
   o cadastro se mantém atualizado sem ninguém clicar em nada.
-- Teste: `test/ip-adaptativo.test.js` (12 casos) trava validação de IP,
-  detecção, aplicação, idempotência, endpoint, job e botão do frontend.
+- Teste: `test/ip-adaptativo.test.js` trava validação de IP (inclusive
+  0.0.0.0/APIPA/multicast/loopback-mapeado), detecção, aplicação,
+  idempotência, endpoint, job e botão do frontend.
+
+### 3.2 Classificação de contexto — "desligado" ≠ "falha" (NOVO)
+
+O pessoal desliga os PCs durante o dia (para reduzir dias de formatação). Antes,
+o sistema tratava **qualquer ping falho como erro**, gerando alertas falsos e
+derrubando a disponibilidade na 1ª falha. Não havia distinção entre desligamento
+legítimo e falha real.
+
+**Replay dos dados reais:** dos 14 alertas históricos, **14 (100%) ocorriam dentro
+do expediente (08h–18h)** — eram boot/desligamento, não falha.
+
+Solução implementada:
+- `monitor/classificador.js` (puro, testável, fuso `America/Sao_Paulo` explícito):
+  classifica cada host em `ACESSIVEL`, `SEM_RESPOSTA`, `DESLIGADO_ESPERADO`,
+  `EMPRESA_PARADA`, `IP_OBSOLETO` ou `SEM_DADOS`, com `suprimeAlerta`, `motivo`
+  e `confianca`. Regras: janela esperada + tolerância, feriados, exceção por IP,
+  parada coletiva (≥40% do setor), host não encontrado por 24h.
+- `config.json` → seção `classificacao` (`modo: CONSERVADOR` por padrão;
+  `EXPLICITO` exige exceção nominal por IP).
+- Integrado em `monitor/service.js`: classificação roda **após** todos os pings
+  e **antes** de alertas/KPIs; `avaliarEAlertar` suprime CONECTIVIDADE/INFRA/
+  INSTABILIDADE quando `suprimeAlerta`; grava evento `SUPRIMIDO` no histórico
+  (auditoria sem poluir alertas ativos).
+- `monNotificarFalhas` (toast do navegador) e `failureSummary` também respeitam
+  a supressão — senão o alerta falso continuaria aparecendo por outros canais.
+
+**Novos KPIs (mutuamente exclusivos — soma = totalAlvos):**
+`desligadosEsperados`, `empresaParada`, `ipObsoleto`, `respondiveis`,
+`disponibilidadeOperacional` (acessiveis/respondiveis — SLO real) e
+`disponibilidadeBruta` (transparência). Cards novos no frontend:
+"Desligados (esperado)" (cor ciano, nunca vermelho) e "Parada Coletiva".
+O gráfico de disponibilidade não transforma mais ausência de dado em 0%.
+
+Testes: `test/classificador.test.js` (14 casos: fuso, janela, tolerância,
+feriado, fim de semana, parada coletiva, modo explicito, IP obsoleto).
+Total da suíte: **40 testes**.
 
 ### 3.1 Como o IP chega ao Zabbix (gatilhos oficiais — testados em laboratório)
 
