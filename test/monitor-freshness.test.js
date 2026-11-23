@@ -35,7 +35,8 @@ test('host list merges inventory IPs with custom targets without losing entries'
     targets = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'monitor', 'data', 'targets.json'), 'utf8'));
   } catch { targets = []; }
   for (const t of targets) {
-    assert.ok(alvos.some(a => a.ip === (t.ipAddress || t.ip)), 'target perdido na mescla: ' + (t.ipAddress || t.ip));
+    if (t.ativo === false) continue; // desativados de proposito nao entram na mescla
+    assert.ok(alvos.some(a => a.ip === (t.ipAddress || t.ip)), 'target ativo perdido na mescla: ' + (t.ipAddress || t.ip));
   }
 
   // Sem IPs duplicados na lista final
