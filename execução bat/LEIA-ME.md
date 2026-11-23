@@ -18,13 +18,17 @@ Esta pasta contém o instalador único para os computadores Windows monitorados.
 
 **Não é preciso:** baixar nada, editar arquivos, saber senhas ou configurar qualquer coisa. O instalador baixa o MSI oficial do Zabbix (17,6 MB) da CDN se ele ainda não estiver na pasta.
 
+## IP do servidor (detecção automática)
+
+O instalador **detecta sozinho** o IP da interface LAN real (ignora vEthernet/WSL/Hyper-V/APIPA), então funciona mesmo se o servidor trocou de IP por DHCP. Se quiser fixar manualmente, crie um arquivo `server-ip.txt` ao lado do `.bat` contendo só o IP (ex.: `192.168.0.102`).
+
 ## O que o instalador faz automaticamente
 
 - Verifica privilégios de administrador.
 - Baixa o MSI oficial do Zabbix Agent 2 7.0.31 se necessário (CDN: `cdn.zabbix.com`).
 - Instala/atualiza o agente apontando para o servidor `192.168.0.102`.
-- Grava uma configuração **válida**:
-  - `Server` / `ServerActive` = `192.168.0.102`
+- Grava uma configuração **válida para o Agent 2 no Windows** (sem `PidFile`, que é inválido e impede o serviço de subir):
+  - `Server` / `ServerActive` = IP detectado automaticamente
   - `Hostname` = nome do computador (automático)
   - `HostMetadataItem=inv.meta` + `UnsafeUserParameters=1` (IP adaptativo)
   - `UserParameter=inv.meta` aponta para um script PowerShell que detecta o **IP real** da interface (ignora IP virtual/APIPA)

@@ -1530,7 +1530,7 @@ async function loadAdmin() {
         if (el) {
             el.innerHTML =
                 '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);"><span>Servidor</span><span style="color:var(--green);font-weight:600;">Online</span></div>' +
-                '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);"><span>Banco de Dados</span><span style="font-weight:600;color:var(--cyan);">H2 (arquivo)</span></div>' +
+                '<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);"><span>Banco de Dados</span><span style="font-weight:600;color:var(--cyan);">JSON (data.json)</span></div>' +
                 '<div style="display:flex;justify-content:space-between;padding:6px 0;"><span>Computadores</span><span style="font-weight:600;color:var(--cyan);">' + total + '</span></div>';
         }
         if (elTotal) elTotal.textContent = total;
@@ -4015,17 +4015,17 @@ function showManual() {
         '<h3 style="color:var(--cyan);font-size:15px;margin:14px 0 10px;">2. Computadores</h3>' +
         '<p>Cadastre equipamentos com três abas: <b>Geral</b> (dados básicos), <b>Foto</b> (upload de imagem) e <b>Detalhes</b> (setor, IP, SO, etc). Use os filtros e busca para encontrar equipamentos. Ações em massa disponíveis para usuários ADMIN.</p>' +
         '<h3 style="color:var(--cyan);font-size:15px;margin:14px 0 10px;">3. Manutenções</h3>' +
-        '<p>Registre manutenções corretivas, preventivas, preditivas ou emergenciais. Ao cadastrar uma manutenção, uma OS Ã© criada automaticamente. Ao concluir, o status do computador Ã© atualizado.</p>' +
+        '<p>Registre manutenções corretivas, preventivas, preditivas ou emergenciais. Ao cadastrar uma manutenção, uma OS é criada automaticamente. Ao concluir, o status do computador é atualizado.</p>' +
         '<h3 style="color:var(--cyan);font-size:15px;margin:14px 0 10px;">4. Ordens de Serviço</h3>' +
         '<p>Gerencie tickets de suporte com prioridade, status, responsável e solução. Clique em uma OS na tabela para editar. Use filtros por status e prioridade.</p>' +
         '<h3 style="color:var(--cyan);font-size:15px;margin:14px 0 10px;">5. Setores</h3>' +
-        '<p>Gerencie os setores da empresa. Apenas nome Ã© necessÃ¡rio. O número de computadores vinculados Ã© exibido automaticamente.</p>' +
+        '<p>Gerencie os setores da empresa. Apenas nome é necessário. O número de computadores vinculados é exibido automaticamente.</p>' +
         '<h3 style="color:var(--cyan);font-size:15px;margin:14px 0 10px;">6. Histórico</h3>' +
         '<p>Visualize todas as operações realizadas no sistema com filtros por entidade (Computador, Manutenção, OS, etc).</p>' +
         '<h3 style="color:var(--cyan);font-size:15px;margin:14px 0 10px;">7. Relatórios</h3>' +
         '<p>Visualize gráficos e estatísticas detalhadas. Clique nos cards de estatísticas para ver os itens individuais. Exporte em CSV ou imprima em PDF.</p>' +
         '<h3 style="color:var(--cyan);font-size:15px;margin:14px 0 10px;">8. Ferramentas</h3>' +
-        '<p>Painel administrativo com status do sistema, H2 Console, Swagger, Actuator e métricas. Apenas usuários ADMIN tem acesso.</p>' +
+        '<p>Painel administrativo com status do sistema, health check do coletor e métricas de monitoramento. Apenas usuários ADMIN tem acesso.</p>' +
         '</div>',
         '<button onclick="closeModal()" class="btn btn-ghost btn-sm">Fechar</button>'
     );
@@ -4037,7 +4037,7 @@ function showManual() {
 function showSystemInfo() {
     apiFetch('/actuator/health').then(function(data) {
         var status = (data && data.status) ? escapeHtml(data.status) : 'UNKNOWN';
-        var dbStatus = 'H2 (embedded)';
+        var dbStatus = 'JSON (data.json)';
         if (data && data.componentes && data.componentes.db) {
             dbStatus = data.componentes.db.details ? escapeHtml(data.componentes.db.details.database || dbStatus) : dbStatus;
         }
@@ -4077,16 +4077,16 @@ function clearSystemCache() {
 function showBackupInfo() {
     openModal('Backup do Banco de Dados',
         '<div style="padding:10px;font-size:13px;color:var(--text-secondary);line-height:1.8;">' +
-        '<p>O banco de dados Ã© armazenado em arquivo local no servidor:</p>' +
-        '<div style="background:rgba(0,0,0,0.3);padding:12px;border-radius:8px;margin:10px 0;font-family:monospace;font-size:12px;color:var(--cyan);">./data/inventário_db.mv.db</div>' +
+        '<p>O cadastro é armazenado em arquivos JSON no servidor:</p>' +
+        '<div style="background:rgba(0,0,0,0.3);padding:12px;border-radius:8px;margin:10px 0;font-family:monospace;font-size:12px;color:var(--cyan);">data.json  +  monitor/data/ (state.json, alerts.json, targets.json, raw/, agg/)</div>' +
         '<p><b>Como fazer backup:</b></p>' +
         '<ol style="padding-left:18px;margin:6px 0;">' +
         '<li>Pare o servidor</li>' +
-        '<li>Copie o arquivo <code style="color:var(--cyan);">inventário_db.mv.db</code> da pasta <code style="color:var(--cyan);">data/</code></li>' +
+        '<li>Com o servidor parado (ou em janela de manutenção), copie <code style="color:var(--cyan);">data.json</code> e a pasta <code style="color:var(--cyan);">monitor/data/</code></li>' +
         '<li>Salve o arquivo em local seguro</li>' +
         '<li>Reinicie o servidor</li>' +
         '</ol>' +
-        '<p style="color:var(--red);margin-top:10px;"><b>importante:</b> O arquivo de banco é o único necessário para restaurar todos os dados do sistema.</p>' +
+        '<p style="color:var(--red);margin-top:10px;"><b>Importante:</b> conserve <code>data.json</code> (cadastro) e <code>monitor/data/</code> (histórico de monitoramento) — juntos restauram todos os dados do sistema.</p>' +
         '</div>',
         '<button onclick="closeModal()" class="btn btn-ghost btn-sm">Fechar</button>'
     );

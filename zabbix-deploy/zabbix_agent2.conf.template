@@ -1,59 +1,17 @@
-# =============================================================================
-# Configuracao do Zabbix Agent 2 para Windows
-# Copie este arquivo para C:\Program Files\Zabbix Agent 2\zabbix_agent2.conf
-# Ajuste os valores conforme o ambiente.
-# =============================================================================
+# Template de referencia — Zabbix Agent 2 (Windows)
+# Use o instalador unico: "execução bat\instalar-tudo.bat"
+# Ele detecta Server/Hostname/IP e gera o conf final com IP adaptativo.
 
-# --- Identificacao ---
-# HOSTNAME: nome tecnico do host no Zabbix. Se o host ja existe, o Zabbix usa o
-# nome para CASAR e atualizar a interface (IP adaptativo) sem duplicar host.
-# Se nao existir, o host e criado automaticamente com este nome.
-Hostname=PC-AJUSTAR
+Server=SERVER_IP_AQUI
+ServerActive=SERVER_IP_AQUI
+Hostname=NOME_DO_PC_AQUI
 
-# --- Auto-registro / IP adaptativo (obrigatorio) ---
-# O valor precisa conter "inventario-ti" para a action
-# "Inventario TI - Auto-registro de agentes" aceitar o registro.
-# Assim, se o IP do PC muder, o Zabbix atualiza a interface sozinho.
-HostMetadata=inventario-ti
+# IP adaptativo: metadata DINAMICO (contem o IP atual do PC)
+HostMetadataItem=inv.meta
+UnsafeUserParameters=1
+UserParameter=inv.meta,powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Program Files\Zabbix Agent 2\scripts\inv-meta.ps1"
 
-# --- Comunicacao com o servidor ---
-# IP ou nome do Zabbix Server (ou Proxy)
-Server=192.168.0.186
-
-# Modo ativo: o agente conecta ao servidor e envia metricas (recomendado)
-ServerActive=192.168.0.186
-
-# --- Portas ---
-# Porta para verificacoes passivas (desabilite se usar apenas modo ativo)
-ListenPort=10050
-# ListenIP=0.0.0.0
-
-# --- Seguranca ---
-# TLS PSK (recomendado para producao)
-# TLSConnect=psk
-# TLSAccept=psk
-# TLSPSKIdentity=PSK-PC-AJUSTAR
-# TLSPSKFile=C:\Program Files\Zabbix Agent 2\zabbix_agent2.psk
-
-# --- Performance ---
-# Buffer mandado de dados (modo ativo)
-BufferSize=4M
-# Max. sessoes simultaneas
-StartAgents=3
-# Timeout para comandos
-Timeout=3
-# Frequencia de coleta do agente
-RefreshActiveChecks=120
-
-# --- Logs ---
 LogFile=C:\Program Files\Zabbix Agent 2\zabbix_agent2.log
-# LogLevel: 0=erro, 1=aviso, 2=info (padrao), 3=debug, 4=debug detalhado
-LogLevel=2
-# LogFilesize=0
-
-# --- Restricoes de seguranca ---
-# NAO habilite system.run[] ou UserParameter generico
-# NAO permita execucao remota de comandos
-
-# --- Include de configuracoes extras ---
-# Include=C:\Program Files\Zabbix Agent 2\zabbix_agent2.d\*.conf
+LogFileSize=10
+Timeout=30
+ListenPort=10050

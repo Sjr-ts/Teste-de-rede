@@ -85,8 +85,8 @@ services:
     environment:
       ZBX_SERVER_HOST: zabbix-server
       ZBX_HOSTNAME: servidor-monitoramento
-    ports:
-      - "10050:10050"
+    # Sem ports 10050: o agente Windows instalado no host ja usa essa porta.
+    # O auto-monitoramento funciona pela rede interna zbx-net (server -> container).
     networks:
       - zbx-net
 
