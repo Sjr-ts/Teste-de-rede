@@ -211,52 +211,42 @@ function monAtualizarGpuNaTabela(gpu, nome, ts) {
     }
 }
 
-// Atualiza KPI de CPU se existir
-function monAtualizarKpiCpu(cpu, ts) {
-    const el = document.getElementById('mon-kpi-cpu-tempo-real');
-    if (!el) {
-        const kpiGrid = document.getElementById('mon-kpis');
-        if (kpiGrid) {
-            const cpuKpi = monKpiCard('fa-microchip', 'cyan', cpu.toFixed(1) + '%', 'CPU Tempo Real', 'ao vivo · 1s', 'mon-kpi-cpu-tempo-real',
-                '<span style="font-size:10px;color:var(--green);"><i class="fas fa-circle" style="font-size:6px;"></i> AO VIVO</span>');
-            kpiGrid.insertAdjacentHTML('afterbegin', cpuKpi);
+// Atualiza metricas em tempo real (CPU/GPU). Nao ha mais cards duplicados na
+// grade: os valores aparecem no DETALHE do Computadores. Atualiza so o texto
+// das metricas, sem reconstruir o overlay (evita flicker/recriar graficos).
+let _monUltimaAtualizacaoDetalhe = 0;
+function monAtualizarMetricasNoDetalhe() {
+    const ct = document.getElementById('sdContainer-mon');
+    if (!ct) return;
+    const agora = Date.now();
+    if (agora - _monUltimaAtualizacaoDetalhe < 900) return; // no maximo ~1x/s
+    _monUltimaAtualizacaoDetalhe = agora;
+    const dados = [
+        ['cpu', _monCpuTempoReal, 'cyan'],
+        ['gpu', _monGpuTempoReal, 'purple']
+    ];
+    for (const [tipo, valor, cor] of dados) {
+        if (valor == null) continue;
+        const el = ct.querySelector('[data-metrica="' + tipo + '"]');
+        if (el) {
+            el.textContent = valor.toFixed(1) + '%';
+            el.style.color = 'var(--' + (monCorUso(valor, cor) || cor) + ')';
         }
-    } else {
-        const valorEl = el.querySelector('.kpi-num');
-        if (valorEl) {
-            const alvo = cpu.toFixed(1) + '%';
-            if (valorEl.textContent !== alvo) valorEl.textContent = alvo;
-            const cls = 'kpi-num' + monNivelUso(cpu);
-            if (valorEl.className !== cls) valorEl.className = cls;
-        }
-        const cor = monCorUso(cpu, 'cyan') || 'cyan';
-        const ic = el.querySelector('.kpi-ic');
-        if (ic) { const want = 'fas fa-microchip kpi-ic kpi-ic-' + cor; if (ic.className !== want) ic.className = want; }
     }
 }
 
-// Atualiza KPI de GPU se existir
+function monAtualizarKpiCpu(cpu, ts) {
+    monAtualizarMetricasNoDetalhe();
+}
+
 function monAtualizarKpiGpu(gpu, nome, ts) {
-    const el = document.getElementById('mon-kpi-gpu-tempo-real');
-    if (!el) {
-        const kpiGrid = document.getElementById('mon-kpis');
-        if (kpiGrid) {
-            const gpuKpi = monKpiCard('fa-tv', 'purple', gpu.toFixed(1) + '%', 'GPU Tempo Real', nome || 'ao vivo · 1s', 'mon-kpi-gpu-tempo-real',
-                '<span style="font-size:10px;color:var(--green);"><i class="fas fa-circle" style="font-size:6px;"></i> AO VIVO</span>');
-            kpiGrid.insertAdjacentHTML('afterbegin', gpuKpi);
-        }
-    } else {
-        const valorEl = el.querySelector('.kpi-num');
-        if (valorEl) {
-            const alvo = gpu.toFixed(1) + '%';
-            if (valorEl.textContent !== alvo) valorEl.textContent = alvo;
-            const cls = 'kpi-num' + monNivelUso(gpu);
-            if (valorEl.className !== cls) valorEl.className = cls;
-        }
-        const cor = monCorUso(gpu, 'purple') || 'purple';
-        const ic = el.querySelector('.kpi-ic');
-        if (ic) { const want = 'fas fa-tv kpi-ic kpi-ic-' + cor; if (ic.className !== want) ic.className = want; }
+    // atualiza o nome da GPU no detalhe se mudou
+    const ct = document.getElementById('sdContainer-mon');
+    if (ct && nome) {
+        const nel = ct.querySelector('[data-metrica="gpu-nome"]');
+        if (nel && nel.textContent !== nome) nel.textContent = nome;
     }
+    monAtualizarMetricasNoDetalhe();
 }
 
 // Aplica innerHTML apenas quando o conteudo realmente mudou (evita reflow/flicker)
@@ -1779,12 +1769,11 @@ function monKpiDefs(p) {
     const qtdDesligados = r.desligadosEsperados || 0;
     const respondiveis = r.respondiveis != null ? r.respondiveis : totalAlvos;
     const pctIndisponivel = respondiveis > 0 ? Math.round((r.semResposta || 0) / respondiveis * 100) : 0;
-    const cpuReal = _monCpuTempoReal != null ? _monCpuTempoReal.toFixed(1) + '%' : '...';
-    const cpuCor = _monCpuTempoReal == null ? 'cyan' : (monCorUso(_monCpuTempoReal) || 'green');
     const dispCor = monCorDisponibilidade(pctDisponivel);
+    // CPU/GPU em tempo real NAO ficam mais na lista principal de KPIs —
+    // agora aparecem no detalhe do "Computadores" (aba expandida do PC local),
+    // onde fazem sentido. A lista principal mostra apenasMetricas de rede.
     return [
-        { icon: 'fa-microchip', cor: cpuCor, valor: cpuReal, label: 'CPU Tempo Real', sub: 'ao vivo · 1s', key: 'mon-kpi-cpu-tempo-real',
-          extra: '<span style="font-size:10px;color:var(--green);"><i class="fas fa-circle" style="font-size:6px;"></i> AO VIVO</span>' },
         { icon: 'fa-chart-pie', cor: dispCor, valor: pctDisponivel + '%', label: 'Disponibilidade', sub: r.acessiveis + ' de ' + respondiveis + ' respondiveis' + (qtdDesligados ? ' · ' + qtdDesligados + ' desligado(s) planejado(s), fora do calculo' : '') + ((r.empresaParada||0) ? ' · ' + r.empresaParada + ' em parada coletiva' : ''), key: 'mon-kpi-disponibilidade',
           extra: '<div style="width:60px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;"><div style="width:' + pctDisponivel + '%;height:100%;background:var(--' + dispCor + ');"></div></div>' },
         { icon: 'fa-desktop', cor: 'cyan', valor: totalAlvos, label: 'Equipamentos', sub: 'Total com IP cadastrado', key: 'mon-kpi-total' },
@@ -1958,9 +1947,27 @@ function monRenderKpiDetail(key) {
             '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--yellow-bg);color:var(--yellow);"><i class="fas fa-wave-square"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">Instaveis</div><div class="stat-detail-item-sub">' + (rs.instaveis || 0) + ' equipamentos</div></div></div>' +
             ((parada.length || obsoletos.length) ? '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--orange-bg);color:var(--orange);"><i class="fas fa-building-circle-xmark"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">Parada coletiva / IP obsoleto</div><div class="stat-detail-item-sub">' + parada.length + ' parada(s), ' + obsoletos.length + ' IP(s) a revisar</div></div></div>' : '') +
             '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--magenta-bg);color:var(--magenta);"><i class="fas fa-circle-question"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">Sem Dados</div><div class="stat-detail-item-sub">' + (rs.semDados != null ? rs.semDados : semDados.length) + ' equipamentos</div></div></div>';
-    } else if (key === 'mon-kpi-total') {
-        title = 'Todos os Equipamentos Monitorados'; icon = 'fa-desktop'; color = 'cyan';
-        itemsHtml = p.linhas.map(l => '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--cyan-bg);color:var(--cyan);"><i class="fas fa-desktop"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">' + esc(l.nome || l.ip) + '</div><div class="stat-detail-item-sub">' + esc(l.ip) + ' | Setor: ' + esc(l.setor || '-') + ' | Estado: ' + monEstadoBadge(l.estado) + ' | Lat: ' + (l.latenciaMediaMs != null ? Math.round(l.latenciaMediaMs) + 'ms' : '—') + '</div><div class="stat-detail-item-badge">' + monEstadoBadge(l.estado) + '</div></div>').join('');
+    } else if (key === 'mon-kpi-total' || key === 'mon-kpi-computadores') {
+        title = 'Equipamentos Monitorados'; icon = 'fa-desktop'; color = 'cyan';
+        // Bloco de METRICAS EM TEMPO REAL do PC local (aqui antes ficavam os
+        // cards duplicados de CPU/GPU na grade principal).
+        const cpuAtual = _monCpuTempoReal;
+        const gpuAtual = _monGpuTempoReal;
+        const ramAtual = (_monDados && _monDados.sistema && _monDados.sistema.memoria) || null;
+        const discoAtual = (_monDados && _monDados.sistema && _monDados.sistema.disco) || null;
+        const hostNome = (_monDados && _monDados.sistema && (_monDados.sistema.nome || _monDados.sistema.hostname)) || 'PC local';
+        const mini = (ic, cor, nome, valor, corValor, nota) =>
+            '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--' + cor + '-bg);color:var(--' + cor + ');"><i class="fas ' + ic + '"></i></div>' +
+            '<div class="stat-detail-item-info"><div class="stat-detail-item-name">' + esc(nome) + '</div>' +
+            '<div class="stat-detail-item-sub"><b style="font-size:18px;color:var(--' + (corValor || cor) + ');">' + valor + '</b>' +
+            (nota !== undefined ? ' <span ' + (nome === 'GPU' ? 'data-metrica="gpu-nome" ' : '') + 'style="font-size:10px;">' + nota + '</span>' : '') + '</div></div></div>';
+        let html = '<div style="font-size:11px;color:var(--text-muted);margin:4px 0 8px;padding:8px;background:rgba(255,255,255,0.03);border-radius:8px;">' +
+            '<i class="fas fa-circle" style="color:var(--green);font-size:7px;"></i> <b style="color:var(--text-primary);">' + esc(hostNome) + '</b> · metricas em tempo real (coletadas localmente)</div>';
+        if (cpuAtual != null) html += mini('fa-microchip', 'cyan', 'CPU', '<span data-metrica="cpu">' + cpuAtual.toFixed(1) + '%</span>', monCorUso(cpuAtual, 'cyan'), 'ao vivo · 1s');
+        if (gpuAtual != null) html += mini('fa-tv', 'purple', 'GPU', '<span data-metrica="gpu">' + gpuAtual.toFixed(1) + '%</span>', monCorUso(gpuAtual, 'purple'), esc(_monGpuNome || 'ao vivo · 2s'));
+        if (ramAtual && ramAtual.usoPct != null) html += mini('fa-memory', 'orange', 'RAM', ramAtual.usoPct + '%', monCorUso(ramAtual.usoPct, 'orange'), 'em uso');
+        html += '<div style="font-size:11px;color:var(--text-muted);margin:10px 0 6px;border-top:1px solid var(--divider);padding-top:8px;">Equipamentos cadastrados (' + p.resumo.totalAlvos + '):</div>';
+        itemsHtml = html + p.linhas.map(l => '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--cyan-bg);color:var(--cyan);"><i class="fas fa-desktop"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">' + esc(l.nome || l.ip) + '</div><div class="stat-detail-item-sub">' + esc(l.ip) + ' | Setor: ' + esc(l.setor || '-') + ' | Estado: ' + monEstadoBadge(l.estado) + ' | Lat: ' + (l.latenciaMediaMs != null ? Math.round(l.latenciaMediaMs) + 'ms' : '—') + (l.local ? ' | <b style="color:var(--cyan)">PC local</b>' : '') + '</div><div class="stat-detail-item-badge">' + monEstadoBadge(l.estado) + '</div></div></div>').join('');
         itemsHtml += failureSummary(p.linhas, 'Total: ' + p.resumo.totalAlvos + ' equipamentos');
     } else if (key === 'mon-kpi-acessiveis') {
         title = 'Equipamentos Acessiveis'; icon = 'fa-circle-check'; color = 'green';
