@@ -10,7 +10,7 @@
 '  USO: duplo-clique neste arquivo. Nao digita nada.
 ' ============================================================================
 
-Dim WshShell, FSO, scriptDir, batPath, elevado
+Dim WshShell, FSO, scriptDir, batPath, elevado, ShellApp
 
 Set WshShell = CreateObject("WScript.Shell")
 Set FSO = CreateObject("Scripting.FileSystemObject")
@@ -27,11 +27,14 @@ If Err.Number = 0 Then
     f.Close
     FSO.DeleteFile "C:\Program Files\zbx-admin-test.tmp"
 End If
+Err.Clear
 On Error GoTo 0
 
 If Not elevado Then
-    ' Auto-elevacao: se a conta for admin, o UAC so pede "Sim", NAO senha.
-    WshShell.ShellExecute "wscript.exe", """" & WScript.ScriptFullName & """", "", "runas", 1
+    ' Auto-elevacao via Shell.Application (WScript.Shell NAO tem ShellExecute).
+    ' Se a conta for admin, o UAC so pede "Sim" — NAO pede senha.
+    Set ShellApp = CreateObject("Shell.Application")
+    ShellApp.ShellExecute "wscript.exe", """" & WScript.ScriptFullName & """", "", "runas", 1
     WScript.Quit
 End If
 
