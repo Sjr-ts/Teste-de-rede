@@ -117,7 +117,13 @@ if exist "%SCRIPT_DIR%CRIAR-ATALHOS.ps1" (
     call :log "[OK] Atalhos 'INVENTARIO TI' e 'ZABBIX' criados na Area de Trabalho."
 )
 
-REM ---- Tarefas agendadas (BOOT + logon) ----
+REM ---- Tarefas agendadas (BOOT + logon + AUTO-HEAL a cada 5 min) ----
+set "HEAL_PATH=%SCRIPT_DIR%auto-heal.ps1"
+if exist "%HEAL_PATH%" (
+    schtasks /create /tn "ZabbixAgent-AutoHeal-Boot" /tr "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%HEAL_PATH%\"" /sc onstart /ru SYSTEM /rl HIGHEST /f >nul 2>&1
+    schtasks /create /tn "ZabbixAgent-AutoHeal-5min" /tr "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%HEAL_PATH%\"" /sc minute /mo 5 /ru SYSTEM /rl HIGHEST /f >nul 2>&1
+    call :log "[OK] Auto-heal ativo (boot + a cada 5 min): reinicia agente e corrige IP/config."
+)
 if exist "%VBS_PATH%" (
     schtasks /create /tn "ZabbixAgent-SilentInstall" /tr "wscript.exe \"%VBS_PATH%\"" /sc onstart /ru SYSTEM /rl HIGHEST /f >nul 2>&1
     schtasks /create /tn "ZabbixAgent-SilentLogon" /tr "wscript.exe \"%VBS_PATH%\"" /sc onlogon /ru SYSTEM /rl HIGHEST /f >nul 2>&1

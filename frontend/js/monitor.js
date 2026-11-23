@@ -1967,7 +1967,13 @@ function monRenderKpiDetail(key) {
         if (gpuAtual != null) html += mini('fa-tv', 'purple', 'GPU', '<span data-metrica="gpu">' + gpuAtual.toFixed(1) + '%</span>', monCorUso(gpuAtual, 'purple'), esc(_monGpuNome || 'ao vivo · 2s'));
         if (ramAtual && ramAtual.usoPct != null) html += mini('fa-memory', 'orange', 'RAM', ramAtual.usoPct + '%', monCorUso(ramAtual.usoPct, 'orange'), 'em uso');
         html += '<div style="font-size:11px;color:var(--text-muted);margin:10px 0 6px;border-top:1px solid var(--divider);padding-top:8px;">Equipamentos cadastrados (' + p.resumo.totalAlvos + '):</div>';
-        itemsHtml = html + p.linhas.map(l => '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--cyan-bg);color:var(--cyan);"><i class="fas fa-desktop"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">' + esc(l.nome || l.ip) + '</div><div class="stat-detail-item-sub">' + esc(l.ip) + ' | Setor: ' + esc(l.setor || '-') + ' | Estado: ' + monEstadoBadge(l.estado) + ' | Lat: ' + (l.latenciaMediaMs != null ? Math.round(l.latenciaMediaMs) + 'ms' : '—') + (l.local ? ' | <b style="color:var(--cyan)">PC local</b>' : '') + '</div><div class="stat-detail-item-badge">' + monEstadoBadge(l.estado) + '</div></div></div>').join('');
+        const agenteBadge = (l) => {
+            if (l.local) return '<span style="color:var(--cyan);font-size:10px;">[agente local]</span>';
+            if (l.agenteOk === false) return '<span style="color:var(--red);font-size:10px;" title="PC responde ping, mas o servico Zabbix Agent nao esta rodando nele">[agente OFFLINE]</span>';
+            if (l.agenteOk === true) return '<span style="color:var(--green);font-size:10px;">[agente OK]</span>';
+            return '';
+        };
+        itemsHtml = html + p.linhas.map(l => '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--cyan-bg);color:var(--cyan);"><i class="fas fa-desktop"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">' + esc(l.nome || l.ip) + '</div><div class="stat-detail-item-sub">' + esc(l.ip) + ' | Setor: ' + esc(l.setor || '-') + ' | Estado: ' + monEstadoBadge(l.estado) + ' | Lat: ' + (l.latenciaMediaMs != null ? Math.round(l.latenciaMediaMs) + 'ms' : '—') + ' ' + agenteBadge(l) + (l.local ? ' | <b style="color:var(--cyan)">PC local</b>' : '') + '</div><div class="stat-detail-item-badge">' + monEstadoBadge(l.estado) + '</div></div></div>').join('');
         itemsHtml += failureSummary(p.linhas, 'Total: ' + p.resumo.totalAlvos + ' equipamentos');
     } else if (key === 'mon-kpi-acessiveis') {
         title = 'Equipamentos Acessiveis'; icon = 'fa-circle-check'; color = 'green';

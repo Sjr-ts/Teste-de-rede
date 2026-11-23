@@ -228,10 +228,16 @@ async function enriquecerPainelComZabbix(painel) {
                 if (z) {
                     // Host LOCAL: o coletor local e a fonte de verdade — o Zabbix
                     // nunca rebaixa o estado nem a latencia do PC do servidor.
+                    // Agente OFFLINE: available 2 (indisponivel) ou 0 (desconhecido)
+                    // sem dados recentes. O Zabbix reporta 0 enquanto nunca coletou.
+                    // Agente OFFLINE: available 0 + sem disponibilidade medida
+                    // = o Zabbix nunca conseguiu coletar deste agente.
+                    // (hosts agentless tem `disponivel` preenchido pelo ICMP do Zabbix)
+                    const semColetaZb = (z.disponivel == null || z.disponivel === '') &&
+                        (z.available == null || z.available === '0' || z.available === '');
                     const indisponivelZb = ehLocalFresco ? false :
                         (z.disponivel === false) || (z.available === '2') ||
-                        (z.available === '0' && z.error) ||
-                        (z.disponivel === null && z.available === '0' && z.error);
+                        (z.error && z.available === '0') || semColetaZb;
                     linha.zabbix = {
                         disponivel: z.disponivel,
                         latenciaMs: z.latenciaMs,
@@ -239,19 +245,32 @@ async function enriquecerPainelComZabbix(painel) {
                         available: z.available,
                         error: z.error,
                         indisponivelZb: indisponivelZb,
+                        // exposto tambem aqui (fonte unica) para o frontend
+                        agenteOk: ehLocalFresco ? true : !indisponivelZb,
                         atualizadoEm: now
                     };
+                    linha.agenteOk = linha.zabbix.agenteOk;
                     if (ehLocalFresco) continue; // nao rebaixa estado local
-                    if (!localFresco || indisponivelZb) {
-                        if (indisponivelZb) {
-                            if (linha.estado === 'ACESSIVEL') linha.estado = 'SEM_RESPOSTA';
-                        } else if (z.disponivel === true) {
-                            if (linha.estado !== 'ACESSIVEL') linha.estado = 'ACESSIVEL';
-                        } else if (z.disponivel === false) {
+                    // REGRA DE OURO: o PING do coletor e a fonte de verdade da
+                    // disponibilidade do PC. O agente Zabbix e COMPLEMENTAR —
+                    // se o PC responde ping mas o agente caiu, NAO rebaixamos o
+                    // estado para SEM_RESPOSTA (seria falso: o PC esta UP). So
+                    // sinalizamos agenteOk=false para o frontend mostrar.
+                    const pingFrescoOk = !!linha.ultimoHorario &&
+                        (now - new Date(linha.ultimoHorario).getTime()) < (config.coletor.intervaloSegundos || 60) * 3000;
+                    if (indisponivelZb) {
+                        linha.agenteOk = false;
+                        // so rebaixa se o proprio ping tambem falhou/esta velho
+                        if (!pingFrescoOk || linha.estado !== 'ACESSIVEL') {
                             if (linha.estado === 'ACESSIVEL') linha.estado = 'SEM_RESPOSTA';
                         }
-                        if (z.latenciaMs != null) linha.latenciaMediaMs = z.latenciaMs;
+                    } else {
+                        linha.agenteOk = true;
+                        if (z.disponivel === true && linha.estado !== 'ACESSIVEL' && !pingFrescoOk) {
+                            linha.estado = 'ACESSIVEL';
+                        }
                     }
+                    if (z.latenciaMs != null && pingFrescoOk) linha.latenciaMediaMs = z.latenciaMs;
                 } else {
                     // Host nao esta mais no Zabbix ou nao retornou dados
                     if (linha.local) continue; // host local: nunca marcar SEM_DADOS por causa do Zabbix

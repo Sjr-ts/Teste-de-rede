@@ -52,6 +52,47 @@ O instalador **detecta sozinho** o IP da interface LAN real (ignora vEthernet/WS
 
 Quando o IP do PC muda (DHCP), o script `inv.meta` retorna um metadata novo (`inventario-ti <novo-ip>`). Isso faz o agente **re-registrar sozinho no Zabbix em menos de 20 segundos, sem reiniciar**. O servidor Zabbix atualiza a interface do host e o Inventário TI lê esse IP de volta para o cadastro (job a cada 5 min). O monitoramento continua sem perder histórico.
 
+## Auto-heal (sobrevive a reboot, queda de rede e mudanca de IP)
+
+O instalador cria 2 tarefas agendadas no PC:
+- **ZabbixAgent-AutoHeal-Boot** — roda no boot do Windows
+- **ZabbixAgent-AutoHeal-5min** — roda a cada 5 minutos
+
+O `auto-heal.ps1` garante automaticamente que:
+- O serviço **Zabbix Agent 2 está rodando** (reinicia se parou)
+- O **metadata contém o IP atual** do PC (sobrevive a DHCP)
+- O conf aponta para o **servidor certo** (se o IP do servidor mudou, corrige)
+- Remove `HostMetadata` estático e `PidFile` inválido se aparecerem
+
+Tudo é logado em `%TEMP%\zabbix-selfheal.log`. Ou seja: **o PC se re-registra sozinho no Zabbix** após qualquer reboot, queda de rede ou troca de IP — sem ninguém mexer.
+
+## Situacao atual do TERM-COMPRAS10 (diagnostico 23/11/2026)
+
+| Verificacao | Resultado |
+|-------------|-----------|
+| Ping (ICMP) | ✅ OK (RTT 0.7ms) |
+| Porta 10050 (agente Zabbix) | ❌ FECHADA |
+| Agente no Zabbix (`available`) | ❌ 0 = indisponível |
+| Problema ativo no Zabbix | "Zabbix agent is not available" desde 11/11 |
+
+**Ou seja: o PC responde ping, mas o AGENTE não está rodando nele.** O instalador está pronto e correto — falta **executá-lo no próprio PC .108** (acesso remoto foi negado sem credenciais admin).
+
+### Como instalar no .108
+
+**Opção A (recomendada — você tem a senha de admin do .108):**
+```powershell
+.\instalar-remoto.ps1 -Computador 192.168.0.108 -Usuario ADMIN -Senha "SENHA_DO_ADMIN"
+```
+Ele copia a pasta pro PC e dispara o instalador silenciosamente.
+
+**Opção B (sem senha):** copie a pasta `execução bat` inteira pro PC .108 (pen drive/rede) e rode `instalar-tudo.bat` como Administrador **naquele PC**.
+
+Depois confirme com:
+```powershell
+.\verificar-agente.ps1 -Computador 192.168.0.108
+```
+O resultado deve virar `>>> AGENTE CONECTADO — OK!` e o Zabbix `available: 1`.
+
 ## Credenciais (já embutidas no instalador)
 
 | Sistema | Endereço | Usuário | Senha |
