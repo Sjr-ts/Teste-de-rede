@@ -2,86 +2,116 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Inventário TI — Acesso Automático</title>
+<title>Inventário TI — Instalação + Acesso Automático</title>
 <style>
-  body { font-family: 'Segoe UI', sans-serif; background:#0d1117; color:#e6edf3; display:flex;
-         align-items:center; justify-content:center; height:100vh; margin:0; }
-  .box { background:#161b22; border:1px solid #30363d; border-radius:12px; padding:32px; text-align:center; max-width:520px; }
-  h2 { color:#58a6ff; margin-top:0; }
-  .spin { color:#8b949e; font-size:14px; }
-  .ok { color:#3fb950; }
-  .err { color:#f85149; }
-  code { background:#21262d; padding:2px 6px; border-radius:4px; color:#79c0ff; }
+  body { font-family:'Segoe UI',sans-serif; background:#0d1117; color:#e6edf3;
+         display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
+  .box { background:#161b22; border:1px solid #30363d; border-radius:12px;
+         padding:28px; width:560px; max-width:95vw; }
+  h2 { color:#58a6ff; margin:0 0 8px; }
+  .sub { color:#8b949e; font-size:12px; margin-bottom:16px; }
+  #status { font-size:14px; padding:10px 0; }
+  #detalhes { font-size:11px; color:#8b949e; text-align:left;
+              max-height:200px; overflow:auto; border-top:1px solid #30363d; padding-top:10px; }
+  .ok { color:#3fb950; } .err { color:#f85149; } .warn { color:#d29922; }
+  code { background:#21262d; padding:1px 5px; border-radius:4px; color:#79c0ff; }
+  button { margin-top:14px; padding:8px 14px; background:#238636; color:#fff;
+           border:0; border-radius:6px; cursor:pointer; font-size:13px; }
 </style>
 </head>
 <body>
 <div class="box">
-  <h2>⚙️ Inventário TI — Acesso Automático</h2>
-  <p class="spin" id="status">Conectando e abrindo os painéis com login automático...</p>
-  <div id="detalhes" style="font-size:12px;color:#8b949e;text-align:left;margin-top:16px;"></div>
+  <h2>⚙️ Inventário TI — Instalação + Acesso Automático</h2>
+  <div class="sub">Senhas já embutidas. Descobre o servidor na rede e configura tudo.</div>
+  <div id="status" class="warn">Procurando o servidor na rede...</div>
+  <div id="detalhes"></div>
 </div>
 
 <script>
-// ============================================================
-//  LOGIN AUTOMÁTICO — credenciais já embutidas (não digita nada)
-//  Descobre o IP do servidor sozinho e abre os 2 painéis logados.
-// ============================================================
-const CREDenciais = { inventario: { u: 'admin', s: 'admin123' }, zabbix: { u: 'Admin', s: 'Monitor2026!' } };
-const IPs = [location.hostname, '127.0.0.1', '192.168.0.167', '192.168.0.108'];
+// ============================================================================
+//  CREDENCIAIS EMBUTIDAS (nao digita nada)
+// ============================================================================
+const CRED = {
+  inv:  { u: 'admin', s: 'admin123' },
+  zbx:  { u: 'Admin', s: 'Monitor2026!' }
+};
+// IPs candidatos — inclui o nome do servidor e faixas comuns
+const HOSTS = [
+  location.hostname, '127.0.0.1', 'localhost',
+  'servidor-monitoramento', 'inventario-ti',
+  ...Array.from({length: 30}, (_, i) => '192.168.0.' + (i + 100))  // .100-.129
+];
+const PORTA_INV = 5903, PORTA_ZBX = 8081;
 const det = document.getElementById('detalhes');
 const status = document.getElementById('status');
-function log(m) { det.innerHTML += '› ' + m + '<br>'; }
-
-async function tentar(base) {
-  // health (público) para achar o servidor
+function log(m, cls) {
+  det.innerHTML += '› <span class="' + (cls||'') + '">' + m + '</span><br>';
+  det.scrollTop = det.scrollHeight;
+}
+async function testar(ip, porta) {
   try {
-    const h = await fetch(base + '/actuator/health', { signal: AbortSignal.timeout(2000) });
-    if (!h.ok) return null;
-    log('Servidor encontrado: <code>' + base + '</code>');
-    return base;
-  } catch (e) { return null; }
+    const r = await fetch('http://' + ip + ':' + porta + '/actuator/health',
+      { signal: AbortSignal.timeout(500) });
+    if (r.ok) return true;
+  } catch (e) {}
+  return false;
 }
-
-async function loginInventario(base) {
-  const r = await fetch(base + '/api/auth/login', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: CREDenciais.inventario.u, senha: CREDenciais.inventario.s })
-  });
-  return r.ok;
+async function acharServidor() {
+  // tenta em paralelo, comum em redes DHCP
+  const unicos = [...new Set(HOSTS.filter(Boolean))];
+  const testes = unicos.map(async ip => (await testar(ip, PORTA_INV)) ? ip : null);
+  const resultados = await Promise.all(testes);
+  const encontrados = resultados.filter(Boolean);
+  for (const ip of encontrados) log('Servidor Inventário encontrado: <code>' + ip + '</code>', 'ok');
+  return encontrados[0] || null;
 }
-
 (async () => {
-  let base = null;
-  for (const ip of IPs) {
-    if (!ip || ip === 'null') continue;
-    base = await tentar('http://' + ip + ':5903');
-    if (base) break;
-  }
-  if (!base) {
+  const ip = await acharServidor();
+  if (!ip) {
     status.className = 'err';
-    status.textContent = 'Não foi possível encontrar o servidor. Verifique se ele está ligado.';
+    status.textContent = 'Servidor não encontrado na rede. Verifique se ele está ligado e na mesma rede.';
+    log('Dica: o instalador do agente funciona mesmo sem o painel — rode o INSTALAR-1-CLIQUE.vbs.', 'warn');
     return;
   }
-  const invOk = await loginInventario(base);
-  log('Login Inventário TI: ' + (invOk ? '<span class="ok">OK</span>' : '<span class="err">falhou</span>'));
-  // Abre o painel do inventário e o Zabbix (Zabbix mantém a sessão via cookie próprio)
-  const host = new URL(base).hostname;
-  window.open(base + '/index.html', '_blank');
-  log('Painel Inventário TI aberto.');
-  // Zabbix: tenta login via API para validar credenciais embutidas
-  try {
-    const zr = await fetch('http://' + host + ':8081/api_jsonrpc.php', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', method: 'user.login',
-        params: { username: CREDenciais.zabbix.u, password: CREDenciais.zabbix.s }, id: 1 })
-    });
-    const zj = await zr.json();
-    log('Login Zabbix: ' + (zj.result ? '<span class="ok">OK</span>' : '<span class="err">falhou</span>'));
-    window.open('http://' + host + ':8081/', '_blank');
-    log('Painel Zabbix aberto.');
-  } catch (e) { log('Zabbix: ' + e.message); }
+  const base = 'http://' + ip + ':' + PORTA_INV;
   status.className = 'ok';
-  status.textContent = '✅ Tudo pronto! Os painéis foram abertos-logados.';
+  status.textContent = '✅ Servidor encontrado em ' + ip;
+
+  // 1) login automático no inventário
+  try {
+    const r = await fetch(base + '/api/auth/login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ username: CRED.inv.u, senha: CRED.inv.s })
+    });
+    log('Login Inventário TI: ' + (r.ok ? '<span class="ok">OK</span>' : '<span class="err">falhou ' + r.status + '</span>'));
+  } catch (e) { log('Login Inventário: ' + e.message, 'err'); }
+
+  // 2) Zabbix (pode estar em outra porta/IP)
+  let ipZbx = null;
+  for (const h of [ip, '127.0.0.1', location.hostname]) {
+    if (h && await testar(h, PORTA_ZBX)) { ipZbx = h; break; }
+  }
+  if (ipZbx) {
+    try {
+      const zr = await fetch('http://' + ipZbx + ':' + PORTA_ZBX + '/api_jsonrpc.php', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({jsonrpc:'2.0', method:'user.login',
+          params:{username:CRED.zbx.u, password:CRED.zbx.s}, id:1})
+      });
+      const zj = await zr.json();
+      log('Login Zabbix: ' + (zj.result ? '<span class="ok">OK</span>' : '<span class="err">falhou</span>'));
+    } catch (e) { log('Zabbix: ' + e.message, 'err'); }
+  } else {
+    log('Zabbix (porta ' + PORTA_ZBX + ') não encontrado — verifique o Docker.', 'warn');
+  }
+
+  // 3) abre os painéis
+  window.open(base + '/index.html', '_blank');
+  log('Painel Inventário TI aberto.', 'ok');
+  if (ipZbx) {
+    window.open('http://' + ipZbx + ':' + PORTA_ZBX + '/', '_blank');
+    log('Painel Zabbix aberto.', 'ok');
+  }
 })();
 </script>
 </body>
