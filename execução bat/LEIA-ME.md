@@ -5,22 +5,39 @@ Esta pasta contém o instalador único para os computadores Windows monitorados.
 ## 📌 ARQUIVO ÚNICO — é só dar 2 cliques
 
 **`INSTALAR.cmd`** — duplo-clique nele e **não digita nada**:
-1. Auto-eleva a Administrador (CMD + PowerShell, sem VBS — se sua conta já for admin, só aparece o UAC "Sim")
-2. Baixa o MSI do Zabbix da internet e instala o agente
-3. Configura IP adaptativo + auto-heal (sobrevive a reboot/DHCP)
-4. Cria os atalhos na Área de Trabalho
-5. Descobre o servidor na rede (127.0.0.1 + faixa 192.168.0.100-129)
-6. Abre o Inventário TI e o Zabbix **já logados** (senha embutida no `acesso-automatico.html`)
 
-> **Por que CMD e não VBS?** O VBScript falhava com erros de compilação por aspas/encoding (`800A0405`, `800A01B6`, `800A0409`). O CMD com PowerShell embutido em base64 elimina esses problemas — validado com `cmd /c` (sem erros).
+1. **Auto-eleva a Administrador** (detecção confiável via `WindowsPrincipal` — sem `net session`, que é instável) → aparece o UAC "Sim"
+2. **`INSTALAR.ps1`** assume o controle: cria o log **`instalar.log`** nesta pasta (nada falha em silêncio)
+3. Baixa o MSI oficial do Zabbix da CDN e instala o agente (`SERVER=` do servidor detectado)
+4. Grava a configuração + script de IP adaptativo e inicia o serviço
+5. Cria atalhos na Área de Trabalho e tarefas agendadas (auto-heal boot + 5min)
+6. Descobre o servidor na rede (127.0.0.1 + faixa 192.168.0.100-129)
+7. Abre o Inventário TI **já logado** no navegador
+
+> **Arquitetura:** `INSTALAR.cmd` (lançador fino) → `INSTALAR.ps1` (orquestrador com log + auto-elevação) → `instalar-tudo.bat /silent` (instala o agente). O VBS foi **abandonado** (erros de compilação `800A0405`/`800A01B6`).
 
 Tudo que é preciso estar na pasta (ela inteira):
 
 | Arquivo | O que faz |
 |---------|-----------|
 | **`INSTALAR.cmd`** | **← duplo-clique aqui, não digita nada** |
-| `instalar-tudo.bat` | Instalador principal (chamado pelo CMD) |
-| `auto-heal.ps1` | Mantém agente vivo (boot + 5min) |
+| `INSTALAR.ps1` | Orquestrador: auto-elevação, log `instalar.log`, descobre servidor, abre painel |
+| `instalar-tudo.bat` | Instalador do agente (MSI + config + serviço) |
+| `gravar-config.ps1` | Grava `zabbix_agent2.conf` + script `inv-meta.ps1` (IP adaptativo) |
+| `detect-server.ps1` | Detecta o IP do servidor (server-ip.txt → scan da rede → 127.0.0.1) |
+| `auto-heal.ps1` | Mantém agente vivo (boot + a cada 5 min) |
+| `CRIAR-ATALHOS.ps1` | Recria os atalhos na Área de Trabalho |
+| `instalar-silencioso.vbs` | Janela oculta para a tarefa agendada no boot/logon |
+| `instalar-remoto.ps1` | Instala em outro PC da rede (ex.: 192.168.0.108) |
+| `verificar-agente.ps1` | Confirma se o agente de outro PC está conectado |
+
+## Logs (onde ver o que aconteceu)
+
+| Log | O que registra |
+|-----|----------------|
+| `instalar.log` (nesta pasta) | Tudo que o `INSTALAR.ps1` fez: elevação, servidor encontrado, painel aberto |
+| `%TEMP%\zabbix-install.log` | Cada passo do `instalar-tudo.bat` (admin, MSI, config, serviço) |
+| `%TEMP%\zabbix_msi.log` | Log verboso do Windows Installer (diagnóstico de falha de MSI) |
 
 ## Como abrir o painel (SEM digitar IP — o servidor muda por DHCP)
 
@@ -29,37 +46,44 @@ Na Área de Trabalho foram criados **2 atalhos**:
 - **INVENTARIO TI - Abrir Painel** → abre `http://<IP-ATUAL>:5903`
 - **ZABBIX - Abrir Painel** → abre `http://<IP-ATUAL>:8081`
 
-Eles detectam o IP do servidor automaticamente (testam `127.0.0.1` e a interface LAN real, ignorando WSL/virtual). **Não use mais os IPs antigos `192.168.0.102` ou `192.168.0.186`** — eles mudaram e dão `ERR_CONNECTION_TIMED_OUT`. O IP atual desta máquina é detectado no boot.
+Eles detectam o IP do servidor automaticamente (testam `127.0.0.1` e a faixa `192.168.0.100-129`, ignorando WSL/virtual). **Não use IPs antigos fixos** (`192.168.0.102`, `.186`) — mudaram e dão `ERR_CONNECTION_TIMED_OUT`.
 
 Se precisar recriar os atalhos: execute `CRIAR-ATALHOS.ps1` (botão direito → Executar com PowerShell).
 
 ## Como usar (usuário final, sem conhecimento técnico)
 
 1. Copie **esta pasta inteira** para o computador.
-2. Clique com o **botão direito** em `instalar-tudo.bat`.
-3. Escolha **"Executar como administrador"**.
+2. Clique em **`INSTALAR.cmd`** (duplo clique).
+3. Clique **"Sim"** no UAC.
 4. Aguarde (~30 segundos). O painel do Inventário TI abrirá sozinho no navegador.
 
 **Não é preciso:** baixar nada, editar arquivos, saber senhas ou configurar qualquer coisa. O instalador baixa o MSI oficial do Zabbix (17,6 MB) da CDN se ele ainda não estiver na pasta.
 
 ## IP do servidor (detecção automática)
 
-O instalador **detecta sozinho** o IP da interface LAN real (ignora vEthernet/WSL/Hyper-V/APIPA), então funciona mesmo se o servidor trocou de IP por DHCP. Se quiser fixar manualmente, crie um arquivo `server-ip.txt` ao lado do `.bat` contendo só o IP (ex.: `192.168.0.102`).
+O instalador **detecta sozinho** o IP do servidor:
+
+1. `server-ip.txt` (se existir ao lado do `.bat` — fixa o IP manualmente)
+2. Scan da rede: `127.0.0.1` + faixa `192.168.0.100-129` na porta `5903`
+3. Fallback: `127.0.0.1`
+
+Esse IP é passado ao MSI como **`SERVER=`** (exigido pelo `LaunchCondition` do instalador do Zabbix — sem ele o MSI falha com código **1603**) e gravado em `Server=`/`ServerActive=` do `zabbix_agent2.conf`.
 
 ## O que o instalador faz automaticamente
 
-- Verifica privilégios de administrador.
+- Verifica privilégios de administrador (confiável, via `WindowsPrincipal`).
 - Baixa o MSI oficial do Zabbix Agent 2 7.0.31 se necessário (CDN: `cdn.zabbix.com`).
-- Instala/atualiza o agente apontando para o servidor `192.168.0.102`.
+- Instala o agente com `SERVER=<IP detectado>` (instalação silenciosa `/qn`).
 - Grava uma configuração **válida para o Agent 2 no Windows** (sem `PidFile`, que é inválido e impede o serviço de subir):
-  - `Server` / `ServerActive` = IP detectado automaticamente
+  - `Server` / `ServerActive` = IP do servidor detectado
   - `Hostname` = nome do computador (automático)
   - `HostMetadataItem=inv.meta` + `UnsafeUserParameters=1` (IP adaptativo)
   - `UserParameter=inv.meta` aponta para um script PowerShell que detecta o **IP real** da interface (ignora IP virtual/APIPA)
   - **Não** grava `HostMetadata` estático (isso anularia o IP adaptativo)
 - Cria tarefas agendadas para execução **silenciosa no boot e no logon** (`ZabbixAgent-SilentInstall` / `ZabbixAgent-SilentLogon`).
+- Cria o **auto-heal** (`ZabbixAgent-AutoHeal-Boot` + `ZabbixAgent-AutoHeal-5min`).
 - Inicia o serviço `Zabbix Agent 2`.
-- Registra tudo em `%TEMP%\zabbix-install.log`.
+- Registra tudo em `%TEMP%\zabbix-install.log` e `instalar.log`.
 
 ## IP adaptativo (o que o usuário não precisa saber)
 
@@ -68,10 +92,12 @@ Quando o IP do PC muda (DHCP), o script `inv.meta` retorna um metadata novo (`in
 ## Auto-heal (sobrevive a reboot, queda de rede e mudanca de IP)
 
 O instalador cria 2 tarefas agendadas no PC:
+
 - **ZabbixAgent-AutoHeal-Boot** — roda no boot do Windows
 - **ZabbixAgent-AutoHeal-5min** — roda a cada 5 minutos
 
 O `auto-heal.ps1` garante automaticamente que:
+
 - O serviço **Zabbix Agent 2 está rodando** (reinicia se parou)
 - O **metadata contém o IP atual** do PC (sobrevive a DHCP)
 - O conf aponta para o **servidor certo** (se o IP do servidor mudou, corrige)
@@ -98,7 +124,7 @@ Tudo é logado em `%TEMP%\zabbix-selfheal.log`. Ou seja: **o PC se re-registra s
 ```
 Ele copia a pasta pro PC e dispara o instalador silenciosamente.
 
-**Opção B (sem senha):** copie a pasta `execução bat` inteira pro PC .108 (pen drive/rede) e rode `instalar-tudo.bat` como Administrador **naquele PC**.
+**Opção B (sem senha):** copie a pasta `execução bat` inteira pro PC .108 (pen drive/rede) e rode **`INSTALAR.cmd`** como Administrador **naquele PC**.
 
 Depois confirme com:
 ```powershell
@@ -110,8 +136,8 @@ O resultado deve virar `>>> AGENTE CONECTADO — OK!` e o Zabbix `available: 1`.
 
 | Sistema | Endereço | Usuário | Senha |
 |---------|----------|---------|-------|
-| Inventário TI | `http://192.168.0.102:5903` | `admin` | `admin123` |
-| Zabbix | `http://192.168.0.102:8081` | `Admin` | `Monitor2026!` |
+| Inventário TI | `http://<IP>:5903` | `admin` | `admin123` |
+| Zabbix | `http://<IP>:8081` | `Admin` | `Monitor2026!` |
 
 ## Execução silenciosa
 
@@ -126,4 +152,5 @@ instalar-tudo.bat /silent
 ```powershell
 schtasks /query /tn "ZabbixAgent-SilentInstall"
 type "%TEMP%\zabbix-install.log"
+type "instalar.log"
 ```

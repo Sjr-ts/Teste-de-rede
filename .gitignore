@@ -4,6 +4,7 @@ node_modules/
 # ===================== INSTALADORES / BINARIOS PESADOS =====================
 # Baixar direto do site do Zabbix (17 MB)
 zabbix-deploy/*.msi
+*.msi
 
 # ===================== SEGREDOS / CREDENCIAIS =====================
 # Chave PSK do agente Zabbix (NAO versionar)
