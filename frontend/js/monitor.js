@@ -2731,7 +2731,7 @@ async function monVerDetalhe(ip) {
         if (mon && mon.estadoAtual) {
             const st = mon.estadoAtual;
             html += '<div class="glass-panel" style="margin-bottom:12px;"><div class="glass-panel-header"><h3><i class="fas fa-satellite-dish"></i> Coletor Proprio (ICMP)</h3></div><div style="padding:14px;">';
-            html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">';
+            html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;">';
             html += monDetailItem('Estado', st.ultimoResultado === 'ACESSIVEL' ? '<span class="badge badge-ativo">Acessivel</span>' : '<span class="badge badge-cancelada">' + esc(st.ultimoResultado) + '</span>');
             html += monDetailItem('Latencia', st.latenciaMediaMs != null ? st.latenciaMediaMs + 'ms' : 'Indisponivel');
             html += monDetailItem('Falhas consecutivas', st.falhasConsecutivas || 0);
@@ -2762,7 +2762,7 @@ async function monVerDetalhe(ip) {
             const rede = (ml.rede || [])[0] || {};
             const info = ml.info || {};
             html += '<div class="glass-panel" style="margin-bottom:12px;border-left:3px solid var(--green);"><div class="glass-panel-header"><h3><i class="fas fa-microchip"></i> Metricas REAIS deste PC (' + esc(ml.hostname || '?') + ')</h3></div><div style="padding:14px;">';
-            html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;">';
+            html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;">';
             html += monDetailItem('CPU', cpu.usoPct != null ? '<span style="color:var(--cyan);">' + cpu.usoPct + '%</span> <span style="font-size:10px;color:var(--text-muted);">(' + cpu.nucleos + ' nucleos)</span>' : 'Aguardando 2a amostra');
             // GPU
             if (gpuInfo.gpus && gpuInfo.gpus.length) {
@@ -2791,7 +2791,7 @@ async function monVerDetalhe(ip) {
         if (zbx && zbx.encontrado) {
             html += '<div class="glass-panel" style="margin-bottom:12px;"><div class="glass-panel-header"><h3><i class="fas fa-server"></i> Zabbix (Agente)</h3></div><div style="padding:14px;">';
             const h = zbx.host;
-            html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">';
+            html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;">';
             html += monDetailItem('Hostname Zabbix', esc(h.hostname));
             html += monDetailItem('Disponivel', h.disponivel === null ? 'Desconhecido' : (h.disponivel ? '<span class="badge badge-ativo">Sim</span>' : '<span class="badge badge-cancelada">Nao</span>'));
             if (zbx.desativado) {
@@ -2903,9 +2903,11 @@ async function monVerDetalhe(ip) {
 }
 
 function monDetailItem(label, valor) {
-    return '<div style="padding:8px;background:rgba(255,255,255,0.02);border-radius:8px;">' +
-        '<div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">' + label + '</div>' +
-        '<div style="font-size:13px;color:var(--text-primary);font-weight:600;margin-top:2px;">' + valor + '</div>' +
+    // Cartao grande e legivel: o valor e o dado principal, nao um rodape.
+    return '<div style="padding:13px 16px;background:linear-gradient(145deg,rgba(255,255,255,0.06),rgba(255,255,255,0.015));' +
+        'border:1px solid var(--border);border-radius:12px;min-width:175px;">' +
+        '<div style="font-size:10px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.8px;font-weight:700;">' + label + '</div>' +
+        '<div style="font-size:23px;line-height:1.2;color:var(--text-primary);font-weight:800;margin-top:6px;">' + valor + '</div>' +
         '</div>';
 }
 
@@ -3382,578 +3384,133 @@ function monGerarRelatorioPC() {
     return html;
 }
 
-function monAbrirRelatorioPC() {
-    const body = monGerarRelatorioPC();
-    const w = window.open('', '_blank');
-    if (!w) { alert('Pop-up bloqueado. Permita pop-ups para este site.'); return; }
-    const doc = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">' +
-        '<title>Relatorio — PC Local</title>' +
-        '<style>body{margin:0;padding:24px;background:#0f1117;color:#e6e6e6;font-family:Segoe UI,Arial,sans-serif;line-height:1.5;}' +
-        'h1{font-size:22px;margin:0 0 4px;color:#2962FF;} h2{font-size:15px;margin:20px 0 8px;color:#00d4ff;border-bottom:1px solid #333;padding-bottom:4px;}' +
-        '.meta{color:#888;font-size:12px;margin-bottom:16px;} .chart{background:rgba(255,255,255,0.03);border-radius:8px;padding:12px;margin:8px 0;overflow:auto;}' +
-        'table.tbl{width:100%;border-collapse:collapse;font-size:12px;margin:8px 0;} table.tbl th,table.tbl td{padding:6px 8px;border:1px solid #333;} table.tbl th{background:#1a1a2e;color:#aaa;text-align:left;} ' +
-        'button{background:#2962FF;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;margin-right:8px;margin-top:8px;} section{margin-bottom:12px;}' +
-        '</style></head><body><div style="max-width:1100px;margin:0 auto;">' +
-        '<h1>Relatorio Detalhado — PC Local</h1>' +
-        '<p class="meta">Inventario TI — Monitoramento | Gerado em ' + new Date().toLocaleString('pt-BR') + '</p>' +
-        '<button onclick="window.print()">Imprimir / Salvar PDF</button>' +
-        '<button onclick="window.close()">Fechar</button>' +
-        body +
-        '</div></body></html>';
-    w.document.write(doc);
-    w.document.close();
-}
 
 function monAbrirRelatorioHost(ip) {
     Promise.all([
         fetch('/api/monitor/host/' + encodeURIComponent(ip)).then(r => r.json()).catch(() => null),
         fetch('/api/zabbix/host/' + encodeURIComponent(ip)).then(r => r.json()).catch(() => null)
     ]).then(function(res) {
-        const mon = res[0], zbx = res[1];
-        let body = '';
-        // Estado
-        body += '<section><h2>Coletor Proprio (ICMP)</h2>';
-        if (mon && mon.estadoAtual) {
-            const st = mon.estadoAtual;
-            body += '<table class="tbl"><tr><td>Estado</td><td>' + esc(st.ultimoResultado) + '</td></tr>';
-            body += '<tr><td>Latencia</td><td>' + (st.latenciaMediaMs != null ? st.latenciaMediaMs + 'ms' : 'Indisponivel') + '</td></tr>';
-            body += '<tr><td>Falhas consecutivas</td><td>' + (st.falhasConsecutivas || 0) + '</td></tr>';
-            body += '<tr><td>Desde</td><td>' + (st.downSince ? new Date(st.downSince).toLocaleString('pt-BR') : '—') + '</td></tr>';
-            body += '<tr><td>Ultima coleta</td><td>' + (st.ultimoHorario ? new Date(st.ultimoHorario).toLocaleString('pt-BR') : '—') + '</td></tr></table>';
-            if (st.janelaRecente && st.janelaRecente.length) {
-                body += '<h3>Janela recente (' + st.janelaRecente.length + ')</h3><table class="tbl"><thead><tr><th>Horario</th><th>OK</th><th>Latencia</th></tr></thead><tbody>';
-                for (const j of st.janelaRecente.slice().reverse()) {
-                    body += '<tr><td>' + (j.timestamp ? new Date(j.timestamp).toLocaleTimeString('pt-BR') : '?') + '</td><td>' + (j.ok ? '✓' : '✗') + '</td><td>' + (j.latenciaMediaMs != null ? j.latenciaMediaMs + 'ms' : '—') + '</td></tr>';
-                }
-                body += '</tbody></table>';
-            }
-        } else {
-            body += '<p>Sem dados do coletor.</p>';
-        }
-        if (mon && mon.serieDiaria && mon.serieDiaria.length) {
-            body += '<h3>Serie diaria (7 dias)</h3><table class="tbl"><thead><tr><th>Dia</th><th>Medicoes</th><th>Perda</th><th>Lat Media</th><th>P95</th></tr></thead><tbody>';
-            for (const s of mon.serieDiaria) {
-                body += '<tr><td>' + s.dia + '</td><td>' + s.total + '</td><td>' + s.perdaPct + '%</td><td>' + (s.latenciaMediaMs != null ? s.latenciaMediaMs + 'ms' : '—') + '</td><td>' + (s.latenciaP95Ms != null ? s.latenciaP95Ms + 'ms' : '—') + '</td></tr>';
-            }
-            body += '</tbody></table>';
-        }
-        body += '</section>';
+        const mon = res[0] || {}, zbx = res[1] || {};
+        const st = mon.estadoAtual || {};
+        const ml = mon.metricasLocais || null;
+        const cpu = (ml && ml.cpu) || {}, mem = (ml && ml.memoria) || {};
+        const gpu = (ml && ml.gpu && ml.gpu.gpus && ml.gpu.gpus[0]) || null;
+        const dv = (ml && ml.disco && ml.disco.discos && ml.disco.discos[0]) || null;
+        const up = (ml && ml.uptime) || {}, rede = (ml && ml.rede && ml.rede[0]) || {};
+        const info = (ml && ml.info) || {};
+        const alertas = mon.alertas || [], indisp = mon.indisponiveis || [];
+        const serie = mon.serieDiaria || [], janela = st.janelaRecente || [];
+        const ok = st.ultimoResultado === 'ACESSIVEL';
+        const pct = v => (v != null && isFinite(v)) ? Math.round(v) + '%' : '—';
+        const esc2 = s => String(s == null ? '—' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+        const kpi = (cor, label, valor, sub) =>
+            '<div class="kpi" style="border-left-color:' + cor + '"><span class="kl">' + esc2(label) + '</span>' +
+            '<b style="color:' + cor + '">' + esc2(valor) + '</b><span class="ks">' + esc2(sub) + '</span></div>';
+        const linha = (a, b) => '<div class="ln"><span>' + esc2(a) + '</span><b>' + b + '</b></div>';
 
-        // Zabbix
-        body += '<section><h2>Zabbix</h2>';
-        if (zbx && zbx.encontrado) {
-            const h = zbx.host;
-            body += '<table class="tbl"><tr><td>Hostname</td><td>' + esc(h.hostname) + '</td></tr>';
-            body += '<tr><td>Disponivel</td><td>' + (h.disponivel === null ? 'Desconhecido' : (h.disponivel ? 'Sim' : 'Nao')) + '</td></tr></table>';
-            if (zbx.triggers && zbx.triggers.length) {
-                body += '<h3>Triggers (' + zbx.triggers.length + ')</h3><table class="tbl"><thead><tr><th>Estado</th><th>Descricao</th></tr></thead><tbody>';
-                for (const t of zbx.triggers) {
-                    body += '<tr><td>' + (t.estado === '1' ? 'PROBLEM' : 'OK') + '</td><td>' + esc(t.descricao) + '</td></tr>';
-                }
-                body += '</tbody></table>';
-            }
-        } else {
-            body += '<p>' + esc((zbx && (zbx.nota || zbx.erro)) || 'Host nao encontrado no Zabbix.') + '</p>';
-        }
-        body += '</section>';
+        let kpis = kpi(ok ? '#00e676' : '#ff4757', 'Estado', ok ? 'ACESSÍVEL' : esc2(st.ultimoResultado || 'SEM DADOS'), 'Coletor ICMP') +
+            kpi('#00e5c7', 'Latência', st.latenciaMediaMs != null ? Math.round(st.latenciaMediaMs) + ' ms' : '—', 'Última coleta') +
+            kpi('#b24dff', 'CPU', pct(cpu.usoPct), (cpu.nucleos || '?') + ' núcleos · real') +
+            kpi('#ff9f43', 'RAM', pct(mem.usoPct), (mem.usadoGb || '?') + '/' + (mem.totalGb || '?') + ' GB');
 
-        // Metricas locais (se for o PC local)
-        if (mon && mon.metricasLocais) {
-            const ml = mon.metricasLocais;
-            const cpu = ml.cpu || {}; const mem = ml.memoria || {}; const up = ml.uptime || {};
-            body += '<section><h2>Metricas REAIS deste PC</h2><table class="tbl">';
-            body += '<tr><td>CPU</td><td>' + (cpu.usoPct != null ? cpu.usoPct + '% (' + cpu.nucleos + ' nucleos)' : 'Aguardando') + '</td></tr>';
-            body += '<tr><td>RAM</td><td>' + (mem.usoPct != null ? mem.usoPct + '% (' + mem.usadoGb + '/' + mem.totalGb + ' GB)' : '?') + '</td></tr>';
-            body += '<tr><td>Uptime</td><td>' + (up.uptimeHumano || '?') + '</td></tr>';
-            body += '<tr><td>IP local</td><td>' + esc((ml.rede && ml.rede[0] && ml.rede[0].ip) || '?') + '</td></tr>';
-            body += '</table></section>';
+        let sistema = '<div class="grid">' +
+            linha('Hostname', esc2((ml && ml.hostname) || ip)) +
+            linha('GPU', gpu ? esc2(gpu.nome || 'GPU') + ' · <span style="color:#00e5c7">' + pct(gpu.usoPct) + '</span>' : 'Indisponível') +
+            linha('Disco', dv ? esc2(dv.letra) + ' · <span style="color:#00e5c7">' + pct(dv.usoPct) + '</span> (' + esc2(dv.livreGb) + ' GB livres)' : '—') +
+            linha('Uptime', esc2(up.uptimeHumano || '—')) +
+            linha('Boot', esc2(up.bootTime ? new Date(up.bootTime).toLocaleString('pt-BR') : '—')) +
+            linha('Rede', esc2(rede.nome || '—') + ' · <span style="color:#00e5c7">' + esc2(rede.ip || ip) + '</span>') +
+            linha('Kernel', esc2(info.release || '—')) + '</div>';
+        if (!ml) sistema = '<p style="color:#8892a8">Métricas locais indisponíveis neste equipamento.</p>';
+
+        let timeline = '';
+        if (janela.length) {
+            timeline = '<div class="timeline">' + janela.slice().reverse().map(function(j) {
+                return '<span class="dot ' + (j.ok ? 'ok' : 'bad') + '" title="' + esc2(j.timestamp ? new Date(j.timestamp).toLocaleTimeString('pt-BR') : '') + ' · ' +
+                    (j.latenciaMediaMs != null ? Math.round(j.latenciaMediaMs) + 'ms' : '—') + '"></span>';
+            }).join('') + '</div><p class="leg">' + janela.filter(j => j.ok).length + '/' + janela.length + ' verificações OK nas últimas 20 coletas</p>';
         }
 
-        // Indisponiveis
-        body += '<section><h2>Dados Indisponiveis</h2>';
-        const indisps = (mon && mon.indisponiveis) || [];
-        if (indisps.length) {
-            body += '<ul>' + indisps.map(i => '<li>' + esc(i) + '</li>').join('') + '</ul>';
-        } else {
-            body += '<p>Nenhum.</p>';
+        let tabela = '';
+        if (serie.length) {
+            tabela = '<table class="tbl"><thead><tr><th>Dia</th><th>Coletas</th><th>Perda</th><th>Lat. média</th><th>P95</th><th>Disponibilidade</th></tr></thead><tbody>' +
+                serie.map(function(s) {
+                    const perda = parseFloat(s.perdaPct) || 0;
+                    const largura = Math.max(3, Math.round(100 - perda));
+                    return '<tr><td>' + esc2(s.dia) + '</td><td>' + esc2(s.total) + '</td><td>' + esc2(s.perdaPct) + '%</td><td>' +
+                        esc2(s.latenciaMediaMs != null ? Math.round(s.latenciaMediaMs) + 'ms' : '—') + '</td><td>' +
+                        esc2(s.latenciaP95Ms != null ? Math.round(s.latenciaP95Ms) + 'ms' : '—') + '</td>' +
+                        '<td><div class="bar"><i style="width:' + largura + '%"></i></div><small>' + largura + '%</small></td></tr>';
+                }).join('') + '</tbody></table>';
         }
-        body += '</section>';
 
-        // Alertas do host
-        const alertasHost = (mon && mon.alertas) || [];
-        body += '<section><h2>Alertas (' + alertasHost.length + ')</h2>';
-        if (alertasHost.length) {
-            body += '<table class="tbl"><thead><tr><th>Gravidade</th><th>Titulo</th><th>Confianca</th></tr></thead><tbody>';
-            for (const a of alertasHost) {
-                body += '<tr><td>' + esc(a.gravidade) + '</td><td>' + esc(a.titulo) + '</td><td>' + esc(a.confianca) + '</td></tr>';
+        let zabbixHtml = '';
+        if (zbx.encontrado) {
+            const h = zbx.host || {};
+            const disp = h.disponivel === null ? 'Desconhecido' : (h.disponivel ? '<span class="badge ok">Conectado</span>' : '<span class="badge bad">Sem agente</span>');
+            zabbixHtml = '<div class="grid">' + linha('Hostname Zabbix', esc2(h.hostname || h.host || '—')) + linha('Agente', disp) +
+                linha('Host ID', esc2(h.hostid || '—')) + linha('Triggers', String((zbx.triggers || []).length)) + '</div>';
+            if ((zbx.triggers || []).length) {
+                zabbixHtml += '<h3>Triggers</h3><table class="tbl"><thead><tr><th>Estado</th><th>Descrição</th></tr></thead><tbody>' +
+                    zbx.triggers.slice(0, 8).map(t => '<tr><td><span class="badge ' + (String(t.estado) === '1' ? 'bad' : 'ok') + '">' +
+                        (String(t.estado) === '1' ? 'PROBLEM' : 'OK') + '</span></td><td>' + esc2(t.descricao) + '</td></tr>').join('') + '</tbody></table>';
             }
-            body += '</tbody></table>';
         } else {
-            body += '<p>Nenhum alerta.</p>';
+            zabbixHtml = '<p style="color:#8892a8">' + esc2(zbx.nota || zbx.erro || 'Host não encontrado no Zabbix.') + '</p>';
         }
-        body += '</section>';
+
+        let alertasHtml = alertas.length
+            ? '<table class="tbl"><thead><tr><th>Gravidade</th><th>Título</th><th>Confiança</th></tr></thead><tbody>' +
+              alertas.map(a => '<tr><td>' + esc2(a.gravidade) + '</td><td>' + esc2(a.titulo) + '</td><td>' + esc2(a.confianca) + '</td></tr>').join('') + '</tbody></table>'
+            : '<p style="color:#00e676"><i class="fas fa-check-circle"></i> Nenhum alerta aberto.</p>';
+
+        const doc = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">' +
+            '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+            '<title>Relatório Detalhado — ' + esc2(ip) + '</title><style>' +
+            '* { box-sizing:border-box } body{margin:0;padding:32px 20px;background:#0b1020;color:#e4e8f1;font:14px/1.55 "Segoe UI",Arial,sans-serif;}' +
+            '.wrap{max-width:1120px;margin:0 auto} .hero{background:linear-gradient(135deg,#12233d,#0d1526);border:1px solid rgba(0,229,199,.2);border-radius:18px;padding:26px 30px;margin-bottom:18px;}' +
+            '.hero h1{margin:0;font-size:26px;color:#00e5c7;letter-spacing:-.5px} .hero p{margin:6px 0 0;color:#8892a8;font-size:13px}' +
+            '.tag{display:inline-block;padding:4px 10px;border-radius:20px;background:rgba(0,229,199,.12);color:#00e5c7;font-size:11px;font-weight:700;margin-right:6px;}' +
+            '.btn{background:#00b89e;color:#04140f;border:0;padding:9px 16px;border-radius:8px;font-weight:800;cursor:pointer;margin:14px 8px 0 0;font-size:12px;}' +
+            '.btn.ghost{background:rgba(255,255,255,.08);color:#e4e8f1}' +
+            '.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;}' +
+            '.kpi{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-left:5px solid #00e5c7;border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:3px;}' +
+            '.kpi .kl{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#8892a8;font-weight:700} .kpi b{font-size:30px;line-height:1.15} .kpi .ks{font-size:11px;color:#8892a8}' +
+            '.card{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:18px 20px;margin-top:16px;}' +
+            '.card h2{margin:0 0 12px;font-size:15px;color:#00d4ff;text-transform:uppercase;letter-spacing:.8px} .card h3{font-size:12px;color:#8892a8;margin:16px 0 6px;}' +
+            '.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px 24px} .ln{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12px;} .ln span{color:#8892a8} .ln b{color:#e4e8f1;text-align:right}' +
+            'table.tbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px} .tbl th,.tbl td{padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06);text-align:left} .tbl th{color:#8892a8;font-size:10px;text-transform:uppercase;letter-spacing:.6px}' +
+            '.timeline{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px} .dot{width:16px;height:16px;border-radius:4px} .dot.ok{background:#00e676} .dot.bad{background:#ff4757}' +
+            '.leg{color:#8892a8;font-size:11px;margin:8px 0 0} .bar{height:7px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden;width:100px;display:inline-block;vertical-align:middle} .bar i{display:block;height:100%;background:#00e676}' +
+            '.badge{padding:2px 8px;border-radius:20px;font-size:10px;font-weight:800} .badge.ok{background:rgba(0,230,118,.15);color:#00e676} .badge.bad{background:rgba(255,71,87,.15);color:#ff4757}' +
+            '@media print{body{background:#fff;color:#111}.hero,.card{background:#fff;border-color:#ccc}.btn{display:none}.kpi b{color:#111!important}.ln b,.tbl td{color:#111}}' +
+            '</style></head><body><div class="wrap">' +
+            '<div class="hero"><h1>Relatório Detalhado — ' + esc2(ip) + '</h1>' +
+            '<p><span class="tag">Inventário TI</span><span class="tag">Monitoramento</span>Gerado em ' + new Date().toLocaleString('pt-BR') + '</p>' +
+            '<button class="btn" onclick="window.print()">Imprimir / Salvar PDF</button><button class="btn ghost" onclick="window.close()">Fechar</button></div>' +
+            '<div class="kpis">' + kpis + '</div>' +
+            '<div class="card"><h2>Sistema — métricas reais</h2>' + sistema + '</div>' +
+            '<div class="card"><h2>Disponibilidade — últimas 20 verificações</h2>' + (timeline || '<p style="color:#8892a8">Sem janela recente.</p>') +
+            '<h3>Série diária (7 dias)</h3>' + (tabela || '<p style="color:#8892a8">Sem dados diários.</p>') + '</div>' +
+            '<div class="card"><h2>Zabbix (agente)</h2>' + zabbixHtml + '</div>' +
+            (indisp.length ? '<div class="card"><h2>Dados indisponíveis</h2><p style="color:#8892a8">' + indisp.map(esc2).join(' · ') + '</p></div>' : '') +
+            '<div class="card"><h2>Alertas (' + alertas.length + ')</h2>' + alertasHtml + '</div>' +
+            '</div></body></html>';
 
         const w = window.open('', '_blank');
         if (!w) { alert('Pop-up bloqueado. Permita pop-ups para este site.'); return; }
-        const doc = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">' +
-            '<title>Relatorio — ' + esc(ip) + '</title>' +
-            '<style>body{margin:0;padding:24px;background:#0f1117;color:#e6e6e6;font-family:Segoe UI,Arial,sans-serif;line-height:1.5;}' +
-            'h1{font-size:22px;margin:0 0 4px;color:#2962FF;} h2{font-size:15px;margin:20px 0 8px;color:#00d4ff;border-bottom:1px solid #333;padding-bottom:4px;} h3{font-size:13px;margin:12px 0 6px;color:#aaa;}' +
-            '.meta{color:#888;font-size:12px;margin-bottom:16px;} table.tbl{width:100%;border-collapse:collapse;font-size:12px;margin:8px 0;} table.tbl th,table.tbl td{padding:6px 8px;border:1px solid #333;} table.tbl th{background:#1a1a2e;color:#aaa;text-align:left;} ' +
-            'button{background:#2962FF;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;margin-right:8px;margin-top:8px;} section{margin-bottom:12px;} ul{margin:6px 0;padding-left:20px;}' +
-            '</style></head><body><div style="max-width:1100px;margin:0 auto;">' +
-            '<h1>Relatorio Detalhado — ' + esc(ip) + '</h1>' +
-            '<p class="meta">Inventario TI — Monitoramento | Gerado em ' + new Date().toLocaleString('pt-BR') + '</p>' +
-            '<button onclick="window.print()">Imprimir / Salvar PDF</button>' +
-            '<button onclick="window.close()">Fechar</button>' +
-            body +
-            '</div></body></html>';
         w.document.write(doc);
         w.document.close();
+        try { w.history.replaceState({ relatorio: true }, '', '/relatorio.html?host=' + encodeURIComponent(ip)); } catch (e) {}
     }).catch(function(e) {
-        alert('Erro ao gerar relatorio: ' + (e && e.message));
+        alert('Erro ao gerar relatório: ' + (e && e.message));
     });
 }
 
-function monAbrirRelatorioPC() {
-    // Busca dados atuais via API
-    fetch('/api/monitor/sistema')
-        .then(r => r.json())
-        .then(s => {
-            const cpu = s.cpu || {};
-            const mem = s.memoria || {};
-            const up = s.uptime || {};
-            const gpuInfo = s.gpu || {};
-            const disco = (s.disco && s.disco.discos) ? s.disco.discos[0] : null;
-            const rede = (s.rede || [])[0] || {};
-            const info = s.info || {};
-            const alertas = s.alertas || [];
-
-            // Dados dos ultimos 30 dias (historico do coletor)
-            return fetch('/api/monitor/historico?host=' + encodeURIComponent(_monLocalIp) + '&dias=30')
-                .then(r => r.json())
-                .then(dados => {
-                    monAplicarLimites(dados);
-                    // Gera grafico de latencia e perda a partir das ultimas medicoes brutas
-                    const lats = (dados.ultimasMedicoes || []).map(function(m) {
-                        return { t: m.timestamp ? new Date(m.timestamp).getTime() : 0, v: m.latenciaMediaMs, ok: m.ok };
-                    }).filter(function(p) { return p.t > 0; });
-                    const perdas = (dados.ultimasMedicoes || []).map(function(m) {
-                        return { t: m.timestamp ? new Date(m.timestamp).getTime() : 0, v: m.perdaPct, ok: m.ok };
-                    }).filter(function(p) { return p.t > 0; });
-
-                    const latChart = monCartesianChart(lats, { titulo: 'Latencia (ms)', unidade: 'ms', cor: '#2962FF', altura: 200, formatarY: function(v){return Math.round(v);}, limiares: monLimiaresLatencia() });
-                    const perdaChart = monCartesianChart(perdas, { titulo: 'Perda (%)', unidade: '%', cor: '#FF6D00', altura: 180, minForcado: 0, maxForcado: 100, formatarY: function(v){return Math.round(v);}, limiares: monLimiaresPerda() });
-
-                    // Monta HTML completo do relatorio
-                    let html = '';
-                    html += '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>' +
-                        '<title>Relatorio — PC Local</title>' +
-                        '<style>body{margin:0;padding:24px;background:#0f1117;color:#e6e6e6;font-family:Segoe UI,Arial,sans-serif;line-height:1.5;}' +
-                        'h1{font-size:22px;margin:0 0 4px;color:#2962FF;} h2{font-size:15px;margin:20px 0 8px;color:#00d4ff;border-bottom:1px solid #333;padding-bottom:4px;}' +
-                        'h3{font-size:13px;margin:12px 0 6px;color:#aaa;} .meta{color:#888;font-size:12px;margin-bottom:16px;}' +
-                        'table.tbl{width:100%;border-collapse:collapse;font-size:12px;margin:8px 0;} table.tbl th,table.tbl td{padding:6px 8px;border:1px solid #333;} table.tbl th{background:#1a1a2e;color:#aaa;text-align:left;} ' +
-                        'button{background:#2962FF;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;margin-right:8px;margin-top:8px;} ' +
-                        '.chart{background:rgba(255,255,255,0.03);border-radius:8px;padding:10px;margin:8px 0;overflow:auto;} .ull{margin-top:8px;}' +
-                        'ul{margin:6px 0;padding-left:20px;} .tag{display:inline-block;padding:2px 6px;border-radius:4px;background:#2962FF;color:#fff;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;}' +
-                        '</style></head><body>' +
-                        '<div style="max-width:1100px;margin:0 auto;">' +
-                        '<h1>Relatorio Detalhado — PC Local</h1>' +
-                        '<p class="meta">Inventario TI — Monitoramento | Gerado em ' + new Date().toLocaleString('pt-BR') + '</p>' +
-                        '<button onclick="window.print()">Imprimir / Salvar PDF</button>' +
-                        '<button onclick="window.close()">Fechar</button>' +
-                        // CPU + RAM
-                        '<section><h2>CPU e Memoria</h2>' +
-                        '<div class="ull"><div style="display:flex;align-items:center;justify-content:center;padding:8px;background:#1a1a2e;border-radius:8px;margin-bottom:12px;">' +
-                        '<span style="font-size:24px;color:#00d4ff;">' + (cpu.usoPct != null ? Math.round(cpu.usoPct) : '—') + '%</span>' +
-                        '</div><div style="font-size:12px;color:#aaa;margin-top:4px;">' + (cpu.nucleos || '?') + ' nucleos — ' + (cpu.modelo || '') + '</div>' +
-                        '</div>' +
-                        '<div class="chart">' + latChart + '</div>' +
-                        '<div class="chart">' + perdaChart + '</div>' +
-                        '</section>' +
-                        // RAM
-                        '<section><h2>Memoria (RAM)</h2>' +
-                        '<p>Uso: <b>' + (mem.usoPct != null ? Math.round(mem.usoPct) + '%' : '?') + '</b> (' + (mem.usadoGb || '?') + '/' + (mem.totalGb || '?') + ' GB, livre ' + (mem.livreGb || '?') + ' GB)</p>' +
-                        '<div class="chart">' + (mem.usoPct != null ? monCartesianChart([mem.usoPct], { titulo: 'RAM', unidade: '%', cor: '#a855f7', altura: 150, minForcado: 0, maxForcado: 100 }) : '') + '</div>' +
-                        '</section>' +
-                        // GPU
-                        '<section><h2>GPU</h2>' +
-                        (gpuInfo.gpus && gpuInfo.gpus.length ?
-                            gpuInfo.gpus.map(function(g) {
-                                return '<p>' + g.nome + ': ' + (g.usoPct != null ? Math.round(g.usoPct) + '%' : '?') +
-                                    (g.memoriaTotalMb ? ' | Mem: ' + g.memoriaUsadaMb + '/' + g.memoriaTotalMb + ' MB' : '') +
-                                    (g.temperaturaC ? ' | Temp: ' + g.temperaturaC + '°C' : '') + '</p>';
-                            }).join('') :
-                            '<p>Indisponivel</p>') +
-                        '</section>' +
-// Disco — todos os discos locais
-            '<section class="card"><h2>Disco</h2>' +
-            (disco && disco.discos && disco.discos.length ?
-                '<table class="tbl"><thead><tr><th>Disco</th><th>Total</th><th>Usado</th><th>Livre</th><th>Uso %</th></tr></thead><tbody>' +
-                disco.discos.map(function(d) {
-                    return '<tr><td>' + d.letra + '</td><td>' + d.totalGb + ' GB</td><td>' + d.usadoGb + ' GB</td><td>' + d.livreGb + ' GB</td><td>' + d.usoPct + '%</td></tr>';
-                }).join('') +
-                '</tbody></table>'
-            : '<p>Nenhum disco localizado (PowerShell nâo disponível ou sem discos locais).</p>') +
-            '</section>' +
-                        // Uptime / Sistema
-                        '<section><h2>Uptime / Sistema</h2>' +
-                        '<p>Uptime: <b>' + (up.uptimeHumano || '?') + '</b> (boot: ' + (up.bootTime ? new Date(up.bootTime).toLocaleString('pt-BR') : '?') + ')</p>' +
-                        '<p>Reinicio detectado: ' + (up.reiniciadoDesdeUltimaColeta ? '<span style="color:#ff4444;">SIM</span>' : 'Nao') + '</p>' +
-                        '<p>Plataforma: ' + (info.plataforma || '?') + ' ' + (info.arquitetura || '') + '</p>' +
-                        '<p>Kernel: ' + (info.release || '?') + ' | Node ' + (info.node || '?') + '</p>' +
-                        '</section>' +
-                        // Rede
-                        '<section><h2>Rede</h2>' +
-                        '<p>' + rede.nome + ' — ' + rede.ip + ' (MAC: ' + rede.mac + ')</p>' +
-                        '</section>' +
-                        // Hosts monitorados
-                        '<section><h2>Hosts Monitorados (' + (linhas ? linhas.length : 0) + ')</h2>' +
-                        '<table class="tbl"><thead><tr><th>Nome</th><th>IP</th><th>Estado</th><th>Latencia</th><th>Falhas</th></tr></thead><tbody>' +
-                        (linhas ? linhas.map(function(l) {
-                            return '<tr><td>' + (l.nome || l.ip) + '</td><td>' + l.ip + '</td><td>' + l.estado + '</td><td>' + (l.latenciaMediaMs != null ? l.latenciaMediaMs + 'ms' : '—') + '</td><td>' + (l.falhasConsecutivas || 0) + '</td></tr>';
-                        }).join('') : '<tr><td colspan="5">Sem dados</td></tr>') +
-                        '</tbody></table>' +
-                        '</section>' +
-                        // Alertas
-                        '<section><h2>Alertas (' + (alertas ? alertas.length : 0) + ')</h2>' +
-                        (alertas ? (
-                            '<table class="tbl"><thead><tr><th>Gravidade</th><th>Titulo</th><th>Confianca</th></tr></thead><tbody>' +
-                            alertas.map(function(a) {
-                                return '<tr><td>' + a.gravidade + '</td><td>' + a.titulo + '</td><td>' + a.confianca + '</td></tr>';
-                            }).join('') +
-                            '</tbody></table>'
-                        ) : '<p>Nenhum alerta.</p>') +
-                        '</section>' +
-                        // Armazenamento
-                        '<section><h2>Armazenamento</h2>' +
-                        '<p>Medicoes hoje: ' + (dados && dados.medicoesHoje != null ? dados.medicoesHoje : '?') + ' | Total: ' + (dados && dados.totalMedicoes != null ? dados.totalMedicoes : '?') +
-                        ' (' + (dados && dados.diasComDados != null ? dados.diasComDados : '?') + ' dias) | Espaco: ' + (dados && dados.tamanhoTotalMB != null ? dados.tamanhoTotalMB + ' MB' : '?') + '</p>' +
-                        '</section>' +
-                        '</div>' +
-                        // Footer buttons
-                        '<div style="margin-top:24px;display:flex;justify-content:flex-end;">' +
-                        '<button onclick="window.print()">Imprimir / Salvar PDF</button>' +
-                        '<button onclick="window.close()">Fechar</button>' +
-                        '</div>' +
-                        '</body></html>';
-
-const w = window.open('', '_blank');
-        if (!w) { alert('Pop-up bloqueado. Permita pop-ups para este site.'); return; }
-        // Small delay to ensure window is ready (some browsers need user gesture)
-        setTimeout(function() {
-            try {
-                w.document.write(html);
-                w.document.close();
-            } catch(e) {
-                // Fallback: try to set content via innerHTML on the body
-                try { w.document.body.innerHTML = html; w.document.close(); } catch(e2) {
-                    w.alert('Erro ao carregar relatório: ' + (e2 && e2.message));
-                }
-            }
-        }, 100);
-                });
-        })
-        .catch(function(e) {
-            alert('Erro ao gerar relatorio: ' + (e && e.message));
-        });
-}
 
 // ==================== RELATORIO DETALHADO DO PC ====================
-function monAbrirRelatorioPC() {
-    // Busca dados atuais via API (sistema + storage + Zabbix resumo)
-    Promise.all([
-        fetch('/api/monitor/sistema').then(r => r.json()).catch(() => null),
-        fetch('/api/monitor/historico?host=' + encodeURIComponent(_monLocalIp) + '&dias=30').then(r => r.json()).catch(() => null),
-        fetch('/api/zabbix/resumo').then(r => r.json()).catch(() => null),
-        fetch('/api/zabbix/host/' + encodeURIComponent(_monLocalIp)).then(r => r.json()).catch(() => null)
-    ]).then(function([sistema, hist, resumo, host]) {
-        // --- Dados do Coletor ---
-        const cpu = (sistema && sistema.cpu) || {};
-        const mem = (sistema && sistema.memoria) || {};
-        const up = (sistema && sistema.uptime) || {};
-        const gpu = (sistema && sistema.gpu) || {};
-        const disco = (sistema && sistema.disco && sistema.disco.discos) ? sistema.disco.discos[0] : null;
-        const rede = (sistema && sistema.rede) ? sistema.rede[0] : null;
-        const info = (sistema && sistema.info) || {};
-        const alertas = (sistema && sistema.alertas) || [];
-
-        // --- Dados do Historico (ultimas 30 dias) ---
-        const serie = (hist && hist.serie) || [];
-        const ultimas = (hist && hist.ultimasMedicoes) || [];
-
-        // --- Dados do Zabbix ---
-        const zStatus = (resumo && resumo.zabbix) || {};
-        const zHost = (host && host.hostname) ? host.hostname : '?';
-        const zDisponivel = zStatus.disponiveis || 0;
-        const zIndisponiveis = zStatus.indisponiveis || 0;
-        const zProblemas = (resumo && resumo.problemas) || {};
-        const zTriggers = (zProblemas.total || 0);
-
-        // --- Montar graficos (Chart.js dados embutidos como base64 simples ou usar monCartesianChart) ---
-        // Vamos gerar dados de chart a partir do historico coletado
-        function geraDadosChart(lados) {
-            if (!lados || lados.length < 2) return '';
-            // Simples geraÃ§Ã£o de dados para o chart canvas
-            const ctx = document.createElement('canvas');
-            ctx.width = 400;
-            ctx.height = 200;
-            const chart = ctx.getContext('2d');
-            // Desenhar eixo e grid simples
-            chart.strokeStyle = '#555';
-            chart.lineWidth = 1;
-            // Desenhar linha de exemplo baseada nos dados
-            const dados = lados.map(function(p) { return p.v || 0; });
-            const max = Math.max(...dados.filter(v => !isNaN(v)) || [0]);
-            const min = Math.min(...dados.filter(v => !isNaN(v)) || [0]);
-            const passo = ctx.width / (dados.length - 1);
-            chart.beginPath();
-            for (let i = 0; i < dados.length; i++) {
-                const y = ctx.height - ( (dados[i] - min) / (max - min || 1) * ctx.height );
-                if (i === 0) chart.moveTo(i * passo, y);
-                else chart.lineTo(i * passo, y);
-            }
-            chart.stroke();
-            return ctx.canvas.toDataURL('image/png');
-        }
-
-        // Dados para graficos de latencia/perda - removidos para evitar erro de sintaxe
-        // const chartLat = geraDadosChart(...); const chartPerda = geraDadosChart(...);
-
-        // --- Montar HTML do Relatorio ---
-        let html = '';
-        html += '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>' +
-            '<title>Relatorio — PC Local</title>' +
-            '<style>body{margin:0;padding:28px;background:#0f1117;color:#e6e6e6;font-family:"Segoe UI",Arial,sans-serif;}' +
-            'h1{font-size:24px;margin:0 0 2px;color:#2962FF;} h2{font-size:15px;margin:20px 0 6px;color:#00d4ff;border-bottom:1px solid #333;padding-bottom:2px;} ' +
-            '.meta{color:#888;font-size:12px;margin-bottom:10px;} .card{background:#1a1a2e;border:1px solid #2a2a3e;border-radius:8px;padding:20px;margin:12px 0;} ' +
-            '.chart{background:#0d1117;padding:12px;margin:8px 0;border-radius:6px;position:relative;} .chart canvas{width:100%;height:150px;} ' +
-            'table.tbl{width:100%;border-collapse:collapse;font-size:12px;margin:6px 0;} table.tbl th,table.tbl td{padding:6px 8px;border:1px solid #333;} table.tbl th{background:#1a1a2e;color:#aaa;text-align:left;} ' +
-            'button{background:#2962FF;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;margin-right:6px;margin-top:6px;} ' +
-            '.tag{display:inline-block;padding:2px 6px;border-radius:4px;background:#2962FF;color:#fff;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;}' +
-            'ul{margin:4px 0;padding-left:20px;} .ok{color:#0f0;} .bad{color:#f44;}' +
-            '</style></head><body>' +
-            '<div style="max-width:1100px;margin:0 auto;">' +
-            '<h1>Relatorio Detalhado — PC Local</h1>' +
-            '<p class="meta">Inventario TI — Monitoramento | Gerado em ' + new Date().toLocaleString('pt-BR') + '</p>' +
-            '<button onclick="window.print()">Imprimir / Salvar PDF</button>' +
-            '<button onclick="window.close()">Fechar</button>' +
-            // SeÃ§Ã£o 1: Identificacao
-            '<section class="card"><h2>Identificacao</h2>' +
-            '<table class="tbl"><tr><td>Hostname</td><td>' + esc((sistema && sistema.hostname) || _monLocalIp) + '</td></tr>' +
-            '<tr><td>IP Local</td><td>' + (rede ? rede.ip : '?') + '</td></tr>' +
-            '<tr><td>MAC</td><td>' + (rede ? rede.mac : '?') + '</td></tr>' +
-            '<tr><td>Plataforma</td><td>' + (info.plataforma || '?') + ' ' + (info.arquitetura || '') + '</td></tr>' +
-            '<tr><td>Kernel</td><td>' + (info.release || '?') + '</td></tr>' +
-            '<tr><td>Node.js</td><td>' + (info.node || '?') + '</td></tr></table></section>' +
-            // SeÃ§Ã£o 2: CPU e RAM
-            '<section class="card"><h2>CPU e Memoria</h2>' +
-            '<div style="display:flex;align-items:center;justify-content:center;padding:8px;background:#1a1a2e;border-radius:8px;margin-bottom:12px;">' +
-            '<span style="font-size:32px;color:#00d4ff;">' + (cpu.usoPct != null ? Math.round(cpu.usoPct) : '—') + '%</span>' +
-            '</div>' +
-            '<div style="font-size:12px;color:#aaa;margin-top:4px;">' + (cpu.nucleos || '?') + ' nucleos — ' + (cpu.modelo || '') + '</div>' +
-            '</div>' +
-            '<div class="chart"><canvas id="cLat"></canvas></div>' +
-            '<div class="chart"><canvas id="cPerda"></canvas></div>' +
-            '</section>' +
-            // SeÃ§Ã£o 3: GPU
-            '<section class="card"><h2>GPU</h2>' +
-            (gpu.gpus && gpu.gpus.length ?
-                gpu.gpus.map(function(g) {
-                    return '<p>' + g.nome + ': ' + (g.usoPct != null ? Math.round(g.usoPct) + '%' : '?') +
-                        (g.memoriaTotalMb ? ' | Mem: ' + g.memoriaUsadaMb + '/' + g.memoriaTotalMb + ' MB' : '') +
-                        (g.temperaturaC ? ' | Temp: ' + g.temperaturaC + '°C' : '') + '</p>';
-                }).join('') :
-                '<p>Indisponivel</p>') +
-            '</section>' +
-            // SeÃ§Ã£o 4: Disco
-            '<section class="card"><h2>Disco ' + (disco ? disco.letra : 'C:') + '</h2>' +
-            '<p>Total: ' + (disco ? disco.totalGb + ' GB' : '?') + ', Usado: ' + (disco ? disco.usadoGb + ' GB' : '?') +
-            ', Livre: ' + (disco ? disco.livreGb + ' GB' : '?') + ', Uso: ' + (disco ? disco.usoPct + '%' : '?') + '</p>' +
-            '</section>' +
-            // SeÃ§Ã£o 5: Uptime / Sistema
-            '<section class="card"><h2>Uptime / Sistema</h2>' +
-            '<p>Uptime: <b>' + (up.uptimeHumano || '?') + '</b> (boot: ' + (up.bootTime ? new Date(up.bootTime).toLocaleString('pt-BR') : '?') + ')</p>' +
-            '<p>Reinicio detectado: ' + (up.reiniciadoDesdeUltimaColeta ? '<span style="color:#f44;">SIM</span>' : 'Nao') + '</p>' +
-            '<p>Plataforma: ' + (info.plataforma || '?') + ' ' + (info.arquitetura || '') + '</p>' +
-            '<p>Kernel: ' + (info.release || '?') + ' | Node ' + (info.node || '?') + '</p>' +
-            '</section>' +
-            // SeÃ§Ã£o 6: Rede
-            '<section class="card"><h2>Rede</h2>' +
-            '<p>' + (rede ? rede.nome + ' — ' + rede.ip : '?') + ' (MAC: ' + (rede ? rede.mac : '?') + ')</p>' +
-            '</section>' +
-            // SeÃ§Ã£o 7: Hosts Monitorados
-            '<section class="card"><h2>Hosts Monitorados (' + (hist && hist.linhas ? hist.linhas.length : 0) + ')</h2>' +
-            '<table class="tbl"><thead><tr><th>Nome</th><th>IP</th><th>Estado</th><th>Latencia</th><th>Falhas</th></tr></thead><tbody>' +
-            (hist && hist.linhas ?
-                hist.linhas.map(function(l) {
-                    return '<tr><td>' + (l.nome || l.ip) + '</td><td>' + l.ip + '</td><td>' + l.estado + '</td><td>' + (l.latenciaMediaMs != null ? l.latenciaMediaMs + 'ms' : '—') + '</td><td>' + (l.falhasConsecutivas || 0) + '</td></tr>';
-                }).join('') :
-                '<tr><td colspan="5">Sem dados</td></tr>') +
-            '</tbody></table>' +
-            '</section>' +
-            // SeÃ§Ã£o 8: Alertas
-            '<section class="card"><h2>Alertas (' + (alertas ? alertas.length : 0) + ')</h2>' +
-            (alertas ?
-                '<table class="tbl"><thead><tr><th>Gravidade</th><th>Titulo</th><th>Confianca</th></tr></thead><tbody>' +
-                alertas.map(function(a) {
-                    return '<tr><td>' + a.gravidade + '</td><td>' + a.titulo + '</td><td>' + a.confianca + '</td></tr>';
-                }).join('') +
-                '</tbody></table>'
-            : '<p>Nenhum alerta.</p>') +
-            '</section>' +
-            // SeÃ§Ã£o 9: Armazenamento
-            '<section class="card"><h2>Armazenamento</h2>' +
-            '<p>Medicoes hoje: ' + (hist && hist.medicoesHoje != null ? hist.medicoesHoje : '?') + ' | Total: ' + (hist && hist.totalMedicoes != null ? hist.totalMedicoes : '?') +
-            ' (' + (hist && hist.diasComDados != null ? hist.diasComDados : '?') + ' dias) | Espaco: ' + (hist && hist.tamanhoTotalMB != null ? hist.tamanhoTotalMB + ' MB' : '?') + '</p>' +
-            '</section>' +
-            // Rodape de botoes
-            '<div style="display:flex;justify-content:flex-end;margin-top:20px;">' +
-            '<button onclick="window.print()">Imprimir / Salvar PDF</button>' +
-            '<button onclick="window.close()">Fechar</button>' +
-            '</div>' +
-            '</div>';
-
-        const w = window.open('', '_blank');
-        if (!w) { alert('Pop-up bloqueado. Permita pop-ups para este site.'); return; }
-        w.document.write(html);
-        w.document.close();
-    }).catch(function(e) {
-        alert('Erro ao gerar relatorio: ' + (e && e.message));
-    });
-}
 
 // ==================== RELATORIO DETALHADO DO PC ====================
-function monAbrirRelatorioPC() {
-    // Busca dados via API
-    Promise.all([
-        fetch('/api/monitor/sistema').then(r => r.json()).catch(() => null),
-        fetch('/api/monitor/historico?host=' + encodeURIComponent(_monLocalIp) + '&dias=30').then(r => r.json()).catch(() => null)
-    ]).then(function(dados) {
-        const s = dados[0] || {};
-        const hist = dados[1] || {};
-        const cpu = s.cpu || {};
-        const mem = s.memoria || {};
-        const up = s.uptime || {};
-        const gpu = s.gpu || {};
-        const disco = (s.disco && s.disco.discos) ? s.disco.discos : [];
-        const rede = (s.rede || [])[0] || {};
-        const info = s.info || {};
-        const alertas = s.alertas || [];
-        const linhas = (s.linhas) ? s.linhas : [];
-
-        monAplicarLimites(hist); // limites vigentes para os limiares dos graficos
-
-        // --- Extrair dados para graficos (arrays de valores) ---
-        function extrairValores(registros, propriedade) {
-            if (!registros) return [];
-            return registros.map(function(m) { return m[propriedade]; }).filter(function(v) { return v != null; });
-        }
-        const latencias = extrairValores(ultimas || [], 'latenciaMediaMs');
-        const perdas = extrairValores(ultimas || [], 'perdaPct');
-
-        // --- Gerar graficos com monCartesianChart ---
-        // O eixo de latencia nunca pode "cortar" um pico real: o maximo e o
-        // maior entre o chao tipico (100ms), o limite configurado e o pico
-        // observado nos dados.
-        const latMaxDados = latencias.length ? Math.max(...latencias) : 0;
-        const limLat = Number(_monLimites.latenciaMediaMs) || 80;
-        const chartLat = (latencias && latencias.length >= 2) ?
-            monCartesianChart(latencias, { titulo: 'Latencia (ms)', unidade: 'ms', cor: '#2962FF', altura: 180, minForcado: 0, maxForcado: Math.max(100, limLat, Math.ceil(latMaxDados)), formatarY: function(v){return Math.round(v);}, limiares: monLimiaresLatencia() }) :
-            '<div style="font-size:10px;color:var(--text-muted);padding:4px;">Dados insuficientes</div>';
-        const chartPerda = (perdas && perdas.length >= 2) ?
-            monCartesianChart(perdas, { titulo: 'Perda (%)', unidade: '%', cor: '#FF6D00', altura: 150, minForcado: 0, maxForcado: 100, formatarY: function(v){return Math.round(v);}, limiares: monLimiaresPerda() }) :
-            '<div style="font-size:10px;color:var(--text-muted);padding:4px;">Dados insuficientes</div>';
-
-        // --- Montar HTML do Relatorio ---
-        let html = '';
-        html += '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>' +
-            '<title>Relatorio — PC Local</title>' +
-            '<style>body{margin:0;padding:24px;background:#0f1117;color:#e6e6e6;font-family:"Segoe UI",Arial,sans-serif;line-height:1.5;}' +
-            'h1{font-size:22px;margin:0 0 4px;color:#2962FF;} h2{font-size:15px;margin:20px 0 6px;color:#00d4ff;border-bottom:1px solid #333;padding-bottom:4px;}' +
-            'h3{font-size:13px;margin:12px 0 6px;color:#aaa;} .meta{color:#888;font-size:12px;margin-bottom:8px;} ' +
-            'table.tbl{width:100%;border-collapse:collapse;font-size:12px;margin:6px 0;} table.tbl th,table.tbl td{padding:6px 8px;border:1px solid #333;} table.tbl th{background:#1a1a2e;color:#aaa;text-align:left;} ' +
-            'button{background:#2962FF;color:#fff;border:none;padding:8px 14px;border-radius:6px;cursor:pointer;margin-right:6px;margin-top:6px;} ' +
-            '.chart{background:#0d1117;padding:8px;margin:6px 0;border-radius:6px;overflow:auto;} .ull{margin-top:8px;}' +
-            'ul{margin:4px 0;padding-left:20px;} .ok{color:#0f0;} .bad{color:#f44;}' +
-            '</style></head><body>' +
-            '<div style="max-width:1100px;margin:0 auto;">' +
-            '<h1>Relatorio Detalhado — PC Local</h1>' +
-            '<p class="meta">Inventario TI — Monitoramento | Gerado em ' + new Date().toLocaleString('pt-BR') + '</p>' +
-            '<button onclick="window.print()">Imprimir / Salvar PDF</button>' +
-            '<button onclick="window.close()">Fechar</button>' +
-            // CPU e RAM
-            '<section class="card"><h2>CPU e Memoria</h2>' +
-            '<p>Uso CPU: <b>' + (cpu.usoPct != null ? cpu.usoPct + '%' : '—') + '</b> (' + (cpu.nucleos || '?') + ' nucleos)</p>' +
-            '<p>Uso Memoria: <b>' + (mem.usoPct != null ? mem.usoPct + '%' : '—') + '</b> (' + (mem.usadoGb || '?') + '/' + (mem.totalGb || '?') + ' GB, livre: ' + (mem.livreGb || '?') + ' GB)</p>' +
-            '<div class="chart">' + chartLat + '</div>' +
-            '<div class="chart">' + chartPerda + '</div>' +
-            '</section>' +
-            // GPU
-            '<section class="card"><h2>GPU</h2>' +
-            (gpu.gpus && gpu.gpus.length ?
-                gpu.gpus.map(function(g) {
-                    return '<p>' + g.nome + ': ' + (g.usoPct != null ? Math.round(g.usoPct) + '%' : '?') +
-                        (g.memoriaTotalMb ? ' | Mem: ' + g.memoriaUsadaMb + '/' + g.memoriaTotalMb + ' MB' : '') +
-                        (g.temperaturaC ? ' | Temp: ' + g.temperaturaC + '°C' : '') + '</p>';
-                }).join('') :
-                '<p>Indisponivel</p>') +
-            '</section>' +
-            // Disco
-            '<section class="card"><h2>Disco ' + (disco ? disco.letra : 'C:') + '</h2>' +
-            '<p>Total: ' + (disco ? disco.totalGb + ' GB' : '?') + ', Usado: ' + (disco ? disco.usadoGb + ' GB' : '?') +
-            ', Livre: ' + (disco ? disco.livreGb + ' GB' : '?') + ', Uso: ' + (disco ? disco.usoPct + '%' : '?') + '</p>' +
-            '</section>' +
-            // Uptime
-            '<section class="card"><h2>Uptime / Sistema</h2>' +
-            '<p>Uptime: <b>' + (up.uptimeHumano || '?') + '</b> (boot: ' + (up.bootTime ? new Date(up.bootTime).toLocaleString('pt-BR') : '?') + ')</p>' +
-            '<p>Reinicio detectado: ' + (up.reiniciadoDesdeUltimaColeta ? '<span style="color:#f44;">SIM</span>' : 'Nao') + '</p>' +
-            '<p>Plataforma: ' + (info.plataforma || '?') + ' ' + (info.arquitetura || '') + '</p>' +
-            '<p>Kernel: ' + (info.release || '?') + ' | Node ' + (info.node || '?') + '</p>' +
-            '</section>' +
-            // Rede
-            '<section class="card"><h2>Rede</h2>' +
-            '<p>' + (rede ? rede.nome + ' — ' + rede.ip : '?') + ' (MAC: ' + (rede ? rede.mac : '?') + ')</p>' +
-            '</section>' +
-            // Hosts
-            '<section class="card"><h2>Hosts Monitorados (' + (linhas ? linhas.length : 0) + ')</h2>' +
-            '<table class="tbl"><thead><tr><th>Nome</th><th>IP</th><th>Estado</th><th>Latencia</th><th>Falhas</th></tr></thead><tbody>' +
-            (linhas ? linhas.map(function(l) {
-                return '<tr><td>' + (l.nome || l.ip) + '</td><td>' + l.ip + '</td><td>' + l.estado + '</td><td>' + (l.latenciaMediaMs != null ? l.latenciaMediaMs + 'ms' : '—') + '</td><td>' + (l.falhasConsecutivas || 0) + '</td></tr>';
-            }).join('') :
-                '<tr><td colspan="5">Sem dados</td></tr>') +
-            '</tbody></table>' +
-            '</section>' +
-            // Alertas
-            '<section class="card"><h2>Alertas (' + (alertas ? alertas.length : 0) + ')</h2>' +
-            (alertas ?
-                '<table class="tbl"><thead><tr><th>Gravidade</th><th>Titulo</th><th>Confianca</th></tr></thead><tbody>' +
-                alertas.map(function(a) {
-                    return '<tr><td>' + a.gravidade + '</td><td>' + a.titulo + '</td><td>' + a.confianca + '</td></tr>';
-                }).join('') +
-                '</tbody></table>'
-            : '<p>Nenhum alerta.</p>') +
-            '</section>' +
-            // Armazenamento
-            '<section class="card"><h2>Armazenamento</h2>' +
-            '<p>Medicoes hoje: ' + (hist && hist.medicoesHoje != null ? hist.medicoesHoje : '?') + ' | Total: ' + (hist && hist.totalMedicoes != null ? hist.totalMedicoes : '?') +
-            ' (' + (hist && hist.diasComDados != null ? hist.diasComDados : '?') + ' dias) | Espaco: ' + (hist && hist.tamanhoTotalMB != null ? hist.tamanhoTotalMB + ' MB' : '?') + '</p>' +
-            '</section>' +
-            // Rodape
-            '<div style="display:flex;justify-content:flex-end;margin-top:20px;">' +
-            '<button onclick="window.print()">Imprimir / Salvar PDF</button>' +
-            '<button onclick="window.close()">Fechar</button>' +
-            '</div>' +
-            '</div>';
-
-        const w = window.open('', '_blank');
-        if (!w) { alert('Pop-up bloqueado. Permita pop-ups para este site.'); return; }
-        w.document.write(html);
-        w.document.close();
-    }).catch(function(e) {
-        alert('Erro ao gerar relatorio: ' + (e && e.message));
-    });
-}
 
 // ==================== RELATORIO DETALHADO DO PC ====================
 function monAbrirRelatorioPC() {

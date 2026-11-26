@@ -152,8 +152,11 @@ test('call sites de latencia/perda/CPU/GPU passam limiares', () => {
     const perda = (fonteMonitor.match(/monLimiaresPerda\(\)/g) || []).length;
     const uso = (fonteMonitor.match(/monLimiaresUso\(\)/g) || []).length;
     const disco = (fonteMonitor.match(/monLimiaresDisco\(\)/g) || []).length;
-    assert.ok(lat >= 4, 'latencia sem limiar em ' + lat + ' grafico(s)');
-    assert.ok(perda >= 4, 'perda sem limiar em ' + perda + ' grafico(s)');
+    // 4 definicoes duplicadas e mortas de monAbrirRelatorioPC foram removidas;
+    // com elas foram embora call sites de grafico que nunca chegavam a rodar.
+    // Os graficos VIVOS continuam todos com limiar (o teste acima valida o SVG).
+    assert.ok(lat >= 3, 'latencia sem limiar em ' + lat + ' grafico(s)');
+    assert.ok(perda >= 2, 'perda sem limiar em ' + perda + ' grafico(s)');
     assert.ok(uso >= 5, 'CPU/GPU/RAM sem limiar em ' + uso + ' grafico(s)');
     assert.ok(disco >= 1, 'disco sem limiar em ' + disco + ' grafico(s)');
 });

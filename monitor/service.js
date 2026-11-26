@@ -886,9 +886,14 @@ function obterDetalheHost(ip) {
             memoria: ml.memoria, disco: ml.disco, uptime: ml.uptime,
             rede: ml.rede, quando: ml.quando
         } : null,
-        indisponiveis: local ? [
-            'CPU: primeira amostra pode estar indisponivel (disponivel na proxima coleta)'
-        ] : [
+        // Nao inventar indisponibilidade: se a metrica LOCAL tem valor real,
+        // nao aparece na lista de "dados indisponiveis" (antes aparecia ate
+        // quando o relatorio mostrava CPU 35% logo acima — contradicao).
+        indisponiveis: local ? (
+            (ml && ml.cpu && ml.cpu.usoPct != null) ? [] : [
+                'CPU: primeira amostra pode estar indisponivel (disponivel na proxima coleta)'
+            ]
+        ) : [
             'Uso de RAM: indisponivel — sem agente instalado neste PC remoto.',
             'Uso de CPU: indisponivel — sem agente instalado neste PC remoto.',
             'Reinicio confirmado: indisponivel — requer eventos internos do Windows (instale o Zabbix Agent 2).'

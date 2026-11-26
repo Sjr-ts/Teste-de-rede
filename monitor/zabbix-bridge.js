@@ -281,6 +281,31 @@ async function buscarHostPorIp(ip) {
     return match.find(h => String(h.status) === '0') || match[0] || null;
 }
 
+/** Busca host pelo nome (util quando o agente local aparece com IP do bridge Docker). */
+async function buscarHostPorNome(nome) {
+    const alvo = String(nome || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!alvo) return null;
+    const hosts = await authCall('host.get', {
+        output: ['hostid', 'host', 'name', 'status'],
+        selectInterfaces: ['ip', 'available', 'error']
+    });
+    const norm = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const match = hosts.filter(h => norm(h.host) === alvo || norm(h.name) === alvo);
+    return match.find(h => String(h.status) === '0') || match[0] || null;
+}
+
+/** IP e desta maquina? (usado para casar o host local pelo hostname). */
+function ehIpDestaMaquina(ip) {
+    try {
+        const os = require('os');
+        const locais = new Set(['127.0.0.1', '::1', '0.0.0.0']);
+        for (const addrs of Object.values(os.networkInterfaces())) {
+            for (const a of (addrs || [])) if (a.address) locais.add(String(a.address));
+        }
+        return locais.has(String(ip || ''));
+    } catch (e) { return false; }
+}
+
 /** Busca problemas (triggers em estado PROBLEM) de um host ou todos. */
 async function listarProblemas(hostid) {
     const params = {
@@ -640,7 +665,13 @@ async function resumoMonitoramento() {
 /** Gera dados de monitoramento para um host especifico do inventario. */
 async function monitoramentoHost(ip) {
     try {
-        const host = await buscarHostPorIp(ip);
+        let host = await buscarHostPorIp(ip);
+        // PC local: o agente fala via 127.0.0.1 e o NAT do Docker faz o Zabbix
+        // registrar a interface com o IP do bridge (172.x), nao o IP da placa.
+        // Nesse caso casa pelo hostname do Windows, que e o mesmo do agente.
+        if (!host && ehIpDestaMaquina(ip)) {
+            try { host = await buscarHostPorNome(require('os').hostname()); } catch (e) {}
+        }
         if (!host) {
             return { encontrado: false, ip, nota: 'Host nao encontrado no Zabbix. Verifique se o agente esta instalado e o host cadastrado.' };
         }
