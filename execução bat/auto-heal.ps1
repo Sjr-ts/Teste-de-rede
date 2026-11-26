@@ -94,7 +94,12 @@ if ($svc.Status -ne 'Running') {
 if (-not (Test-Path $conf)) { Log 'ERRO: zabbix_agent2.conf ausente. Execute instalar-tudo.bat.'; exit 1 }
 $txt = Get-Content $conf -Raw
 if (-not $txt) { $txt = '' }
-$serverIp = Get-ServerIp
+# Passa o Server= ATUAL: se ele ainda responde em 10051, Get-ServerIp MANTEM.
+# (antes chamava sem argumento, entao a protecao "manter o que funciona" nunca rodava)
+$serverAtual = ''
+$mAtual = [regex]::Match($txt, '(?m)^Server=(\S+)')
+if ($mAtual.Success) { $serverAtual = $mAtual.Groups[1].Value.Trim() }
+$serverIp = Get-ServerIp $serverAtual
 $ipReal = Get-IpReal
 $mudou = $false
 

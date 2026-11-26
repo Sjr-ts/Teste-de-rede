@@ -109,7 +109,7 @@ REM ---- Baixa o MSI oficial se faltar ----
 REM (fluxo com goto: evita if/else aninhado que causa erro de parse no cmd)
 if exist "%MSI_PATH%" goto :msi_presente
 call :log "[INFO] Baixando MSI oficial do Zabbix (17.6 MB, aguarde)..."
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; try { Invoke-WebRequest -Uri '%MSI_URL%' -OutFile '%MSI_PATH%' -TimeoutSec 300 -ErrorAction Stop; exit 0 } catch { exit 1 }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $ok=$false; for($i=1; $i -le 3; $i++){ try { Invoke-WebRequest -Uri '%MSI_URL%' -OutFile '%MSI_PATH%' -TimeoutSec 300 -ErrorAction Stop; $ok=$true; break } catch { if($i -lt 3){ Start-Sleep -Seconds 3 } } }; if(-not $ok){ exit 1 }; if((Get-Item -LiteralPath '%MSI_PATH%').Length -lt 1000000){ exit 1 }; exit 0"
 if errorlevel 1 goto :msi_falhou
 call :log "[OK] MSI baixado."
 goto :msi_fim

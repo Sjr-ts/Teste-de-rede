@@ -24,7 +24,7 @@ Tudo que é preciso estar na pasta (ela inteira):
 | `INSTALAR.ps1` | Orquestrador: auto-elevação, log `instalar.log`, descobre servidor, abre painel |
 | `instalar-tudo.bat` | Instalador do agente (MSI + config + serviço) |
 | `gravar-config.ps1` | Grava `zabbix_agent2.conf` + script `inv-meta.ps1` (IP adaptativo) |
-| `detect-server.ps1` | Detecta o IP do servidor (server-ip.txt → scan da rede → 127.0.0.1) |
+| `detect-server.ps1` | Detecta o IP do servidor (server-ip.txt → scan PARALELO de toda a sub-rede → 127.0.0.1) |
 | `auto-heal.ps1` | Mantém agente vivo (boot + a cada 5 min) |
 | `CRIAR-ATALHOS.ps1` | Recria os atalhos na Área de Trabalho |
 | `instalar-silencioso.vbs` | Janela oculta para a tarefa agendada no boot/logon |
@@ -46,7 +46,7 @@ Na Área de Trabalho foram criados **2 atalhos**:
 - **INVENTARIO TI - Abrir Painel** → abre `http://<IP-ATUAL>:5903`
 - **ZABBIX - Abrir Painel** → abre `http://<IP-ATUAL>:8081`
 
-Eles detectam o IP do servidor automaticamente (testam `127.0.0.1` e a faixa `192.168.0.100-129`, ignorando WSL/virtual). **Não use IPs antigos fixos** (`192.168.0.102`, `.186`) — mudaram e dão `ERR_CONNECTION_TIMED_OUT`.
+Eles detectam o IP do servidor automaticamente (testam `server-ip.txt`, depois `127.0.0.1`, depois fazem um **scan paralelo de toda a sub-rede** na porta `5903` — 254 IPs ao mesmo tempo, resposta em ~2s). **Não use IPs antigos fixos** (`192.168.0.102`, `.186`) — mudaram e dão `ERR_CONNECTION_TIMED_OUT`.
 
 Se precisar recriar os atalhos: execute `CRIAR-ATALHOS.ps1` (botão direito → Executar com PowerShell).
 
@@ -64,8 +64,11 @@ Se precisar recriar os atalhos: execute `CRIAR-ATALHOS.ps1` (botão direito → 
 O instalador **detecta sozinho** o IP do servidor:
 
 1. `server-ip.txt` (se existir ao lado do `.bat` — fixa o IP manualmente)
-2. Scan da rede: `127.0.0.1` + faixa `192.168.0.100-129` na porta `5903`
-3. Fallback: `127.0.0.1`
+2. Servidor local: `127.0.0.1:5903` responde → esta máquina **é** o servidor
+3. **Scan paralelo de toda a sub-rede** (254 IPs simultâneos na porta `5903`, espera global de 2s) e confirma com `/actuator/health` = 200 — só devolve IP que responde **UP**
+4. Fallback: `127.0.0.1`
+
+> **Por que paralelo:** a versão antiga testava a faixa `192.168.0.100-129` um IP por vez (timeout de 1s cada). Se o servidor estava fora da faixa (ex.: `.238`), o cliente apontava para `127.0.0.1` — o agente falava com ele mesmo e **nenhum dado chegava ao servidor**. Com o scan paralelo isso não acontece mais: qualquer IP da sub-rede é encontrado em ~2s.
 
 Esse IP é passado ao MSI como **`SERVER=`** (exigido pelo `LaunchCondition` do instalador do Zabbix — sem ele o MSI falha com código **1603**) e gravado em `Server=`/`ServerActive=` do `zabbix_agent2.conf`.
 
@@ -88,6 +91,20 @@ Esse IP é passado ao MSI como **`SERVER=`** (exigido pelo `LaunchCondition` do 
 ## IP adaptativo (o que o usuário não precisa saber)
 
 Quando o IP do PC muda (DHCP), o script `inv.meta` retorna um metadata novo (`inventario-ti <novo-ip>`). Isso faz o agente **re-registrar sozinho no Zabbix em menos de 20 segundos, sem reiniciar**. O servidor Zabbix atualiza a interface do host e o Inventário TI lê esse IP de volta para o cadastro (job a cada 5 min). O monitoramento continua sem perder histórico.
+
+## Auto-registro no Zabbix (PC novo aparece com dados sozinho)
+
+A ação **"Inventario TI - Auto-registro de agentes"** do Zabbix foi configurada para, quando um agente novo se registra, fazer **tudo automaticamente**:
+
+1. **Adicionar o host** ao Zabbix
+2. **Colocar no grupo** `Inventario TI`
+3. **Vincular o template** `Windows by Zabbix agent active` (48 itens: CPU, RAM, disco, uptime, rede…) ← *esta etapa faltava; sem ela o PC novo chegava com 0 itens e nenhum dado*
+4. **Marcar inventário automático** (`inventory_mode=0`)
+5. **Tag** `inventario_origem=autoreg` (identifica veio do instalador)
+
+Ou seja: **basta rodar `INSTALAR.cmd` no PC novo** — em até ~1 min o host aparece no Zabbix com template vinculado e começam a chegar dados reais. Nada de configurar à mão.
+
+Para ver os hosts: painel do Inventário TI → seção **HOSTS ZABBIX** (lista todos, com status "Conectado/Sem Agente" e o template de cada um).
 
 ## Auto-heal (sobrevive a reboot, queda de rede e mudanca de IP)
 

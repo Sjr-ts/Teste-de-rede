@@ -36,6 +36,10 @@ j.py
 vigia-estado.txt
 vigia-ultima-restart.txt
 
+# Gerados pelo CRIAR-ATALHOS.ps1 na maquina do usuario
+ABRIR-PAINEL.vbs
+ABRIR-ZABBIX.vbs
+
 # ===================== CONFIG LOCAL (credenciais Zabbix) =====================
 # Copie de monitor/*.example.json e preencha a senha localmente
 monitor/config.json

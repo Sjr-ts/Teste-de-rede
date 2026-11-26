@@ -35,12 +35,37 @@ const CRED = {
   inv:  { u: 'admin', s: 'admin123' },
   zbx:  { u: 'Admin', s: 'Monitor2026!' }
 };
-// IPs candidatos — inclui o nome do servidor e faixas comuns
-const HOSTS = [
+// IPs candidatos — servidor LOCAL/nome + REDE INTEIRA derivada do IP real.
+// Antes: apenas 192.168.0.100-129 — o servidor em .238 ficava FORA e o acesso
+// automatico falhava ("Servidor nao encontrado") ao abrir o arquivo solto.
+const HOSTS_BASE = [
   location.hostname, '127.0.0.1', 'localhost',
-  'servidor-monitoramento', 'inventario-ti',
-  ...Array.from({length: 30}, (_, i) => '192.168.0.' + (i + 100))  // .100-.129
+  'servidor-monitoramento', 'inventario-ti'
 ];
+function redeDe(ip) {
+  const m = String(ip || '').match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.\d{1,3}$/);
+  if (!m) return null;
+  return m[1] + '.' + m[2] + '.' + m[3] + '.';
+}
+function ipLocalWebRtc() {
+  // IP real da maquina (mesmo abrindo via file://) para varrer a SUB-REDE
+  // INTEIRA, igual ao detect-server.ps1 do instalador.
+  return new Promise(resolve => {
+    try {
+      const pc = new RTCPeerConnection({ iceServers: [] });
+      let pronto = false;
+      const fim = ip => { if (pronto) return; pronto = true; try { pc.close(); } catch (e) {} resolve(ip || null); };
+      pc.createDataChannel('');
+      pc.onicecandidate = e => {
+        if (!e.candidate) { fim(null); return; }
+        const m = e.candidate.candidate.match(/(\d{1,3}(?:\.\d{1,3}){3})/);
+        if (m && !m[1].startsWith('127.') && !m[1].startsWith('169.254.')) fim(m[1]);
+      };
+      pc.createOffer().then(o => pc.setLocalDescription(o)).catch(() => fim(null));
+      setTimeout(() => fim(null), 1800);
+    } catch (e) { resolve(null); }
+  });
+}
 const PORTA_INV = 5903, PORTA_ZBX = 8081;
 const det = document.getElementById('detalhes');
 const status = document.getElementById('status');
@@ -68,8 +93,13 @@ async function testarZabbix(ip) {
   } catch (e) { return false; }
 }
 async function acharServidor() {
-  // tenta em paralelo, comum em redes DHCP
-  const unicos = [...new Set(HOSTS.filter(Boolean))];
+  // Descobre o IP real (file:// tambem) e varre a SUB-REDE INTEIRA em paralelo,
+  // igual ao detect-server.ps1. Nada de faixa fixa .100-.129: servidor em .238.
+  const ipLocal = await ipLocalWebRtc();
+  const rede = redeDe(ipLocal) || redeDe(location.hostname) || '192.168.0.';
+  const candidatos = [...HOSTS_BASE];
+  for (let i = 1; i <= 254; i++) candidatos.push(rede + i);
+  const unicos = [...new Set(candidatos.filter(Boolean))];
   const testes = unicos.map(async ip => (await testar(ip, PORTA_INV)) ? ip : null);
   const resultados = await Promise.all(testes);
   const encontrados = resultados.filter(Boolean);

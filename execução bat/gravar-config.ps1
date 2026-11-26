@@ -36,7 +36,7 @@ if (-not $Server) {
     }
 }
 if (-not $Server) {
-    # 2) scan da rede (127.0.0.1 + 192.168.0.100-129 na porta 5903)
+    # 2) detect-server.ps1 (scan paralelo de toda a sub-rede na porta 5903)
     $det = Join-Path $thisDir 'detect-server.ps1'
     if (Test-Path -LiteralPath $det) {
         $Server = (& powershell -NoProfile -ExecutionPolicy Bypass -File $det | Select-Object -First 1)
