@@ -172,7 +172,47 @@ function obterAlvos() {
         if (!merged.has(alvo.ip)) merged.set(alvo.ip, alvo);
     }
 
+    // O PC que roda o servidor SEMPRE aparece na tabela "Equipamentos Monitorados".
+    // Antes ele so entrava se alguem tivesse cadastrado 127.0.0.1 no targets.json
+    // (desativado por padrao) — por isso o proprio PC do usuario faltava.
+    // E um alvo REAL: IP da placa, hostname do SO e metricas locais reais.
+    try {
+        const jaTemLocal = Array.from(merged.values()).some(a => ehHostLocal(a.ip));
+        if (!jaTemLocal) {
+            const ipLocal = obterIpLocalReal();
+            if (ipLocal && !merged.has(ipLocal)) {
+                merged.set(ipLocal, {
+                    id: 'local',
+                    nome: os.hostname() || 'PC LOCAL',
+                    ip: ipLocal,
+                    setor: 'TI',
+                    mac: null,
+                    ativo: true,
+                    fonte: 'LOCAL_AUTO'
+                });
+            }
+        }
+    } catch (e) {}
+
     return Array.from(merged.values()).sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
+}
+
+/** IP LAN real desta maquina (ignora loopback, APIPA, virtual e bridge Docker). */
+function obterIpLocalReal() {
+    const pular = /vEthernet|Hyper-V|VMware|VirtualBox|Loopback|WSL|Bluetooth/i;
+    const ehBridge = ip => /^172\.(1[6-9]|2\d|3[01])\./.test(String(ip || ''));
+    try {
+        for (const [nome, addrs] of Object.entries(os.networkInterfaces())) {
+            if (pular.test(nome)) continue;
+            for (const a of (Array.isArray(addrs) ? addrs : [])) {
+                const ip = String(a.address || '');
+                if ((a.family === 'IPv4' || a.family === 4) && !a.internal &&
+                    /^\d+\.\d+\.\d+\.\d+$/.test(ip) && !ip.startsWith('127.') &&
+                    !ip.startsWith('169.254.') && !ehBridge(ip)) return ip;
+            }
+        }
+    } catch (e) {}
+    return null;
 }
 
 // ==================== MOTOR DE MOCK ====================

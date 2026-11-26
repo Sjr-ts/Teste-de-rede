@@ -168,7 +168,7 @@ if "%SILENT%"=="0" pause
 exit /b 1
 
 :cfg_ok
-call :log "[OK] Configuracao gravada (HostMetadataItem + UnsafeUserParameters + IP real)."
+call :log "[OK] Configuracao gravada (HostMetadata com IP real + auto-heal)."
 REM le o IP do servidor que foi detectado e gravado no conf (para exibicao)
 for /f "usebackq tokens=1,2 delims==" %%A in ("%ZBX_CONF_DIR%\zabbix_agent2.conf") do (
     if "%%A"=="Server" set "ZBX_SERVER=%%B"
