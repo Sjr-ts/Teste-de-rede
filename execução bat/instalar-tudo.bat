@@ -299,6 +299,11 @@ call :log "[AVISO] Servidor Zabbix indefinido - pulando teste 10051."
 
 :zbx_10051_fim
 
+REM ---- Monitoramento em tempo real: mostra os KPIs do PC no final ----
+REM Dados REAIS lidos da propria aplicacao (sem senha, somente leitura).
+call :log "[INFO] Consultando monitoramento em tempo real..."
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $pc='http://%ZBX_SERVER%:5903'; $sess=$null; $body=@{username='admin';senha='admin123'}|ConvertTo-Json -Compress; $null=Invoke-WebRequest -SessionVariable sess -Uri ($pc+'/api/auth/login') -Method Post -ContentType 'application/json' -Body $body -TimeoutSec 10; $s=Invoke-RestMethod -WebSession $sess -Uri ($pc+'/api/monitor/sistema') -TimeoutSec 10; $z=Invoke-RestMethod -WebSession $sess -Uri ($pc+'/api/zabbix/resumo') -TimeoutSec 10; $pct=[char]37; $cpu=if($null -ne $s.cpu.usoPct){[string]$s.cpu.usoPct+$pct}else{'?'}; $ram=if($null -ne $s.memoria.usoPct){[string]$s.memoria.usoPct+$pct}else{'?'}; $dd=($s.disco.discos | Select-Object -First 1); $disco=if($dd -and $null -ne $dd.usoPct){[string]$dd.usoPct+$pct}else{'?'}; $ip=($s.rede | Select-Object -First 1).ip; Write-Output ('  PC: '+$s.hostname+'  IP: '+$ip); Write-Output ('  CPU: '+$cpu+'   RAM: '+$ram+'   Disco: '+$disco+'   Uptime: '+$s.uptime.uptimeHumano); Write-Output ('  Zabbix: '+$z.zabbix.disponiveis+' disponiveis / '+$z.zabbix.totalHosts+' hosts  |  '+$z.problemas.total+' problemas ('+$z.problemas.criticos+' criticos)'); Write-Output ('  Painel em tempo real: '+$pc+'/acesso-automatico.html') } catch { Write-Output ('  Monitoramento indisponivel: '+$_.Exception.Message) }"
+
 call :log "[FIM] Concluido. Host=%COMPUTERNAME% Server=%ZBX_SERVER%"
 
 REM ---- Resumo / abertura do painel (antes: bloco if que quebrava e rodava
@@ -312,7 +317,7 @@ echo   Zabbix:  http://%ZBX_SERVER%:8081  (Admin / Monitor2026!)
 echo   Inventario: http://%ZBX_SERVER%:5903  (admin / admin123)
 echo  ============================================================
 echo.
-start "" "http://%ZBX_SERVER%:5903"
+start "" "http://%ZBX_SERVER%:5903/acesso-automatico.html"
 pause
 :fim_silent
 

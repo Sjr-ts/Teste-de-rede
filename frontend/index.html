@@ -71,8 +71,8 @@
                 </div>
             </div>
 
-            <div class="nav-group" id="navg-operacoes">
-                <button type="button" class="nav-group-toggle" onclick="toggleNavGroup(this)" aria-expanded="true">
+            <div class="nav-group collapsed" id="navg-operacoes">
+                <button type="button" class="nav-group-toggle" onclick="toggleNavGroup(this)" aria-expanded="false">
                     <span class="nav-group-label"><i class="fas fa-briefcase nav-icon"></i><span>Operacoes</span></span><i class="fas fa-chevron-down nav-chevron"></i>
                 </button>
                 <div class="nav-group-items">
@@ -88,8 +88,8 @@
                 </div>
             </div>
 
-            <div class="nav-group" id="navg-gestao">
-                <button type="button" class="nav-group-toggle" onclick="toggleNavGroup(this)" aria-expanded="true">
+            <div class="nav-group collapsed" id="navg-gestao">
+                <button type="button" class="nav-group-toggle" onclick="toggleNavGroup(this)" aria-expanded="false">
                     <span class="nav-group-label"><i class="fas fa-layer-group nav-icon"></i><span>Gestao</span></span><i class="fas fa-chevron-down nav-chevron"></i>
                 </button>
                 <div class="nav-group-items">
@@ -105,8 +105,8 @@
                 </div>
             </div>
 
-            <div class="nav-group" id="navg-sistema">
-                <button type="button" class="nav-group-toggle" onclick="toggleNavGroup(this)" aria-expanded="true">
+            <div class="nav-group collapsed" id="navg-sistema">
+                <button type="button" class="nav-group-toggle" onclick="toggleNavGroup(this)" aria-expanded="false">
                     <span class="nav-group-label"><i class="fas fa-sliders-h nav-icon"></i><span>Sistema</span></span><i class="fas fa-chevron-down nav-chevron"></i>
                 </button>
                 <div class="nav-group-items">
@@ -945,9 +945,6 @@
                     <button onclick="monToggleSilenciados()" id="mon-toggle-silenciados" class="btn btn-ghost btn-sm" style="font-size:10px;" title="Mostrar/ocultar problemas silenciados no Zabbix">
                         <i class="fas fa-eye-slash"></i> Silenciados: <span id="mon-silenciados-count">0</span>
                     </button>
-                    <button onclick="monAbrirZabbixFiltrado()" class="btn btn-ghost btn-sm" style="font-size:10px;" title="Abrir o Zabbix Web com exatamente estes filtros aplicados">
-                        <i class="fas fa-external-link-alt"></i> Ver no Zabbix
-                    </button>
                 </div>
                 <!-- Chips de severidade (contadores clicaveis) -->
                 <div id="mon-prob-chips" style="padding:8px 12px 4px;display:flex;gap:6px;flex-wrap:wrap;"></div>
@@ -986,12 +983,6 @@
                 <div class="glass-panel-header">
                     <h3><i class="fas fa-server"></i> Hosts Zabbix</h3>
                     <div style="display:flex;gap:8px;">
-                        <button onclick="monAbrirHostsZabbixFiltrado()" class="btn btn-ghost btn-sm" title="Abrir a lista de hosts no Zabbix">
-                            <i class="fas fa-external-link-alt"></i> Ver no Zabbix
-                        </button>
-                        <button onclick="monCriarDashboardZabbix()" class="btn btn-ghost btn-sm" title="Criar/atualizar o dashboard Inventario TI no Zabbix">
-                            <i class="fas fa-chart-pie"></i> Dashboard
-                        </button>
                         <button onclick="monSyncZabbix()" class="btn btn-ghost btn-sm" title="Sincronizar inventario, manutencoes e hosts com o Zabbix">
                             <i class="fas fa-rotate"></i> Sincronizar
                         </button>
@@ -1019,12 +1010,6 @@
                 <div id="mon-armazenamento" style="padding:16px;">
                     <p style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px;">Carregando...</p>
                 </div>
-            </div>
-            <div class="glass-panel" style="margin-top:16px;">
-                <div class="glass-panel-header">
-                    <h3><i class="fas fa-ban"></i> Indicadores Indisponiveis</h3>
-                </div>
-                <div id="mon-indisponiveis" style="padding:16px;font-size:12px;color:var(--text-muted);line-height:2;"></div>
             </div>
         </section>
 

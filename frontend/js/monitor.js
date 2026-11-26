@@ -276,7 +276,6 @@ function monRenderTudo(d) {
     try { monRenderTabela(d); } catch (e) {}
     try { monRenderAlertas(d); } catch (e) {}
     try { monRenderIncidentes(d); } catch (e) {}
-    try { monRenderIndisponiveis(d); } catch (e) {}
     try { monRenderDashboardWidget(); } catch (e) {}
     try { monRenderZabbixProblemas(); } catch (e) {}
     // notificacoes de falha no PONTO COMUM (SSE, polling e fallback), para nao
@@ -378,22 +377,6 @@ function monZabbixHostViewUrl(opts) {
     params.push('sortorder=ASC');
     return monZabbixBase() + '/zabbix.php?' + params.join('&');
 }
-// Dashboard "Inventario TI" no Zabbix
-function monAbrirDashboardZabbix() {
-    fetch('/api/zabbix/dashboard').then(r => r.json()).then(d => {
-        const id = d && d.dashboardid;
-        const url = monZabbixBase() + (id
-            ? '/zabbix.php?action=dashboard.view&dashboardid=' + encodeURIComponent(id)
-            : '/zabbix.php?action=dashboard.view');
-        window.open(url, '_blank', 'noopener');
-    }).catch(() => window.open(monZabbixBase() + '/zabbix.php?action=dashboard.view', '_blank', 'noopener'));
-}
-// Abre a lista de hosts no Zabbix ja filtrada pela pesquisa atual do painel
-function monAbrirHostsZabbixFiltrado() {
-    const q = (document.getElementById('mon-zabbix-busca') || {}).value || '';
-    window.open(monZabbixHostViewUrl({ nome: q.trim(), grupo: '22' }), '_blank', 'noopener');
-}
-
 // ==================== PROBLEMAS ZABBIX (painel integrado) ====================
 const MON_SEV_INFO = {
     '5': { label: 'Desastre', cor: '#ff4757', bg: 'rgba(255,71,87,0.14)' },
@@ -427,7 +410,7 @@ function monConselhoFalha(trigger) {
         return {
             causa: 'Mais de 100 itens do Zabbix pararam de receber dados ha mais de 10 minutos — tipicamente causado por host(s) sem contato (rede/agente), afetando a coleta em massa.',
             contornoHtml: '<ol style="margin:6px 0 0 18px;"><li>Identifique os hosts afetados no problem view do Zabbix e verifique conectividade/agente deles.</li><li>Confirme se houve migracao/mudanca de rede do servidor de monitoramento (faixa de IP).</li><li>Verifique os agentes e reinicie-os se necessario; acompanhe este alerta ate normalizar (some quando os dados voltarem).</li></ol>',
-            contornoTexto: '1) Ver no Zabbix quais hosts pararam; 2) Checar rede/agente deles; 3) Reiniciar agente se necessario; o alerta normaliza quando os dados voltarem.',
+            contornoTexto: '1) Identifique no painel quais hosts pararam; 2) Checar rede/agente deles; 3) Reiniciar agente se necessario; o alerta normaliza quando os dados voltarem.',
             notifica: 'Coleta Zabbix com muitos itens sem dados (host sem contato). Ver hosts afetados.'
         };
     }
@@ -797,28 +780,6 @@ async function monAckTodosVisiveis() {
     }
 }
 
-// Gera URL do Zabbix problem.view com os MESMOS filtros ativos aqui (dinamico, sem IP fixo)
-function monAbrirZabbixFiltrado() {
-    const f = _monProbFiltro;
-    const params = [];
-    params.push('action=problem.view');
-    params.push('show=1');
-    params.push('name=' + encodeURIComponent(f.texto || ''));
-    params.push('acknowledgement_status=' + (f.soNaoRec ? '1' : '0'));
-    if (f.host) params.push('hostids[]=' + encodeURIComponent(f.host));
-    if (f.sev !== '') params.push('severity[]=' + encodeURIComponent(f.sev));
-    params.push('show_tags=3');
-    params.push('tag_name_format=0');
-    params.push('show_timeline=1');
-    params.push('show_suppressed=' + (_monMostrarSilenciados ? '1' : '0'));
-    params.push('sort=clock');
-    params.push('sortorder=' + (f.ordem === 'recente' ? 'ASC' : 'DESC'));
-    params.push('age_state=0');
-    params.push('compact_view=1');
-    const url = monZabbixBase() + '/zabbix.php?' + params.join('&');
-    window.open(url, '_blank', 'noopener');
-}
-
 async function monAckProblema(eventid) {
     const p = monProblemaPorId(eventid);
     if (!p) { if (typeof showToast === 'function') showToast('Problema nao encontrado na lista local.', 'error'); return; }
@@ -1180,7 +1141,6 @@ if (typeof document !== 'undefined' && document.addEventListener) {
         window.monProbChipSev = monProbChipSev;
         window.monProbLimparFiltros = monProbLimparFiltros;
         window.monAckTodosVisiveis = monAckTodosVisiveis;
-        window.monAbrirZabbixFiltrado = monAbrirZabbixFiltrado;
         window.monToggleSilenciados = monToggleSilenciados;
     });
 }
@@ -2332,24 +2292,6 @@ function monRenderIncidentes(p) {
     }).join(''));
 }
 
-// ==================== RENDER: INDISPONIVEIS ====================
-function monRenderIndisponiveis(p) {
-    const el = document.getElementById('mon-indisponiveis');
-    if (!el) return;
-    const lista = (p && p.indisponiveis) || [
-        'Uso de RAM/CPU em PCs REMOTOS: indisponivel (sem agente instalado no PC destino)',
-        'Reinicio de PCs remotos: indisponivel (requer WEF/agent)',
-        'Porta do switch: indisponivel (requer SNMP nos switches)',
-        'Qualidade Wi-Fi: indisponivel (requer controlador Wi-Fi)',
-        'Registros DHCP/DNS: indisponivel (requer acesso aos servidores)'
-    ];
-    monSetHtmlSeMudou(el, lista.map(function(item) {
-        return '<div><i class="fas fa-ban" style="color:var(--red);width:16px;"></i> ' + esc(item) + '</div>';
-    }).join('') +
-    '<p style="margin-top:10px;font-size:11px;color:var(--green);"><i class="fas fa-check-circle"></i> No PC LOCAL (este servidor) CPU/RAM/disco/uptime sao REAIS e coletados por SO — veja o painel "PC Local" no topo.</p>' +
-    '<p style="margin-top:4px;font-size:11px;color:var(--yellow);"><i class="fas fa-info-circle"></i> Para PCs remotos completos, instale o Zabbix Agent 2.</p>');
-}
-
 // ==================== RENDER: HOSTS ZABBIX ====================
 let _monZbxHostsTs = 0;
 async function monRenderZabbixHosts(forcar) {
@@ -2366,7 +2308,7 @@ async function monRenderZabbixHosts(forcar) {
             return;
         }
         monSetHtmlSeMudou(el, '<div style="overflow-x:auto;"><table class="data-table" style="font-size:11px;"><thead><tr>' +
-            '<th>Hostname</th><th>Nome</th><th>IP</th><th>Status Agente</th><th>Templates</th><th>Erro</th><th>Ações</th>' +
+            '<th>Hostname</th><th>Nome</th><th>IP</th><th>Status Agente</th><th>Templates</th><th>Erro</th>' +
             '</tr></thead><tbody>' +
             hosts.map(h => {
                 const iface = (h.interfaces || [])[0] || {};
@@ -2376,8 +2318,6 @@ async function monRenderZabbixHosts(forcar) {
                 else if (avail === '2') { statusBadge = '<span class="badge badge-cancelada">Sem Agente</span>'; }
                 else { statusBadge = '<span class="badge badge-pendente">Aguardando</span>'; }
                 const templates = (h.parentTemplates || []).map(t => t.name).join(', ');
-                // Link host.view ja filtrado pelo nome visivel do host
-                const urlHost = monZabbixHostViewUrl({ nome: h.name || h.host, status: 0 });
                 return '<tr>' +
                     '<td><code>' + esc(h.host) + '</code></td>' +
                     '<td>' + esc(h.name || '-') + '</td>' +
@@ -2385,10 +2325,6 @@ async function monRenderZabbixHosts(forcar) {
                     '<td>' + statusBadge + '</td>' +
                     '<td style="font-size:10px;">' + esc(templates) + '</td>' +
                     '<td style="font-size:10px;color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="' + esc(iface.error || '') + '">' + esc((iface.error || '—').substring(0, 60)) + '</td>' +
-                    '<td style="white-space:nowrap;">' +
-                        '<a href="' + esc(urlHost) + '" target="_blank" rel="noopener" title="Ver host no Zabbix" style="color:var(--cyan);margin-right:8px;"><i class="fas fa-external-link-alt"></i></a>' +
-                        '<a href="' + esc(monZabbixUrl(h.hostid)) + '" target="_blank" rel="noopener" title="Ver problemas do host" style="color:var(--yellow);"><i class="fas fa-exclamation-triangle"></i></a>' +
-                    '</td>' +
                     '</tr>';
             }).join('') +
             '</tbody></table></div>');
@@ -2475,26 +2411,6 @@ async function monSyncIpsZabbix() {
         if (typeof showToast === 'function') showToast('Erro ao atualizar IPs: ' + e.message, 'error');
     } finally {
         if (btn) { btn.disabled = false; btn.style.opacity = 1; }
-    }
-}
-
-// Garante/abre o dashboard "Inventario TI" no Zabbix
-async function monCriarDashboardZabbix() {
-    try {
-        const url = 'http://' + window.location.hostname + ':5903/index.html';
-        const r = await fetch('/api/zabbix/dashboard', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ urlPainel: url })
-        }).then(x => x.json());
-        if (r.error) throw new Error(r.error);
-        if (typeof showToast === 'function') {
-            showToast(r.criado ? 'Dashboard "Inventario TI" criado no Zabbix.' : 'Dashboard "Inventario TI" atualizado no Zabbix.', 'success');
-        }
-        if (typeof pushLog === 'function') pushLog('ALTERACAO', 'MONITORAMENTO', null, 'Dashboard Zabbix Inventario TI: ' + (r.criado ? 'criado' : 'atualizado') + ' (id ' + r.dashboardid + ')');
-        monAbrirDashboardZabbix();
-    } catch (e) {
-        if (typeof showToast === 'function') showToast('Erro no dashboard: ' + e.message, 'error');
     }
 }
 

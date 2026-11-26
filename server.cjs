@@ -977,6 +977,35 @@ app.get('/api/zabbix/hosts', async (req, res) => {
         // determinar se esta disponivel. Evita mostrar "Aguardando" para
         // hosts que estao respondendo (bug reportado pelo usuario).
         const enriquecidos = await zb.enriquecerDisponibilidade(r);
+        // CORRECAO DE EXIBICAO: o agente desta maquina fala com o Zabbix via
+        // 127.0.0.1:10051 e o NAT do Docker faz o servidor ver o IP do bridge
+        // (172.22.0.1), nao o IP real da placa. Mostra o IP LAN verdadeiro no
+        // host local. Isso NAO altera o Zabbix nem o cadastro — apenas a
+        // resposta deste endpoint (a sincronizacao usa a ponte diretamente).
+        try {
+            const osMod = require('os');
+            const hostnameLocal = String(osMod.hostname() || '').toUpperCase();
+            const pular = /vEthernet|Hyper-V|VMware|VirtualBox|Loopback|WSL|Bluetooth/i;
+            const ehBridge = ip => /^172\.(1[6-9]|2\d|3[01])\./.test(String(ip || ''));
+            let ipReal = null;
+            for (const [nome, addrs] of Object.entries(osMod.networkInterfaces())) {
+                if (pular.test(nome)) continue;
+                for (const a of (addrs || [])) {
+                    const ip = String(a.address || '');
+                    if ((a.family === 'IPv4' || a.family === 4) && !a.internal &&
+                        /^\d+\.\d+\.\d+\.\d+$/.test(ip) && !ip.startsWith('127.') &&
+                        !ip.startsWith('169.254.') && !ehBridge(ip)) { ipReal = ip; break; }
+                }
+                if (ipReal) break;
+            }
+            if (ipReal) {
+                for (const h of (enriquecidos || [])) {
+                    const nome = String(h.name || h.host || '').toUpperCase();
+                    const iface = h.interfaces && h.interfaces[0];
+                    if (iface && nome === hostnameLocal && ehBridge(iface.ip)) iface.ip = ipReal;
+                }
+            }
+        } catch (e) {}
         res.json(enriquecidos);
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
