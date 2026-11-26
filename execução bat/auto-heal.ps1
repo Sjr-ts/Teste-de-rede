@@ -40,14 +40,42 @@ function Get-IpReal {
     return $null
 }
 
-function Get-ServerIp {
+function Test-ZbxServer([string]$ip) {
+    # true se $ip:10051 aceita conexao (o Zabbix server esta vivo la)
+    if (-not $ip -or $ip -notmatch '^\d{1,3}(\.\d{1,3}){3}$') { return $false }
+    try {
+        $c = New-Object Net.Sockets.TcpClient
+        $iar = $c.BeginConnect($ip, 10051, $null, $null)
+        $ok = $iar.AsyncWaitHandle.WaitOne(1500)
+        try { $c.Close() } catch { }
+        return [bool]$ok
+    } catch { return $false }
+}
+
+function Get-ServerIp([string]$atual) {
+    # 1) arquivo fixo
     $ipFile = Join-Path (Get-BaseDir) 'server-ip.txt'
     if (Test-Path $ipFile) {
         $s = (Get-Content $ipFile -Raw).Trim()
         if ($s) { return $s }
     }
-    $ip = Get-IpReal
-    if ($ip) { return $ip }
+    # 2) Se o Server= que JA esta no conf ainda responde em 10051, MANTÉM.
+    #    (nao ha razao para trocar o que esta funcionando)
+    if ($atual -and (Test-ZbxServer $atual)) { return $atual }
+    # 3) detecta o servidor de verdade (quem responde /actuator/health:5903)
+    #    NUNCA o IP local desta maquina: em clientes isso apontava o agente
+    #    para SI MESMO e o Zabbix nunca recebia os dados.
+    $scan = Join-Path (Get-BaseDir) 'detect-server.ps1'
+    if (Test-Path $scan) {
+        $ip = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scan 2>$null |
+              Where-Object { $_ -match '^\d{1,3}(\.\d{1,3}){3}$' } | Select-Object -First 1
+        if ($ip -and (Test-ZbxServer "$ip".Trim())) { return "$ip".Trim() }
+        if ($ip -and -not (Test-ZbxServer "$ip".Trim())) {
+            # achou o painel mas nao o Zabbix: melhor 127.0.0.1 que o IP local
+            return '127.0.0.1'
+        }
+    }
+    # 4) fallback: o servidor Zabbix costuma estar nesta mesma maquina
     return '127.0.0.1'
 }
 

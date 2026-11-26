@@ -48,13 +48,24 @@ function log(m, cls) {
   det.innerHTML += '› <span class="' + (cls||'') + '">' + m + '</span><br>';
   det.scrollTop = det.scrollHeight;
 }
-async function testar(ip, porta) {
+async function testar(ip, porta, caminho) {
   try {
-    const r = await fetch('http://' + ip + ':' + porta + '/actuator/health',
+    const r = await fetch('http://' + ip + ':' + porta + (caminho || '/actuator/health'),
       { signal: AbortSignal.timeout(500) });
     if (r.ok) return true;
   } catch (e) {}
   return false;
+}
+async function testarZabbix(ip) {
+  // O Zabbix NAO tem /actuator/health (devolve 404 -> sempre "nao encontrado",
+  // bug corrigido em 25/11/2026). Qualquer resposta HTTP legivel na porta 8081
+  // (200/412/404) prova que ha um servidor Zabbix/nginx respondendo.
+  // CORS: /api_jsonrpc.php devolve Access-Control-Allow-Origin: *.
+  try {
+    const r = await fetch('http://' + ip + ':' + PORTA_ZBX + '/api_jsonrpc.php',
+      { signal: AbortSignal.timeout(800) });
+    return r.status > 0;
+  } catch (e) { return false; }
 }
 async function acharServidor() {
   // tenta em paralelo, comum em redes DHCP
@@ -89,7 +100,7 @@ async function acharServidor() {
   // 2) Zabbix (pode estar em outra porta/IP)
   let ipZbx = null;
   for (const h of [ip, '127.0.0.1', location.hostname]) {
-    if (h && await testar(h, PORTA_ZBX)) { ipZbx = h; break; }
+    if (h && await testarZabbix(h)) { ipZbx = h; break; }
   }
   if (ipZbx) {
     try {

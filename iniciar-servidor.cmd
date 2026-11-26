@@ -1,13 +1,18 @@
 @echo off
-title Servidor Inventario TI - Porta 5903
+REM ===========================================================================
+REM  Iniciar o servidor do Inventario TI (porta 5903) - versao SEGURO.
+REM
+REM  ANTES este .cmd rodava "node server.cjs" DIRETO no console. Com QuickEdit
+REM  ativado (padrao do Windows), uma selecao de texto na janela congelava o
+REM  event loop do node e o painel ficava em carregamento infinito.
+REM
+REM  AGORA a saida vai para ARQUIVO (server.log / server.err.log) via
+REM  iniciar-servidor.ps1 - o WriteFile nunca pode bloquear o servidor.
+REM ===========================================================================
 cd /d "%~dp0"
-echo ============================================
-echo  Servidor Inventario TI (clone local)
-echo  Porta: 5903 | Zabbix: 192.168.0.186:8081
-echo ============================================
-echo.
-echo Matando servidor antigo se existir...
-for /f "tokens=5" %%p in ('netstat -ano ^| findstr :5903 ^| findstr LISTENING') do taskkill /F /PID %%p >nul 2>&1
-timeout /t 1 /nobreak >nul
-echo Iniciando servidor...
-node server.cjs
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0iniciar-servidor.ps1"
+if errorlevel 1 (
+    echo.
+    echo Falha ao iniciar. Veja iniciar-servidor.log e server.err.log
+    pause
+)

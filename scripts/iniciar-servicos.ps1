@@ -89,11 +89,22 @@ try {
         if (-not (Test-Path $nodeExe)) {
             Log "ERRO: node nao encontrado em $nodeExe"
         } else {
-            Log "server.cjs: subindo na porta $Porta..."
-            Start-Process -FilePath $nodeExe `
-                -ArgumentList "`"$repo\server.cjs`"" `
-                -WorkingDirectory $repo `
-                -WindowStyle Hidden
+            # SEGURANCA: usa iniciar-servidor.ps1 em vez de Start-Process node direto.
+            # O inicializador redireciona stdout/stderr para ARQUIVO (server.log /
+            # server.err.log). Rodar "node" em console - mesmo oculto - arrisca o
+            # mesmo congelamento de event loop por QuickEdit/buffer que derrubou o
+            # painel em 25/11/2026 (carregamento infinito).
+            $init = Join-Path $repo 'iniciar-servidor.ps1'
+            if (Test-Path -LiteralPath $init) {
+                Log "server.cjs: subindo na porta $Porta (via iniciar-servidor.ps1)..."
+                & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $init | ForEach-Object { Log ("  init> " + "$_".Trim()) }
+            } else {
+                Log "server.cjs: subindo na porta $Porta (fallback Start-Process oculto)..."
+                Start-Process -FilePath $nodeExe `
+                    -ArgumentList "`"$repo\server.cjs`"" `
+                    -WorkingDirectory $repo `
+                    -WindowStyle Hidden
+            }
             $deadline = (Get-Date).AddSeconds(30)
             while ((Get-Date) -lt $deadline) {
                 Start-Sleep -Seconds 2
