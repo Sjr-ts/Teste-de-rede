@@ -93,14 +93,21 @@ async function testarZabbix(ip) {
   } catch (e) { return false; }
 }
 async function acharServidor() {
-  // Descobre o IP real (file:// tambem) e varre a SUB-REDE INTEIRA em paralelo,
-  // igual ao detect-server.ps1. Nada de faixa fixa .100-.129: servidor em .238.
+  // 1) CAMINHO RAPIDO: o instalador abre esta pagina ja no IP do servidor
+  //    (location.hostname), entao nao ha motivo para varrer 254 IPs antes.
+  for (const ip of [...new Set(HOSTS_BASE.filter(Boolean))]) {
+    if (await testar(ip, PORTA_INV)) {
+      log('Servidor Inventário encontrado: <code>' + ip + '</code>', 'ok');
+      return ip;
+    }
+  }
+  // 2) FALLBACK: arquivo solto (file://) ou servidor em outro IP da rede.
+  //    Descobre o IP real e varre a SUB-REDE INTEIRA em paralelo, igual ao
+  //    detect-server.ps1. Nada de faixa fixa .100-.129: servidor em .238.
   const ipLocal = await ipLocalWebRtc();
   const rede = redeDe(ipLocal) || redeDe(location.hostname) || '192.168.0.';
-  const candidatos = [...HOSTS_BASE];
-  for (let i = 1; i <= 254; i++) candidatos.push(rede + i);
-  const unicos = [...new Set(candidatos.filter(Boolean))];
-  const testes = unicos.map(async ip => (await testar(ip, PORTA_INV)) ? ip : null);
+  const testes = [];
+  for (let i = 1; i <= 254; i++) testes.push((async ip => (await testar(ip, PORTA_INV)) ? ip : null)(rede + i));
   const resultados = await Promise.all(testes);
   const encontrados = resultados.filter(Boolean);
   for (const ip of encontrados) log('Servidor Inventário encontrado: <code>' + ip + '</code>', 'ok');
