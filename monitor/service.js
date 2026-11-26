@@ -8,6 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { execFileSync } = require('child_process');
 const { ping, tcpCheck } = require('./pinger');
 const store = require('./storage');
 const { avaliarHost, correlacionarSetor } = require('./alerts');
@@ -172,29 +173,43 @@ function obterAlvos() {
         if (!merged.has(alvo.ip)) merged.set(alvo.ip, alvo);
     }
 
-    // O PC que roda o servidor SEMPRE aparece na tabela "Equipamentos Monitorados".
-    // Antes ele so entrava se alguem tivesse cadastrado 127.0.0.1 no targets.json
-    // (desativado por padrao) — por isso o proprio PC do usuario faltava.
-    // E um alvo REAL: IP da placa, hostname do SO e metricas locais reais.
+    // O PC local entra no monitoramento SOMENTE enquanto o agente Zabbix estiver
+    // instalado. Ao desinstalar (bat limpo) a linha some; ao rodar o instalador
+    // ela volta sozinha. Vale para qualquer PC: presenca do agente = linha viva.
     try {
-        const jaTemLocal = Array.from(merged.values()).some(a => ehHostLocal(a.ip));
-        if (!jaTemLocal) {
-            const ipLocal = obterIpLocalReal();
-            if (ipLocal && !merged.has(ipLocal)) {
-                merged.set(ipLocal, {
-                    id: 'local',
-                    nome: os.hostname() || 'PC LOCAL',
-                    ip: ipLocal,
-                    setor: 'TI',
-                    mac: null,
-                    ativo: true,
-                    fonte: 'LOCAL_AUTO'
-                });
+        if (agenteLocalInstalado()) {
+            const jaTemLocal = Array.from(merged.values()).some(a => ehHostLocal(a.ip));
+            if (!jaTemLocal) {
+                const ipLocal = obterIpLocalReal();
+                if (ipLocal && !merged.has(ipLocal)) {
+                    merged.set(ipLocal, {
+                        id: 'local',
+                        nome: os.hostname() || 'PC LOCAL',
+                        ip: ipLocal,
+                        setor: 'TI',
+                        mac: null,
+                        ativo: true,
+                        fonte: 'LOCAL_AUTO'
+                    });
+                }
             }
         }
     } catch (e) {}
 
     return Array.from(merged.values()).sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
+}
+
+/** Agente Zabbix 2 instalado nesta maquina? (exe + conf + servico). */
+function agenteLocalInstalado() {
+    const dir = 'C:\\Program Files\\Zabbix Agent 2';
+    if (!fs.existsSync(path.join(dir, 'zabbix_agent2.exe'))) return false;
+    if (!fs.existsSync(path.join(dir, 'zabbix_agent2.conf'))) return false;
+    try {
+        const out = execFileSync('sc.exe', ['query', 'Zabbix Agent 2'], {
+            encoding: 'utf8', timeout: 2500, stdio: ['ignore', 'pipe', 'ignore']
+        });
+        return /RUNNING|STOPPED|PAUSED/.test(String(out));
+    } catch (e) { return false; }
 }
 
 /** IP LAN real desta maquina (ignora loopback, APIPA, virtual e bridge Docker). */
