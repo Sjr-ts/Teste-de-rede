@@ -80,9 +80,9 @@ Esse IP é passado ao MSI como **`SERVER=`** (exigido pelo `LaunchCondition` do 
 - Grava uma configuração **válida para o Agent 2 no Windows** (sem `PidFile`, que é inválido e impede o serviço de subir):
   - `Server` / `ServerActive` = IP do servidor detectado
   - `Hostname` = nome do computador (automático)
-  - `HostMetadataItem=inv.meta` + `UnsafeUserParameters=1` (IP adaptativo)
-  - `UserParameter=inv.meta` aponta para um script PowerShell que detecta o **IP real** da interface (ignora IP virtual/APIPA)
-  - **Não** grava `HostMetadata` estático (isso anularia o IP adaptativo)
+  - `HostMetadata=inventario-ti <IP real>` + `UnsafeUserParameters=1` (IP adaptativo)
+  - O script `inv-meta.ps1` detecta o **IP real** da interface (ignora IP virtual/APIPA) e grava esse valor no metadata
+  - **Não** usa `HostMetadataItem`/`UserParameter`: neste Windows o Agent 2 falha ao executar `cmd.exe` ("Acesso negado") até para `echo OK`, então o metadata é estático e o auto-heal o reescreve
 - Cria tarefas agendadas para execução **silenciosa no boot e no logon** (`ZabbixAgent-SilentInstall` / `ZabbixAgent-SilentLogon`).
 - Cria o **auto-heal** (`ZabbixAgent-AutoHeal-Boot` + `ZabbixAgent-AutoHeal-5min`).
 - Inicia o serviço `Zabbix Agent 2`.
@@ -90,7 +90,9 @@ Esse IP é passado ao MSI como **`SERVER=`** (exigido pelo `LaunchCondition` do 
 
 ## IP adaptativo (o que o usuário não precisa saber)
 
-Quando o IP do PC muda (DHCP), o script `inv.meta` retorna um metadata novo (`inventario-ti <novo-ip>`). Isso faz o agente **re-registrar sozinho no Zabbix em menos de 20 segundos, sem reiniciar**. O servidor Zabbix atualiza a interface do host e o Inventário TI lê esse IP de volta para o cadastro (job a cada 5 min). O monitoramento continua sem perder histórico.
+Quando o IP do PC muda (DHCP), o `auto-heal.ps1` (a cada 5 min) detecta o novo IP, reescreve a linha `HostMetadata=inventario-ti <novo-ip>` e reinicia o agente. Isso faz o agente **re-registrar sozinho no Zabbix**. O servidor Zabbix atualiza a interface do host e o Inventário TI lê esse IP de volta para o cadastro (job a cada 5 min). O monitoramento continua sem perder histórico.
+
+> **Por que não `HostMetadataItem`:** o `UserParameter` do Agent 2 depende de `cmd.exe`, e neste ambiente o Agent 2 não consegue executá-lo ("Acesso negado" até para `echo OK`). O metadata estático reescrito pelo auto-heal evita esse bloqueio e funciona mesmo sem nenhum comando externo do agente.
 
 ## Auto-registro no Zabbix (PC novo aparece com dados sozinho)
 
@@ -116,9 +118,9 @@ O instalador cria 2 tarefas agendadas no PC:
 O `auto-heal.ps1` garante automaticamente que:
 
 - O serviço **Zabbix Agent 2 está rodando** (reinicia se parou)
-- O **metadata contém o IP atual** do PC (sobrevive a DHCP)
+- O **`HostMetadata` contém o IP atual** do PC (sobrevive a DHCP)
 - O conf aponta para o **servidor certo** (se o IP do servidor mudou, corrige)
-- Remove `HostMetadata` estático e `PidFile` inválido se aparecerem
+- Remove `HostMetadataItem`/`UserParameter` antigos e `PidFile` inválido se aparecerem
 
 Tudo é logado em `%TEMP%\zabbix-selfheal.log`. Ou seja: **o PC se re-registra sozinho no Zabbix** após qualquer reboot, queda de rede ou troca de IP — sem ninguém mexer.
 

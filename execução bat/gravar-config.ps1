@@ -63,6 +63,14 @@ $metaLines += 'Write-Output (' + $sq + 'inventario-ti ' + $sq + ' + ' + $d + 'ip
 $enc = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllLines($meta, $metaLines, $enc)
 
+# --- valor do metadata (IP adaptativo) ---
+# O UserParameter do Agent 2 NAO funciona neste Windows: qualquer comando
+# (ate "echo OK") falha com "fork/exec cmd.exe: Acesso negado". Por isso o
+# metadata e ESTATICO e o auto-heal.ps1 o reescreve quando o IP muda (5 min).
+$metaValor = (& powershell -NoProfile -ExecutionPolicy Bypass -File $meta | Select-Object -First 1)
+if ($metaValor) { $metaValor = "$metaValor".Trim() }
+if (-not $metaValor -or $metaValor -like '*sem-ip*') { $metaValor = 'inventario-ti ' + $hostname }
+
 # --- zabbix_agent2.conf (SEM PidFile - invalido no Agent 2 Windows) ---
 $c = @()
 $c += '# Zabbix Agent 2 - Configuracao automatica (Inventario TI)'
@@ -72,11 +80,10 @@ $c += 'Server=' + $Server
 $c += 'ServerActive=' + $Server
 $c += 'Hostname=' + $hostname
 $c += ''
-$c += '# IP adaptativo: metadata DINAMICO (HostMetadataItem)'
-$c += '# HostMetadata (estatico) NAO pode estar definido, senao este item e ignorado'
-$c += 'HostMetadataItem=inv.meta'
+$c += '# IP adaptativo: HostMetadata com o IP real; auto-heal reescreve em 5 min'
+$c += '# (UserParameter abandonado: Agent 2 nao executa cmd.exe neste Windows)'
+$c += 'HostMetadata=' + $metaValor
 $c += 'UnsafeUserParameters=1'
-$c += 'UserParameter=inv.meta,powershell -NoProfile -ExecutionPolicy Bypass -File ' + $q + $meta + $q
 $c += ''
 $c += 'Include=' + $confDir + '\zabbix_agent2.d\*.conf'
 $c += 'LogFile=' + $confDir + '\zabbix_agent2.log'

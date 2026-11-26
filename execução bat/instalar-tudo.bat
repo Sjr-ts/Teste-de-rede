@@ -261,7 +261,7 @@ exit /b 1
 :svc_fim
 
 REM ---- Validacao REAL de comunicacao (evita falso "Concluido") ----
-call :log "[INFO] Validando agente (agent.ping + inv.meta)..."
+call :log "[INFO] Validando agente (agent.ping + HostMetadata)..."
 "%ZBX_EXE%" -c "%ZBX_CONF_DIR%\zabbix_agent2.conf" -t "agent.ping" 2>&1 | findstr /i "ZBX_NOTSUPPORTED" >nul
 if errorlevel 1 goto :ping_ok
 call :log "[ERRO] agent.ping NAO respondeu - agente nao funcional."
@@ -270,13 +270,15 @@ exit /b 1
 
 :ping_ok
 call :log "[OK] agent.ping responde."
-"%ZBX_EXE%" -c "%ZBX_CONF_DIR%\zabbix_agent2.conf" -t "inv.meta" 2>&1 | findstr /i "ZBX_NOTSUPPORTED" >nul
-if errorlevel 1 goto :meta_ok
-call :log "[AVISO] inv.meta nao respondeu - metadata pode nao chegar ao Zabbix."
+REM IP adaptativo: HostMetadata estatico reescrito pelo auto-heal.
+REM (antes validavamos -t inv.meta, mas o Agent 2 nao executa cmd.exe aqui)
+findstr /i /c:"HostMetadata=inventario-ti" "%ZBX_CONF_DIR%\zabbix_agent2.conf" >nul 2>&1
+if errorlevel 1 goto :meta_aviso
+call :log "[OK] HostMetadata com IP adaptativo gravado (auto-heal atualiza em 5 min)."
 goto :meta_fim
 
-:meta_ok
-call :log "[OK] inv.meta responde."
+:meta_aviso
+call :log "[AVISO] HostMetadata ausente - IP adaptativo pode nao funcionar."
 
 :meta_fim
 

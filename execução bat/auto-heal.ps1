@@ -103,14 +103,25 @@ $serverIp = Get-ServerIp $serverAtual
 $ipReal = Get-IpReal
 $mudou = $false
 
-if ($txt -notmatch '(?m)^HostMetadataItem=inv\.meta') {
-    $txt = $txt -replace '(?m)^HostMetadata=.*\r?\n?', ''
-    $txt = $txt.TrimEnd() + "`r`nHostMetadataItem=inv.meta`r`nUnsafeUserParameters=1`r`n"
-    $mudou = $true; Log 'Corrigido: HostMetadataItem restaurado.'
+# IP adaptativo SEM UserParameter: o Agent 2 nao consegue executar cmd.exe
+# neste Windows ("Acesso negado" ate para "echo OK"). O metadata e gravado
+# como HostMetadata estatico e REESCRITO aqui quando o IP da maquina muda.
+$metaEsperado = 'inventario-ti ' + $ipReal
+if ($txt -match '(?m)^HostMetadataItem=') {
+    $txt = $txt -replace '(?m)^HostMetadataItem=.*\r?\n?', ''
+    $mudou = $true; Log 'Corrigido: HostMetadataItem removido.'
 }
-if ($txt -match '(?m)^HostMetadata=') {
-    $txt = $txt -replace '(?m)^HostMetadata=.*\r?\n?', ''
-    $mudou = $true; Log 'Corrigido: HostMetadata estatico removido.'
+if ($txt -match '(?m)^UserParameter=inv\.meta') {
+    $txt = $txt -replace '(?m)^UserParameter=inv\.meta.*\r?\n?', ''
+    $mudou = $true; Log 'Corrigido: UserParameter inv.meta removido.'
+}
+$mMeta = [regex]::Match($txt, '(?m)^HostMetadata=(.*)$')
+if (-not $mMeta.Success) {
+    $txt = $txt.TrimEnd() + "`r`nHostMetadata=$metaEsperado`r`n"
+    $mudou = $true; Log "Corrigido: HostMetadata gravado ($metaEsperado)."
+} elseif ($mMeta.Groups[1].Value.Trim() -ne $metaEsperado) {
+    $txt = $txt -replace '(?m)^HostMetadata=.*$', "HostMetadata=$metaEsperado"
+    $mudou = $true; Log "Corrigido: IP mudou -> HostMetadata=$metaEsperado."
 }
 if ($txt -match '(?m)^PidFile=') {
     $txt = $txt -replace '(?m)^PidFile=.*\r?\n?', ''
@@ -132,10 +143,8 @@ if ($mudou) {
     Start-Sleep -Seconds 3
 }
 
-$metaScript = Join-Path $confDir 'scripts\inv-meta.ps1'
-if (Test-Path $metaScript) {
-    $valor = & powershell -NoProfile -ExecutionPolicy Bypass -File $metaScript 2>$null | Select-Object -First 1
-    Log "Metadata: $valor (IP real: $ipReal, servidor: $serverIp)"
-} else { Log 'AVISO: inv-meta.ps1 ausente — IP adaptativo inativo.' }
+$metaFinal = [regex]::Match((Get-Content $conf -Raw), '(?m)^HostMetadata=(.*)$')
+if ($metaFinal.Success) { Log ('Metadata efetivo: ' + $metaFinal.Groups[1].Value.Trim() + ' (servidor: ' + $serverIp + ')') }
+else { Log 'AVISO: HostMetadata ausente — IP adaptativo inativo.' }
 
 Log '=== Self-heal concluido ==='
