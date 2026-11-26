@@ -159,6 +159,8 @@ async function monPollCpuTempoReal() {
             monAtualizarGpuNaTabela(gpuRes.gpu, gpuRes.nome || _monGpuNome, gpuRes.ts);
             monAtualizarKpiGpu(gpuRes.gpu, gpuRes.nome || _monGpuNome, gpuRes.ts);
         }
+        // A linha de status acompanha CPU/GPU em tempo real
+        try { monRenderTopo(_monSistema, _monZabbix, _monDados); } catch (e) {}
     } catch (e) {}
 }
 
@@ -185,8 +187,8 @@ function monAtualizarCpuNaTabela(cpu, ts) {
     const tr = monLinhaLocalTabela(tbody);
     if (!tr) return;
     const tds = tr.querySelectorAll('td');
-    if (tds.length >= 6) {
-        const cpuCell = tds[5];
+    if (tds.length >= 8) {
+        const cpuCell = tds[3];
         cpuCell.innerHTML = '<span style="color:var(--cyan);font-weight:600;">' + cpu.toFixed(1) + '%</span>' +
             '<br><span style="font-size:9px;color:var(--text-muted);" title="Contador &apos;% Processor Utility&apos; — o mesmo exibido no Gerenciador de Tarefas">TEMPO REAL</span>' +
             '<br>' + monIdadeHtml(ts);
@@ -202,8 +204,8 @@ function monAtualizarGpuNaTabela(gpu, nome, ts) {
     const tr = monLinhaLocalTabela(tbody);
     if (!tr) return;
     const tds = tr.querySelectorAll('td');
-    if (tds.length >= 7) {
-        const gpuCell = tds[6];
+    if (tds.length >= 8) {
+        const gpuCell = tds[4];
         const cor = 'var(--' + (monCorUso(gpu, 'cyan') || 'cyan') + ')';
         gpuCell.innerHTML = '<span style="color:' + cor + ';font-weight:600;">' + gpu.toFixed(1) + '%</span>' +
             '<br><span style="font-size:9px;color:var(--text-muted);">' + esc(nome || 'GPU') + '</span>' +
@@ -697,10 +699,8 @@ function monProblemaItemHtml(p) {
             '<span style="font-size:10px;color:var(--orange);white-space:nowrap;font-weight:600;" data-mon-tempo="' + esc(inicio ? inicio.toISOString() : '') + '" title="Inicio: ' + esc(inicio ? inicio.toLocaleString('pt-BR') : '—') + '">' + esc(monTempoRelativo(inicio)) + '</span>' +
             ackBadge + supBadge +
             '<span style="display:flex;gap:4px;margin-left:auto;">' +
-                (p.reconhecido ? '' : '<button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:10px;" onclick="event.stopPropagation();monAckProblema(\'' + monJsAttr(p.eventid) + '\')" title="Reconhecer no Zabbix"><i class="fas fa-check-double" style="color:var(--green);"></i></button>') +
-                '<button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:10px;" onclick="event.stopPropagation();monAbrirZabbixHost(\'' + monJsAttr(p.hostid || '') + '\')" title="Abrir problem view no Zabbix"><i class="fas fa-external-link-alt" style="color:var(--cyan);"></i></button>' +
+                (p.reconhecido ? '' : '<button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:10px;" onclick="event.stopPropagation();monAckProblema(\'' + monJsAttr(p.eventid) + '\')" title="Reconhecer"><i class="fas fa-check-double" style="color:var(--green);"></i></button>') +
                 '<button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:10px;" onclick="event.stopPropagation();monAbrirOSFalha(\'' + monJsAttr(p.eventid) + '\')" title="Criar Ordem de Servico"><i class="fas fa-clipboard-list" style="color:var(--purple);"></i></button>' +
-                '<button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:10px;" onclick="event.stopPropagation();monVerInventario(\'' + monJsAttr(p.hostTecnico || p.host || '') + '\')" title="Localizar no Inventario"><i class="fas fa-desktop" style="color:var(--green);"></i></button>' +
             '</span>' +
         '</div>' +
         (tags ? '<div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap;align-items:center;"><span style="font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Tags:</span>' + tags + '</div>' : '') +
@@ -1164,30 +1164,19 @@ let _monFonteMock = false; // usa painel real (meu PC + 1 mock)
 
 async function monAtualizar() {
     try {
-        // Busca painel real + painel mock (101 PCs inventario original)
-        const [painelReal, painelMock, zabbix, sistema] = await Promise.all([
+        // Somente dados reais: painel do coletor, resumo Zabbix e metricas do SO.
+        const [painelReal, zabbix, sistema] = await Promise.all([
             fetch('/api/monitor/painel').then(r => r.json()).catch(() => null),
-            fetch('/api/monitor/mock/painel').then(r => r.json()).catch(() => null),
             fetch('/api/zabbix/resumo').then(r => r.json()).catch(() => null),
             fetch('/api/monitor/sistema').then(r => r.json()).catch(() => null)
         ]);
         _monZabbix = zabbix;
         _monSistema = sistema;
         _monDirty = false;
-        monRenderZabbixStatus(zabbix);
-        monRenderSistema(sistema);
+        monRenderTopo(sistema, zabbix, painelReal);
 
-        // Painel mock (101 PCs inventario) tem prioridade se disponivel
-        if (_monFonteMock && painelMock && painelMock.linhas && painelMock.linhas.length > 0) {
-            painelMock.fonte = 'MOCK_INVENTARIO_ORIGINAL';
-            _monDados = painelMock;
-        } else {
-            _monDados = painelReal;
-        }
-
+        _monDados = painelReal;
         monRenderTudo(_monDados);
-        monRenderZabbixHosts();
-        monAtualizarArmazenamento();
     } catch (e) {
         console.error('Erro ao carregar monitoramento:', e);
     }
@@ -1705,6 +1694,38 @@ async function monCarregarMockMetricas(ip) {
 // ==================== RENDER: KPIs (atualizacao diferencial, sem innerHTML total) ====================
 // Cada card tem data-key fixo; atualizamos apenas texto/classes, preservando os
 // nos do DOM. Isso elimina o "travamento" a cada ciclo do coletor/SSE.
+// Linha unica de status: coleta, agente e maquina local. Substitui os
+// paineis antigos "Zabbix" + "PC Local" que repetiam as mesmas informacoes.
+function monRenderTopo(sistema, zabbix, painel) {
+    const el = document.getElementById('mon-topo');
+    if (!el) return;
+    const s = sistema || {};
+    const z = zabbix || {};
+    const servico = (painel && painel.servico) || {};
+    const cpu = _monCpuTempoReal != null ? _monCpuTempoReal : (s.cpu && s.cpu.usoPct);
+    const gpu = _monGpuTempoReal != null ? _monGpuTempoReal : null;
+    const mem = s.memoria && s.memoria.usoPct;
+    const dv = s.disco && s.disco.discos && s.disco.discos[0];
+    const pct = v => (v != null && isFinite(v)) ? Math.round(v) + '%' : '—';
+    const zb = z.zabbix || {};
+    if (!zb.totalHosts) zb.totalHosts = 0;
+    if (!zb.disponiveis) zb.disponiveis = 0;
+    const hora = servico.ultimaExecucao ? new Date(servico.ultimaExecucao).toLocaleTimeString('pt-BR') : new Date().toLocaleTimeString('pt-BR');
+    const item = (ic, cor, label, valor) =>
+        '<div class="mon-topo-item"><i class="fas ' + ic + '" style="color:var(--' + cor + ');"></i>' +
+        '<span class="mon-topo-label">' + label + '</span><b style="color:var(--' + cor + ');">' + esc(valor) + '</b></div>';
+    el.innerHTML =
+        item('fa-bolt', servico.rodando ? 'green' : 'red', 'Coletor', servico.rodando ? 'ON' : 'OFF') +
+        item('fa-server', z.conectado ? 'green' : 'red', 'Zabbix', z.conectado ? (zb.disponiveis + '/' + zb.totalHosts + ' hosts') : 'OFF') +
+        item('fa-clock', 'cyan', 'Ultima coleta', hora) +
+        '<div class="mon-topo-sep"></div>' +
+        item('fa-microchip', 'cyan', 'CPU', pct(cpu)) +
+        item('fa-tv', 'purple', 'GPU', pct(gpu)) +
+        item('fa-memory', 'orange', 'RAM', pct(mem)) +
+        item('fa-hard-drive', 'yellow', 'Disco', dv ? pct(dv.usoPct) : '—') +
+        item('fa-desktop', 'green', 'PC', s.hostname || '—');
+}
+
 function monRenderKPIs(p) {
     const el = document.getElementById('mon-kpis');
     if (!el) return;
@@ -1713,8 +1734,11 @@ function monRenderKPIs(p) {
     if (!p || !p.resumo) return;
     const defs = monKpiDefs(p);
     for (const d of defs) monAtualizarKpiCardDom(el, d);
-    // KPIs de armazenamento (carrega sob demanda, com cache de 60s)
-    monRenderArmazenamentoKPIs();
+    // Sem cards de armazenamento: o resumo vai na linha de status (mon-topo).
+    // Cards antigos que ficaram no DOM (de outra versao) sao removidos.
+    el.querySelectorAll('.kpi-card').forEach(function(card) {
+        if (!defs.some(function(d) { return d.key === card.dataset.key; })) card.remove();
+    });
 }
 
 function monKpiDefs(p) {
@@ -1733,21 +1757,19 @@ function monKpiDefs(p) {
     // CPU/GPU em tempo real NAO ficam mais na lista principal de KPIs —
     // agora aparecem no detalhe do "Computadores" (aba expandida do PC local),
     // onde fazem sentido. A lista principal mostra apenasMetricas de rede.
+    // Seis KPIs que cabem numa leitura rapida: nenhum card que nunca muda
+    // ( zerado) e nenhum dado duplicado em outro painel.
+    const atencao = (r.semResposta || 0) + (r.instaveis || 0) + (r.semDados || 0);
+    const lats = (p.linhas || []).map(l => l.latenciaMediaMs).filter(v => v != null && isFinite(v));
+    const latMedia = lats.length ? Math.round(lats.reduce((a, b) => a + b, 0) / lats.length) : null;
     return [
-        { icon: 'fa-chart-pie', cor: dispCor, valor: pctDisponivel + '%', label: 'Disponibilidade', sub: r.acessiveis + ' de ' + respondiveis + ' respondiveis' + (qtdDesligados ? ' · ' + qtdDesligados + ' desligado(s) planejado(s), fora do calculo' : '') + ((r.empresaParada||0) ? ' · ' + r.empresaParada + ' em parada coletiva' : ''), key: 'mon-kpi-disponibilidade',
+        { icon: 'fa-chart-pie', cor: dispCor, valor: pctDisponivel + '%', label: 'Disponibilidade', sub: r.acessiveis + ' de ' + respondiveis + ' respondendo', key: 'mon-kpi-disponibilidade',
           extra: '<div style="width:60px;height:4px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;"><div style="width:' + pctDisponivel + '%;height:100%;background:var(--' + dispCor + ');"></div></div>' },
-        { icon: 'fa-desktop', cor: 'cyan', valor: totalAlvos, label: 'Equipamentos', sub: 'Total com IP cadastrado', key: 'mon-kpi-total' },
-        { icon: 'fa-circle-check', cor: 'green', valor: r.acessiveis, label: 'Acessiveis', sub: 'Respondendo agora', key: 'mon-kpi-acessiveis' },
-        { icon: 'fa-moon', cor: 'cyan', valor: qtdDesligados, label: 'Desligados (esperado)', sub: qtdDesligados ? 'Janela/config · nao e falha' : 'Nenhum desligamento previsto', key: 'mon-kpi-desligados' },
-        { icon: 'fa-circle-xmark', cor: 'red', valor: r.semResposta, label: 'Sem Resposta', sub: pctIndisponivel + '% dos respondiveis', key: 'mon-kpi-semresposta' },
-        { icon: 'fa-wave-square', cor: 'yellow', valor: r.instaveis, label: 'Instaveis', sub: 'Oscilando na rede', key: 'mon-kpi-instaveis' },
-        { icon: 'fa-building-circle-xmark', cor: 'orange', valor: r.empresaParada || 0, label: 'Parada Coletiva', sub: 'Setor inteiro fora', key: 'mon-kpi-empresa-parada' },
-        { icon: 'fa-triangle-exclamation', cor: r.alertasAbertos > 0 ? 'orange' : 'green', valor: r.alertasAbertos, label: 'Alertas', sub: r.alertasAbertos > 0 ? 'Requer atencao' : 'Tudo normal', key: 'mon-kpi-alertas' },
-        { icon: 'fa-share-nodes', cor: 'purple', valor: r.incidentesSetor, label: 'Incidentes', sub: 'Falha em massa por setor', key: 'mon-kpi-incidentes' },
-        { icon: 'fa-circle-question', cor: 'magenta', valor: r.semDados, label: 'Sem Dados', sub: 'Ainda nao verificados', key: 'mon-kpi-semdados' },
-        { icon: 'fa-stopwatch', cor: 'green', valor: r.mttrMs != null ? (r.mttrMs >= 60000 ? Math.round(r.mttrMs/60000) + ' min' : Math.round(r.mttrMs/1000) + ' s') : '—', label: 'MTTR', sub: 'Tempo medio de recuperacao', key: 'mon-kpi-mttr' },
-        { icon: 'fa-shield-halved', cor: (r.alertasEvitados||0) > 0 ? 'green' : 'cyan', valor: r.alertasEvitados || 0, label: 'Alertas Evitados', sub: 'Desligamentos nao contados como falha', key: 'mon-kpi-evitados' },
-        { icon: 'fa-clock', cor: servico.rodando ? 'green' : 'red', valor: servico.rodando ? 'ON' : 'OFF', label: 'Coletor', sub: servico.rodando ? 'Ativo' : 'Parado', key: 'mon-kpi-coletor' }
+        { icon: 'fa-desktop', cor: 'cyan', valor: totalAlvos, label: 'Equipamentos', sub: 'Com IP monitorado', key: 'mon-kpi-total' },
+        { icon: 'fa-circle-check', cor: 'green', valor: r.acessiveis, label: 'Acessiveis', sub: 'Neste momento', key: 'mon-kpi-acessiveis' },
+        { icon: 'fa-triangle-exclamation', cor: atencao > 0 ? 'orange' : 'green', valor: atencao, label: 'Em atencao', sub: 'Sem resposta, instaveis e sem dados', key: 'mon-kpi-semresposta' },
+        { icon: 'fa-gauge-high', cor: 'cyan', valor: latMedia != null ? latMedia + ' ms' : '—', label: 'Latencia media', sub: 'Ultima coleta', key: 'mon-kpi-latencia' },
+        { icon: 'fa-bell', cor: (r.alertasAbertos || 0) > 0 ? 'red' : 'green', valor: r.alertasAbertos || 0, label: 'Alertas', sub: (r.alertasAbertos || 0) > 0 ? 'Requer atencao' : 'Tudo normal', key: 'mon-kpi-alertas' }
     ];
 }
 
@@ -2020,6 +2042,13 @@ function monRenderKpiDetail(key) {
         itemsHtml += failureSummary(Object.values(dm), 'Medicoes');
     }
 
+    // KPIs novos (sem handler especifico): mostra a lista de equipamentos.
+    if (!itemsHtml && key && key.indexOf('mon-kpi-') === 0) {
+        title = 'Equipamentos'; icon = 'fa-desktop'; color = 'cyan';
+        itemsHtml = (p.linhas || []).map(function(l) {
+            return monKpiDetailItem(l, 'fa-circle', 'green');
+        }).join('') || failureSummary([], 'equipamentos');
+    }
     if (!itemsHtml) itemsHtml = '<div class="stat-detail-empty"><i class="fas fa-inbox"></i> Nenhum item encontrado</div>';
     itemsHtml += monKpiChartBlock(key);
     const count = (itemsHtml.match(/class="stat-detail-item"/g) || []).length;
@@ -2094,7 +2123,7 @@ function monRenderTabela(p) {
     const tbody = document.querySelector('#monTable tbody');
     if (!tbody) return;
     if (!p || !p.linhas || !p.linhas.length) {
-        tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:30px;color:var(--text-muted);">' +
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text-muted);">' +
             '<i class="fas fa-satellite-dish" style="font-size:28px;display:block;margin-bottom:10px;opacity:0.3;"></i>' +
             'Nenhum IP cadastrado para monitorar.<br>' +
             '<span style="font-size:11px;">Cadastre o campo <b>ipAddress</b> nos computadores do inventario ou defina <b>monitor/data/targets.json</b>.</span>' +
@@ -2175,16 +2204,12 @@ function monRenderTabela(p) {
 
         return '<tr data-local="' + (l.local ? '1' : '0') + '">' +
             '<td><b style="color:var(--text-primary);">' + esc(l.nome || '-') + '</b><br><span style="font-size:11px;color:var(--text-muted);font-family:monospace;">' + esc(l.ip) + '</span></td>' +
-            '<td style="font-size:11px;">' + esc(l.setor || '-') + '</td>' +
             '<td>' + estadoBadge + '</td>' +
             '<td>' + lat + idadeInfo + '</td>' +
-            '<td>' + falhas + '</td>' +
             '<td>' + cpuCell + '</td>' +
             '<td>' + gpuCell + '</td>' +
             '<td>' + ramCell + '</td>' +
             '<td>' + discoCell + '</td>' +
-            '<td>' + alertas + '</td>' +
-            '<td><span style="font-size:10px;color:var(--cyan);">' + esc(l.fonte || '-') + '</span></td>' +
             '<td><button class="action-btn action-btn-edit" onclick="monVerDetalhe(\'' + monAttr(l.ip) + '\')" title="Detalhes"><i class="fas fa-chart-line"></i></button></td>' +
             '</tr>';
     }).join('');

@@ -4,6 +4,35 @@
    ========================================== */
 
 /* ==========================================
+   Monitoramento - linha de status compacta
+   ========================================== */
+.mon-topo {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    flex-wrap: wrap;
+    padding: 11px 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: linear-gradient(180deg, var(--bg-surface), var(--bg-panel));
+}
+.mon-topo-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+.mon-topo-item i { font-size: 13px; }
+.mon-topo-item b { font-size: 13px; font-weight: 700; }
+.mon-topo-label { color: var(--text-secondary); font-size: 10px; text-transform: uppercase; letter-spacing: .5px; }
+.mon-topo-sep { width: 1px; height: 20px; background: var(--border); }
+@media (max-width: 900px) {
+    .mon-topo { gap: 12px; }
+    .mon-topo-sep { display: none; }
+}
+
+/* ==========================================
    CSS Variables
    ========================================== */
 :root {
