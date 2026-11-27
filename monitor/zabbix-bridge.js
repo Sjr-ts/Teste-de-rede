@@ -1286,6 +1286,20 @@ async function sincronizarIpsDoZabbix(db) {
     try { hosts = await listarHostsComIp(); }
     catch (e) { return { aplicados: [], ignorados: [], semVinculo: [], erros: [e.message] }; }
 
+    // O agente desta maquina fala via 127.0.0.1 e o NAT do Docker faz o Zabbix
+    // registrar a interface com o IP do bridge (172.22.0.1). Nunca gravar esse
+    // IP no cadastro — ele e artefato do container, nao o IP real do PC.
+    try {
+        const os = require('os');
+        const nomeLocal = String(os.hostname() || '').toUpperCase();
+        hosts = hosts.filter(h => {
+            const nome = String(h.name || h.host || '').toUpperCase();
+            const iface = (h.interfaces || [])[0];
+            if (iface && nome === nomeLocal && /^172\.(1[6-9]|2\d|3[01])\./.test(String(iface.ip || ''))) return false;
+            return true;
+        });
+    } catch (e) {}
+
     const computadores = (db && Array.isArray(db.computadores)) ? db.computadores : [];
     const det = detectarMudancasIp(computadores, hosts);
     const ap = aplicarMudancasIp(det.alteracoes, db);

@@ -154,6 +154,10 @@ function obterAlvos() {
             for (const c of (db.computadores || [])) {
                 const ip = (c.ipAddress || '').trim();
                 if (!ip || ip === '-' || ip === 'N/A') continue;
+                // Registro criado pelo instalador do agente so e alvo de
+                // monitoramento enquanto o agente existir. Sem ele, some da
+                // tabela (o cadastro no Inventario permanece para o suporte).
+                if (c._origem === 'INSTALADOR_AGENTE' && ehHostLocal(ip) && !agenteLocalInstalado()) continue;
                 inventory.push({
                     id: c.id,
                     nome: c.nomePc || ('PC-' + c.id),

@@ -456,6 +456,59 @@ app.post('/api/data', (req, res) => {
         res.json({ rev: newData._rev, merged: false });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
+// Cadastro automatico do PC no momento em que o agente e instalado.
+// O instalador envia dados REAIS coletados do Windows; preenchemos somente
+// campos vazios — informacao digitada pelo suporte nunca e sobrescrita.
+app.post('/api/computadores/auto-registro', (req, res) => {
+    try {
+        const b = req.body || {};
+        const nome = String(b.nomePc || '').trim();
+        const ip = String(b.ipAddress || '').trim();
+        if (!nome || !ip) return res.status(400).json({ error: 'nomePc e ipAddress obrigatorios' });
+        const db = lerJsonSeguro(DATA_FILE, { computadores: [] });
+        const comps = Array.isArray(db.computadores) ? db.computadores : [];
+        const norm = s => String(s || '').toUpperCase().trim();
+        let comp = comps.find(c => norm(c.nomePc) === norm(nome)) ||
+                   comps.find(c => norm(c.ipAddress) === norm(ip));
+        let criado = false;
+        if (!comp) {
+            const maxId = comps.reduce((m, c) => Math.max(m, Number(c.id) || 0), 0);
+            comp = {
+                id: maxId + 1,
+                nomePc: nome,
+                ipAddress: ip,
+                status: 'ATIVO',
+                dataCadastro: new Date().toISOString(),
+                departamento: String(b.departamento || 'TI'),
+                _origem: 'INSTALADOR_AGENTE'
+            };
+            comps.push(comp);
+            criado = true;
+        }
+        const campos = ['numeroSerie', 'modeloMarca', 'processador', 'memoriaRam', 'armazenamento',
+                        'sistemaOperacional', 'fornecedor', 'localizacao', 'macAddress'];
+        const atualizados = [];
+        for (const k of campos) {
+            const v = b[k] != null ? String(b[k]).trim() : '';
+            if (v && (comp[k] == null || comp[k] === '')) { comp[k] = v; atualizados.push(k); }
+        }
+        if (!comp.ipAddress && ip) { comp.ipAddress = ip; atualizados.push('ipAddress'); }
+        if (!Array.isArray(db.logs)) db.logs = [];
+        db.logs.unshift({
+            id: db.logs.reduce((m, l) => Math.max(m, Number(l.id) || 0), 0) + 1,
+            usuario: 'INSTALADOR', acao: criado ? 'CRIACAO' : 'ALTERACAO',
+            entidade: 'COMPUTADOR', entidadeId: comp.id,
+            descricao: (criado ? 'Computador cadastrado automaticamente pelo instalador do agente: '
+                               : 'Dados preenchidos automaticamente pelo instalador: ') + nome + ' (' + ip + ')',
+            dataAtividade: new Date().toISOString(), ipAddress: ip
+        });
+        db.computadores = comps;
+        db._rev = (db._rev || 0) + 1;
+        gravarJsonAtomico(DATA_FILE, db);
+        res.json({ ok: true, criado, atualizados: atualizados.length, rev: db._rev, computador: comp });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.post('/api/upload', (req, res) => {
     try {
         const { filename, data } = req.body || {};

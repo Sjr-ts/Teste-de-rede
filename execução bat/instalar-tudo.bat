@@ -175,6 +175,19 @@ for /f "usebackq tokens=1,2 delims==" %%A in ("%ZBX_CONF_DIR%\zabbix_agent2.conf
 )
 if not defined ZBX_SERVER set "ZBX_SERVER=(detectado)"
 
+REM ---- Auto-cadastro do PC no Inventario TI (dados REAIS do Windows) ----
+REM O script descobre o servidor sozinho e preenche somente campos vazios,
+REM preservando o que o suporte ja digitou na aba Computadores.
+if not exist "%SCRIPT_DIR%registrar-pc.ps1" goto :registro_fim
+call :log "[INFO] Cadastrando o PC no Inventario TI..."
+powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%registrar-pc.ps1"
+if errorlevel 1 goto :registro_aviso
+call :log "[OK] PC cadastrado no Inventario TI com dados reais."
+goto :registro_fim
+:registro_aviso
+call :log "[AVISO] Auto-cadastro falhou - complete manualmente na aba Computadores."
+:registro_fim
+
 REM ---- Atalhos na Area de Trabalho (abram painel sem depender de IP) ----
 if not exist "%SCRIPT_DIR%CRIAR-ATALHOS.ps1" goto :atalhos_fim
 powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%CRIAR-ATALHOS.ps1"

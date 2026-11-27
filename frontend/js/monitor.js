@@ -1710,7 +1710,12 @@ function monRenderTopo(sistema, zabbix, painel) {
     const zb = z.zabbix || {};
     if (!zb.totalHosts) zb.totalHosts = 0;
     if (!zb.disponiveis) zb.disponiveis = 0;
-    const hora = servico.ultimaExecucao ? new Date(servico.ultimaExecucao).toLocaleTimeString('pt-BR') : new Date().toLocaleTimeString('pt-BR');
+    // ultimaExecucao pode vir como numero, ISO ou vazio — nunca "Invalid Date".
+    let hora = new Date().toLocaleTimeString('pt-BR');
+    if (servico.ultimaExecucao != null && servico.ultimaExecucao !== '') {
+        const d = new Date(servico.ultimaExecucao);
+        if (!isNaN(d.getTime())) hora = d.toLocaleTimeString('pt-BR');
+    }
     const item = (ic, cor, label, valor) =>
         '<div class="mon-topo-item"><i class="fas ' + ic + '" style="color:var(--' + cor + ');"></i>' +
         '<span class="mon-topo-label">' + label + '</span><b style="color:var(--' + cor + ');">' + esc(valor) + '</b></div>';
