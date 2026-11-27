@@ -393,6 +393,15 @@ function pruneOldLogs() {
     return removed;
 }
 
+// Nunca deixar os arrays semeados ficticios alimentarem a interface/PDF.
+// Chamado quando o servidor responde 404 (instalacao limpa) ou desiste de carregar.
+function limparDadosFicticios() {
+    [MOCK_COMPUTADORES, MOCK_MANUTENCOES, MOCK_ORDENS, MOCK_USUARIOS, MOCK_DEPARTAMENTOS,
+     MOCK_SOFTWARE, MOCK_RAMAIS, MOCK_TROCAS, MOCK_LOGS].forEach(function(a) {
+        if (Array.isArray(a)) a.length = 0;
+    });
+}
+
 async function initPersistence() {
     if (!MOCK_COMPUTADORES_ORIG) MOCK_COMPUTADORES_ORIG = MOCK_COMPUTADORES.map(function(c) { return Object.assign({}, c); });
     var st = await loadServerData();
@@ -405,7 +414,7 @@ async function initPersistence() {
             try { console.log(pruned + ' registro(s) do histórico com mais de 12 meses removidos.'); } catch (e2) {}
         }
     }
-    else if (st === 'empty') { saveInitialData(); _dataLoaded = true; }
+    else if (st === 'empty') { limparDadosFicticios(); saveInitialData(); _dataLoaded = true; }
     else { tentarCargaInicial(); }
 }
 
@@ -416,6 +425,7 @@ function tentarCargaInicial() {
     if (_dataLoaded) return;
     _cargaTentativas++;
     if (_cargaTentativas > 5) {
+        limparDadosFicticios();
         try { showToast('Servidor indisponível: as alterações desta sessão NÃO serão salvas. Recarregue a página.', 'error'); } catch (e) {}
         return;
     }

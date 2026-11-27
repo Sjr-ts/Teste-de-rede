@@ -285,8 +285,6 @@ function monRenderTudo(d) {
     try { monRenderKPIs(d); } catch (e) { console.error('[mon] KPIs:', e); }
     try { monRenderFiltroSetores(d); } catch (e) {}
     try { monRenderTabela(d); } catch (e) {}
-    try { monRenderAlertas(d); } catch (e) {}
-    try { monRenderIncidentes(d); } catch (e) {}
     try { monRenderDashboardWidget(); } catch (e) {}
     try { monRenderZabbixProblemas(); } catch (e) {}
     // notificacoes de falha no PONTO COMUM (SSE, polling e fallback), para nao
@@ -377,17 +375,6 @@ function monZabbixUrl(hostid) {
     return monZabbixBase() + '/zabbix.php?action=problem.view&hostids[]=' + encodeURIComponent(hostid || '');
 }
 // Deep-link para a lista de hosts do Zabbix (host.view) — filtro por nome/grupo, dinamico
-function monZabbixHostViewUrl(opts) {
-    const params = ['action=host.view'];
-    if (opts && opts.nome) params.push('name=' + encodeURIComponent(opts.nome));
-    if (opts && opts.grupo) params.push('groupids[]=' + encodeURIComponent(opts.grupo));
-    if (opts && opts.status !== undefined && opts.status !== null && opts.status !== '') {
-        params.push('status=' + encodeURIComponent(opts.status));
-    }
-    params.push('sort=name');
-    params.push('sortorder=ASC');
-    return monZabbixBase() + '/zabbix.php?' + params.join('&');
-}
 // ==================== PROBLEMAS ZABBIX (painel integrado) ====================
 const MON_SEV_INFO = {
     '5': { label: 'Desastre', cor: '#ff4757', bg: 'rgba(255,71,87,0.14)' },
@@ -1072,7 +1059,6 @@ function monConectarSSE() {
                 _monSistema = s;
                 const secao = document.getElementById('monitoramento');
                 if (secao && secao.classList.contains('hidden')) { _monDirty = true; return; }
-                monRenderSistema(s);
             } catch (err) {}
         });
 
@@ -1083,7 +1069,6 @@ function monConectarSSE() {
                 _monAlertasZabbix = _monAlertasZabbix || [];
                 _monAlertasZabbix.unshift(a);
                 if (_monAlertasZabbix.length > 100) _monAlertasZabbix.length = 100;
-                monRenderAlertasZabbix();
                 if (typeof showToast === 'function') showToast((a.status === 'PROBLEM' ? '⚠ PROBLEMA' : '✓ RESOLVIDO') + ': ' + a.trigger + ' @ ' + a.host, a.status === 'PROBLEM' ? 'error' : 'success');
             } catch (err) {}
         });
@@ -1130,7 +1115,6 @@ if (typeof document !== 'undefined' && document.addEventListener) {
         window.monExportarCSV = monExportarCSV;
         window.monVerDetalhe = monVerDetalhe;
         window.monVerZabbix = monVerZabbix;
-        window.monAtualizarArmazenamento = monAtualizarArmazenamento;
         window.monVerHistorico = monVerHistorico;
         window.monCarregarHistorico = monCarregarHistorico;
         window.monToggleKpiDetail = monToggleKpiDetail;
@@ -1208,158 +1192,14 @@ async function monExecutarCiclo() {
 }
 
 // ==================== RENDER: STATUS ZABBIX ====================
-function monRenderZabbixStatus(z) {
-    const el = document.getElementById('mon-zabbix-status');
-    if (!el) return;
-    if (z && z.desabilitado) {
-        monSetHtmlSeMudou(el, '<div class="glass-panel" style="border-left:3px solid var(--yellow);margin-bottom:0;">' +
-            '<div style="padding:14px 18px;display:flex;align-items:center;gap:12px;">' +
-            '<i class="fas fa-plug-circle-xmark" style="color:var(--yellow);font-size:18px;"></i>' +
-            '<div><b style="font-size:13px;color:var(--text-primary);">Zabbix: desabilitado</b>' +
-            '<p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">' + esc(z.mensagem) + '</p></div>' +
-            '</div></div>');
-        return;
-    }
-    if (!z || z.erro) {
-        monSetHtmlSeMudou(el, '<div class="glass-panel" style="border-left:3px solid var(--red);margin-bottom:0;">' +
-            '<div style="padding:14px 18px;display:flex;align-items:center;gap:12px;">' +
-            '<i class="fas fa-plug-circle-xmark" style="color:var(--red);font-size:18px;"></i>' +
-            '<div><b style="font-size:13px;color:var(--text-primary);">Zabbix: desconectado</b>' +
-            '<p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">' + esc(z && z.erro ? z.erro : 'Configure monitor/zabbix-config.json e reinicie o servidor.') + '</p>' +
-            '<p style="font-size:10px;color:var(--text-muted);margin-top:4px;"><i class="fas fa-info-circle"></i> Para restaurar: inicie Docker Desktop e rode <code>docker compose -f docker-compose.zabbix.yml up -d</code></p></div>' +
-            '</div></div>');
-        return;
-    }
-    const zx = z.zabbix || {};
-    const pr = z.problemas || {};
-    const ok = z.conectado;
-    monSetHtmlSeMudou(el, '<div class="glass-panel" style="border-left:3px solid ' + (ok ? 'var(--green)' : 'var(--red)') + ';margin-bottom:0;">' +
-        '<div style="padding:14px 18px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;">' +
-        '<div style="display:flex;align-items:center;gap:10px;">' +
-        '<i class="fas fa-' + (ok ? 'circle-check' : 'circle-xmark') + '" style="color:var(--' + (ok ? 'green' : 'red') + ');font-size:18px;"></i>' +
-        '<div><b style="font-size:13px;color:var(--text-primary);">Zabbix ' + (ok ? 'Conectado' : 'Desconectado') + '</b>' +
-        '<p style="font-size:11px;color:var(--text-muted);margin:0;">Hosts: ' + (zx.totalHosts || 0) + ' | Disponiveis: ' + (zx.disponiveis || 0) + ' | Indisponiveis: ' + (zx.indisponiveis || 0) + '</p></div></div>' +
-        (pr.total ? '<div style="display:flex;align-items:center;gap:8px;margin-left:auto;">' +
-            '<span style="font-size:11px;color:var(--text-muted);">Problemas:</span>' +
-            '<span class="badge badge-' + (pr.criticos ? 'cancelada' : 'pendente') + '">' + pr.total + ' (' + (pr.criticos || 0) + ' criticos)</span>' +
-            '</div>' : '') +
-        '</div></div>');
-}
 
 // ==================== RENDER: SISTEMA LOCAL (in-place; sem innerHTML total) ====================
 // O painel e desenhado uma vez (skeleton) e depois apenas textos/cores sao
 // atualizados — elimina reflow e o "travamento" a cada ciclo SSE de 3s.
 const MON_SYS_COR = { green: 'var(--green)', yellow: 'var(--yellow)', red: 'var(--red)', cyan: 'var(--cyan)', purple: 'var(--purple)', magenta: 'var(--magenta)', muted: 'var(--text-muted)' };
 
-function monSistemaSkeleton() {
-    const item = function (id, icon, label) {
-        return '<div id="mon-sys-' + id + '" style="padding:10px 12px;background:rgba(255,255,255,0.03);border-radius:10px;border-left:3px solid var(--text-muted);">' +
-            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
-            '<i class="fas ' + icon + ' mon-sys-icon" style="color:var(--text-muted);font-size:11px;"></i>' +
-            '<span id="mon-sys-' + id + '-l" style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">' + label + '</span>' +
-            '</div>' +
-            '<div id="mon-sys-' + id + '-v" style="font-size:20px;font-weight:700;color:var(--text-primary);">—</div>' +
-            '<div id="mon-sys-' + id + '-s" style="font-size:10px;color:var(--text-muted);margin-top:2px;"></div>' +
-            '</div>';
-    };
-    return '<div class="glass-panel" style="border-left:3px solid var(--cyan);margin-bottom:0;">' +
-        '<div style="padding:16px 20px;">' +
-        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">' +
-        '<i class="fas fa-microchip" style="color:var(--cyan);font-size:16px;"></i>' +
-        '<b id="mon-sys-titulo" style="font-size:13px;color:var(--text-primary);">PC Local</b>' +
-        '<span id="mon-sys-quando" style="font-size:10px;color:var(--text-muted);margin-left:auto;"></span>' +
-        '<button class="btn btn-ghost btn-sm" style="margin-left:8px;" onclick="monAbrirRelatorioPC()" title="Relatorio detalhado em nova aba"><i class="fas fa-file-lines"></i> Relatorio</button>' +
-        '</div>' +
-        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">' +
-        item('cpu', 'fa-microchip', 'CPU') +
-        item('gpu', 'fa-microchip', 'GPU') +
-        item('ram', 'fa-memory', 'RAM') +
-        item('disco', 'fa-hard-drive', 'Disco') +
-        item('uptime', 'fa-clock', 'Uptime') +
-        item('rede', 'fa-network-wired', 'Rede') +
-        item('sistema', 'fa-server', 'Sistema') +
-        '</div></div></div>';
-}
 
-function monSetSysItem(id, label, valor, sub, cor) {
-    const wrap = document.getElementById('mon-sys-' + id);
-    if (!wrap) return;
-    const c = MON_SYS_COR[cor] || 'var(--text-primary)';
-    wrap.style.borderLeftColor = c;
-    const icon = wrap.querySelector('.mon-sys-icon'); if (icon) icon.style.color = c;
-    if (label != null) { const l = document.getElementById('mon-sys-' + id + '-l'); if (l && l.textContent !== label) l.textContent = label; }
-    const v = document.getElementById('mon-sys-' + id + '-v');
-    if (v) { const t = valor == null ? '—' : String(valor); if (v.textContent !== t) v.textContent = t; v.style.color = c; }
-    const sb = document.getElementById('mon-sys-' + id + '-s');
-    if (sb) { const t = sub || ''; if (sb.textContent !== t) sb.textContent = t; }
-}
 
-function monRenderSistema(s) {
-    const el = document.getElementById('mon-sistema');
-    if (!el) return;
-    if (!s || s.error) {
-        el._skeleton = 0;
-        monSetHtmlSeMudou(el, '<div class="glass-panel" style="border-left:3px solid var(--yellow);margin-bottom:0;">' +
-            '<div style="padding:14px 18px;display:flex;align-items:center;gap:12px;">' +
-            '<i class="fas fa-microchip" style="color:var(--yellow);font-size:18px;"></i>' +
-            '<div><b style="font-size:13px;color:var(--text-primary);">Metricas Locais</b>' +
-            '<p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">' + (s && s.error ? esc(s.error) : 'Indisponivel') + '</p></div>' +
-            '</div></div>');
-        return;
-    }
-    if (el._skeleton !== 1) { el.innerHTML = monSistemaSkeleton(); el._skeleton = 1; }
-    const cpu = s.cpu || {};
-    const mem = s.memoria || {};
-    const up = s.uptime || {};
-    const gpuInfo = s.gpu || {};
-    const disco = (s.disco && s.disco.discos) ? s.disco.discos[0] : null;
-    const info = s.info || {};
-    const rede = (s.rede || [])[0] || {};
-
-    let gpuValor = 'Indisp.';
-    let gpuSub = gpuInfo.indisponivel || '';
-    let gpuCor = 'muted';
-    if (gpuInfo.gpus && gpuInfo.gpus.length) {
-        const g0 = gpuInfo.gpus[0];
-        gpuValor = g0.usoPct != null ? g0.usoPct + '%' : '?';
-        gpuSub = g0.nome + (g0.memoriaTotalMb ? ' · ' + g0.memoriaUsadaMb + '/' + g0.memoriaTotalMb + ' MB' : '') + (g0.temperaturaC ? ' · ' + g0.temperaturaC + '°C' : '');
-        gpuCor = monCorUso(g0.usoPct) || 'muted';
-    }
-
-    const titulo = document.getElementById('mon-sys-titulo');
-    if (titulo) titulo.textContent = 'PC Local — ' + (s.hostname || '?') + ' (' + ((s.rede && s.rede[0] && s.rede[0].ip) || '?') + ')';
-    const quando = document.getElementById('mon-sys-quando');
-    if (quando) quando.textContent = 'Coletado: ' + new Date(s.quando).toLocaleString('pt-BR');
-
-    monSetSysItem('cpu', 'CPU', cpu.usoPct != null ? cpu.usoPct + '%' : 'Aguardando...',
-        cpu.modelo ? cpu.nucleos + ' nucleos · ' + cpu.modelo : '',
-        cpu.usoPct != null ? (monCorUso(cpu.usoPct) || 'green') : 'muted');
-    monSetSysItem('gpu', 'GPU', gpuValor, gpuSub, gpuCor);
-    monSetSysItem('ram', 'RAM', mem.usoPct != null ? mem.usoPct + '%' : '?',
-        mem.usoPct != null ? mem.usadoGb + '/' + mem.totalGb + ' GB (livre: ' + mem.livreGb + ' GB)' : '',
-        mem.usoPct != null ? (monCorUso(mem.usoPct) || 'green') : 'muted');
-    monSetSysItem('disco', 'Disco ' + (disco ? disco.letra : '') + ' (espaco)', disco ? disco.usoPct + '%' : 'Indisp.',
-        disco ? disco.usadoGb + '/' + disco.totalGb + ' GB (livre: ' + disco.livreGb + ' GB)' : '',
-        disco ? (monCorDisco(disco.usoPct) || 'green') : 'muted');
-    monSetSysItem('uptime', 'Uptime', up.uptimeHumano || '?',
-        'Boot: ' + (up.bootTime ? new Date(up.bootTime).toLocaleString('pt-BR') : '?') + (up.reiniciadoDesdeUltimaColeta ? ' · REINICIADO!' : ''),
-        up.reiniciadoDesdeUltimaColeta ? 'red' : 'cyan');
-    monSetSysItem('rede', 'Rede', rede.ip || '?', rede.nome ? rede.nome + ' · MAC: ' + rede.mac : '', 'purple');
-    monSetSysItem('sistema', 'Sistema', (info.plataforma || '?') + ' ' + (info.arquitetura || ''),
-        'Kernel ' + (info.release || '?') + ' · Node ' + (info.node || '?'), 'magenta');
-
-    // Acumula historico para grafico cardiaco (ultimos 60 pontos)
-    if (cpu.usoPct != null) { _monCpuHist.push(cpu.usoPct); if (_monCpuHist.length > 60) _monCpuHist.shift(); }
-    if (mem.usoPct != null) { _monRamHist.push(mem.usoPct); if (_monRamHist.length > 60) _monRamHist.shift(); }
-
-    // Acumula graficos para uso no KPI detalhado / relatorio (sem renderizar inline)
-    if (_monCpuHist.length >= 2) {
-        const cpuHtml = monCartesianChart(_monCpuHist, { titulo: 'CPU', unidade: '%', cor: '#00d4ff', altura: 220, minForcado: 0, maxForcado: 100, limiares: monLimiaresUso() });
-        const ramHtml = monCartesianChart(_monRamHist, { titulo: 'RAM', unidade: '%', cor: '#a855f7', altura: 220, minForcado: 0, maxForcado: 100, limiares: monLimiaresUso() });
-        _monKpiCharts['sys-cpu'] = { titulo: 'CPU do PC Local (%)', html: cpuHtml };
-        _monKpiCharts['sys-ram'] = { titulo: 'RAM do PC Local (%)', html: ramHtml };
-    }
-}
 
 // ==================== SISTEMA DE GRAFICOS SVG ====================
 /**
@@ -1372,62 +1212,6 @@ function monRenderSistema(s) {
  * @param {boolean} marcarFalhas - se true, marca pontos de falha em vermelho
  * @returns {string} HTML do SVG
  */
-function monSvgChart(dados, cor, corFundo, largura, altura, marcarFalhas) {
-    if (!dados || dados.length < 2) return '<div style="font-size:10px;color:var(--text-muted);padding:4px;">Dados insuficientes</div>';
-    const pts = dados.filter(v => v !== null && v !== undefined && !isNaN(v));
-    if (pts.length < 2) return '<div style="font-size:10px;color:var(--text-muted);padding:4px;">Dados insuficientes</div>';
-
-    const max = Math.max(...pts);
-    const min = Math.min(...pts);
-    const range = (max - min) || 1;
-    const padX = 2, padY = 3;
-    const w = largura || 280;
-    const h = altura || 60;
-
-    // Gera pontos do polilinha
-    const step = (w - padX * 2) / (pts.length - 1);
-    let pontos = [];
-    for (let i = 0; i < pts.length; i++) {
-        const x = padX + i * step;
-        const y = padY + (h - padY * 2) - ((pts[i] - min) / range) * (h - padY * 2);
-        pontos.push([x, y]);
-    }
-
-    const polilinha = pontos.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
-
-    // Preenchimento sob a linha
-    const fillPoints = padX + ',' + (h - padY) + ' ' + polilinha + ' ' + (padX + (pts.length - 1) * step).toFixed(1) + ',' + (h - padY);
-
-    // Pontos de falha (onde ok=false)
-    let falhaMarkers = '';
-    if (marcarFalhas && dados.originais) {
-        for (let i = 0; i < pontos.length; i++) {
-            const v = dados.originais[i];
-            if (v !== null && v !== undefined && !v.ok) {
-                falhaMarkers += '<circle cx="' + pontos[i][0].toFixed(1) + '" cy="' + pontos[i][1].toFixed(1) + '" r="2.5" fill="#ff4444" opacity="0.9"/>';
-            }
-        }
-    }
-
-    // Grid lines
-    const gridLines = [0.25, 0.5, 0.75].map(frac => {
-        const y = padY + (h - padY * 2) * frac;
-        return '<line x1="' + padX + '" y1="' + y + '" x2="' + (w - padX) + '" y2="' + y + '" stroke="rgba(255,255,255,0.06)" stroke-width="0.5"/>';
-    }).join('');
-
-    // Valor atual
-    const atual = pts[pts.length - 1];
-    const valorAtual = typeof atual === 'number' ? atual.toFixed(1) : atual;
-
-    return '<svg width="' + w + '" height="' + h + '" style="display:block;background:' + (corFundo || 'rgba(0,0,0,0.2)') + ';border-radius:6px;">' +
-        gridLines +
-        '<polygon points="' + fillPoints + '" fill="' + cor + '" opacity="0.12"/>' +
-        '<polyline points="' + polilinha + '" fill="none" stroke="' + cor + '" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>' +
-        falhaMarkers +
-        '<circle cx="' + pontos[pontos.length - 1][0].toFixed(1) + '" cy="' + pontos[pontos.length - 1][1].toFixed(1) + '" r="3" fill="' + cor + '" stroke="white" stroke-width="1"/>' +
-        '<text x="' + (w - 5) + '" y="12" text-anchor="end" fill="' + cor + '" font-size="9" font-weight="700">' + valorAtual + '</text>' +
-        '</svg>';
-}
 
 /**
  * Grafico cartesiano SVG completo: eixos X/Y com rotulos, grid, area,
@@ -1673,32 +1457,8 @@ function monCartesianChart(dados, opts) {
 /**
  * Gera sparkline inline (pequeno grafico no estilo Unicode block)
  */
-function monSparklineUnicode(dados, maxVal) {
-    if (!dados || dados.length < 2) return '';
-    const blocks = '▁▂▃▄▅▆▇█';
-    const max = maxVal || Math.max(...dados.filter(v => v != null)) || 1;
-    let result = '';
-    for (const v of dados.slice(-20)) {
-        const norm = v != null ? v / max : 0;
-        const level = Math.max(1, Math.min(8, Math.ceil(norm * 8)));
-        result += blocks.charAt(level - 1);
-    }
-    return result;
-}
 
 // ==================== MOCK METRICS ====================
-let _mockMetricas = {};
-async function monCarregarMockMetricas(ip) {
-    if (_mockMetricas[ip] && _mockMetricas[ip]._ts && (Date.now() - _mockMetricas[ip]._ts < 5000)) {
-        return _mockMetricas[ip];
-    }
-    try {
-        const d = await fetch('/api/monitor/mock/' + encodeURIComponent(ip)).then(r => r.json());
-        d._ts = Date.now();
-        _mockMetricas[ip] = d;
-        return d;
-    } catch (e) { return null; }
-}
 
 // ==================== RENDER: KPIs (atualizacao diferencial, sem innerHTML total) ====================
 // Cada card tem data-key fixo; atualizamos apenas texto/classes, preservando os
@@ -1810,32 +1570,6 @@ function monAtualizarKpiCardDom(el, d) {
 }
 
 let _monArmKPIs = null;
-async function monRenderArmazenamentoKPIs() {
-    const el = document.getElementById('mon-kpis');
-    if (!el) return;
-    const agora = Date.now();
-    try {
-        if (!_monArmKPIs || (agora - _monArmKPIsTs) > 60000) {
-            const d = await fetch('/api/monitor/armazenamento').then(r => r.json()).catch(() => null);
-            if (d) { _monArmKPIs = d; _monArmKPIsTs = Date.now(); }
-        }
-        if (!_monArmKPIs) return;
-        const dm = _monArmKPIs || {};
-        const discos = _monArmKPIs.discos || [];
-        const disco0 = discos[0] || null;
-        let discoSub = '';
-        let discoCor = 'green';
-        if (disco0) {
-            discoSub = disco0.livreGb + ' GB livre';
-            discoCor = monCorDisco(disco0.usoPct) || 'green';
-        }
-        const defs = [
-            { icon: 'fa-hard-drive', cor: discoCor, valor: disco0 ? disco0.usadoGb + ' de ' + disco0.totalGb + ' GB' : '?', label: 'Disco ' + (disco0 ? disco0.letra : ''), sub: discoSub, key: 'mon-kpi-disco' },
-            { icon: 'fa-database', cor: 'purple', valor: dm.totalMedicoes != null ? dm.totalMedicoes : '?', label: 'Medicoes', sub: (dm.diasComDados || 0) + ' dia(s) | ' + (dm.tamanhoTotalMB || 0) + ' MB', key: 'mon-kpi-medicoes' }
-        ];
-        for (const d of defs) monAtualizarKpiCardDom(el, d);
-    } catch (e) {}
-}
 
 function monKpiCard(icon, cor, valor, label, sub, key, extra) {
     return '<div class="kpi-card" onclick="monToggleKpiDetail(\'' + key + '\')" data-key="' + key + '">' +
@@ -2084,9 +1818,6 @@ function monKpiDetailItem(l, icon, color) {
         '<div class="stat-detail-item-badge">' + estadoBadge + '</div></div>';
 }
 
-function monKpiInfoItem(label, valor) {
-    return '<div class="stat-detail-item"><div class="stat-detail-item-icon" style="background:var(--cyan-bg);color:var(--cyan);"><i class="fas fa-info-circle"></i></div><div class="stat-detail-item-info"><div class="stat-detail-item-name">' + label + '</div><div class="stat-detail-item-sub">' + valor + '</div></div></div>';
-}
 
 // ==================== RENDER: FILTRO SETORES ====================
 function monRenderFiltroSetores(p) {
@@ -2252,86 +1983,10 @@ function monEstadoBadge(estado) {
 }
 
 // ==================== RENDER: ALERTAS ====================
-function monRenderAlertas(p) {
-    const el = document.getElementById('mon-alertas-list');
-    if (!el) return;
-    if (!p || !p.alertas || !p.alertas.length) {
-        monSetHtmlSeMudou(el, '<p style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px;">Nenhum alerta ativo</p>');
-        var badgeVazio = document.getElementById('nav-monitor-alerts');
-        if (badgeVazio) badgeVazio.style.display = 'none';
-        return;
-    }
-    monSetHtmlSeMudou(el, p.alertas.map(function(a) {
-        const gravClass = { CRITICA: 'cancelada', ALTA: 'cancelada', MEDIA: 'pendente', BAIXA: 'pendente', INFO: 'inativo' }[a.gravidade] || 'inativo';
-        const confBadge = { CONFIRMADO: 'badge-ativo', ALTA: 'badge-ativo', MODERADA: 'badge-pendente', BAIXA: 'badge-inativo', INCONCLUSIVO: 'badge-inativo' }[a.confianca] || 'badge-inativo';
-        return '<div style="display:flex;align-items:flex-start;gap:12px;padding:12px;border-bottom:1px solid var(--border);">' +
-            '<span class="badge badge-' + gravClass + '" style="margin-top:2px;">' + a.gravidade + '</span>' +
-            '<div style="flex:1;min-width:0;">' +
-            '<b style="font-size:12px;color:var(--text-primary);">' + esc(a.titulo) + '</b>' +
-            '<p style="font-size:11px;color:var(--text-muted);margin:3px 0 0;">Host: <code>' + esc(a.host) + '</code> | Categoria: ' + esc(a.categoria) + ' | Ocorrencias: ' + a.ocorrencias + '</p>' +
-            '<p style="font-size:11px;color:var(--text-secondary);margin:4px 0 0;">' + (a.evidencias || []).map(e => '• ' + esc(e)).join('<br>') + '</p>' +
-            (a.recomendacao ? '<p style="font-size:11px;color:var(--cyan);margin:4px 0 0;"><i class="fas fa-lightbulb"></i> ' + esc(a.recomendacao) + '</p>' : '') +
-            '</div>' +
-            '<span class="badge ' + confBadge + '" style="margin-top:2px;" title="Confianca do diagnostico">' + a.confianca + '</span>' +
-            '</div>';
-    }).join(''));
 
-    // Badge no sidebar
-    const badge = document.getElementById('nav-monitor-alerts');
-    if (badge) {
-        if (p.alertas.length) {
-            badge.textContent = p.alertas.length;
-            badge.style.display = '';
-        } else {
-            badge.style.display = 'none';
-        }
-    }
-}
 
-function monRenderAlertasZabbix() {
-    const el = document.getElementById('mon-zabbix-alertas');
-    if (!el) return;
-    const lista = _monAlertasZabbix || [];
-    if (!lista.length) {
-        monSetHtmlSeMudou(el, '<p style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px;">Nenhuma notificacao recebida</p>');
-        return;
-    }
-    monSetHtmlSeMudou(el, lista.map(function(a) {
-        const cor = a.status === 'PROBLEM' ? 'var(--red)' : 'var(--green)';
-        const icone = a.status === 'PROBLEM' ? 'fa-triangle-exclamation' : 'fa-check-circle';
-        return '<div style="display:flex;align-items:flex-start;gap:12px;padding:10px;border-bottom:1px solid var(--border);">' +
-            '<i class="fas ' + icone + '" style="color:' + cor + ';margin-top:2px;"></i>' +
-            '<div style="flex:1;min-width:0;">' +
-            '<b style="font-size:12px;color:var(--text-primary);">' + esc(a.trigger || '') + '</b>' +
-            '<p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">Host: <code>' + esc(a.host || '') + '</code> | Severidade: ' + esc(a.severidade || '') + ' | ' + esc(a.hora || a.recebidoEm || '') + '</p>' +
-            (a.mensagem ? '<p style="font-size:11px;color:var(--text-secondary);margin:4px 0 0;">' + esc(a.mensagem).slice(0, 200) + '</p>' : '') +
-            '</div>' +
-            '<span class="badge ' + (a.status === 'PROBLEM' ? 'badge-cancelada' : 'badge-ativo') + '">' + esc(a.status) + '</span>' +
-            '</div>';
-    }).join(''));
-}
-
-function monLimparAlertasZabbix() {
-    _monAlertasZabbix = [];
-    monRenderAlertasZabbix();
-}
 
 // ==================== RENDER: INCIDENTES ====================
-function monRenderIncidentes(p) {
-    const el = document.getElementById('mon-incidentes');
-    if (!el) return;
-    if (!p || !p.incidentes || !p.incidentes.length) { monSetHtmlSeMudou(el, ''); return; }
-    monSetHtmlSeMudou(el, p.incidentes.map(function(inc) {
-        return '<div class="glass-panel" style="border-left:3px solid var(--red);margin-bottom:8px;">' +
-            '<div style="padding:14px 18px;display:flex;align-items:center;gap:12px;">' +
-            '<i class="fas fa-share-nodes" style="color:var(--red);font-size:16px;"></i>' +
-            '<div><b style="font-size:13px;color:var(--text-primary);">' + esc(inc.titulo) + '</b>' +
-            '<p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">' +
-            inc.afetados + ' de ' + inc.total + ' equipamentos afetados | Confianca: ' + inc.confianca + '</p>' +
-            '<p style="font-size:11px;color:var(--text-secondary);margin:2px 0 0;">Hosts: ' + inc.hosts.map(h => '<code>' + esc(h) + '</code>').join(', ') + '</p>' +
-            '</div></div></div>';
-    }).join(''));
-}
 
 // ==================== RENDER: HOSTS ZABBIX ====================
 let _monZbxHostsTs = 0;
@@ -2456,89 +2111,7 @@ async function monSyncIpsZabbix() {
 }
 
 // ==================== ARMAZENAMENTO ====================
-async function monAtualizarArmazenamento() {
-    try {
-        const dados = await fetch('/api/monitor/armazenamento').then(r => r.json()).catch(() => null);
-        monRenderArmazenamento(dados);
-    } catch (e) {
-        const el = document.getElementById('mon-armazenamento');
-        if (el) el.innerHTML = '<p style="color:var(--red);font-size:12px;text-align:center;padding:20px;">Erro ao carregar armazenamento: ' + esc(e.message) + '</p>';
-    }
-}
 
-function monRenderArmazenamento(d) {
-    const el = document.getElementById('mon-armazenamento');
-    if (!el) return;
-    if (!d || d.error) {
-        monSetHtmlSeMudou(el, '<p style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px;">' + esc(d && d.error ? d.error : 'Indisponivel') + '</p>');
-        return;
-    }
-
-    let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">';
-
-    // --- DISCOS DO PC LOCAL ---
-    html += '<div>';
-    html += '<h4 style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 10px;"><i class="fas fa-hard-drive" style="color:var(--cyan);"></i> Discos do PC Local</h4>';
-    if (d.discos && d.discos.length) {
-        for (const disco of d.discos) {
-            const pct = disco.usoPct || 0;
-            const corBarra = 'var(--' + (monCorDisco(disco.usoPct) || 'green') + ')';
-            html += '<div style="padding:12px;background:rgba(255,255,255,0.03);border-radius:10px;margin-bottom:8px;border-left:3px solid ' + corBarra + ';">';
-            html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">';
-            html += '<b style="font-size:13px;color:var(--text-primary);"><i class="fas fa-hard-drive" style="color:' + corBarra + ';margin-right:6px;"></i>' + esc(disco.letra || '?') + '</b>';
-            html += '<span style="font-size:18px;font-weight:700;color:' + corBarra + ';">' + pct + '%</span>';
-            html += '</div>';
-            // Barra de progresso
-            html += '<div style="width:100%;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;margin-bottom:6px;">';
-            html += '<div style="width:' + Math.min(100, pct) + '%;height:100%;background:' + corBarra + ';border-radius:4px;transition:width 0.5s;"></div>';
-            html += '</div>';
-            html += '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);">';
-            html += '<span>Usado: <b style="color:var(--text-secondary);">' + disco.usadoGb + ' GB</b></span>';
-            html += '<span>Livre: <b style="color:var(--text-secondary);">' + disco.livreGb + ' GB</b></span>';
-            html += '<span>Total: <b style="color:var(--text-secondary);">' + disco.totalGb + ' GB</b></span>';
-            html += '</div>';
-            html += '</div>';
-        }
-    } else {
-        html += '<p style="color:var(--text-muted);font-size:12px;padding:12px;">Discos indisponiveis (sem acesso WMI/PowerShell).</p>';
-    }
-    html += '</div>';
-
-    // --- DADOS DO MONITORAMENTO ---
-    const dm = d || {};
-    const ret = d.retencao || {};
-    html += '<div>';
-    html += '<h4 style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 10px;"><i class="fas fa-database" style="color:var(--purple);"></i> Dados do Monitoramento</h4>';
-    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">';
-    html += monArmItem('fa-database', 'Medicoes Hoje', dm.medicoesHoje != null ? dm.medicoesHoje : '?', (dm.tamanhoHojeBytes ? monFormatBytes(dm.tamanhoHojeBytes) : ''), 'purple');
-    html += monArmItem('fa-database', 'Total Medicoes', dm.totalMedicoes != null ? dm.totalMedicoes : '?', (dm.diasComDados != null ? dm.diasComDados : 0) + ' dia(s) de dados', 'purple');
-    html += monArmItem('fa-weight-hanging', 'Espaco Total', dm.tamanhoTotalMB != null ? dm.tamanhoTotalMB + ' MB' : '?', 'raw + agregados', 'magenta');
-    html += monArmItem('fa-calendar', 'Retencao', (ret.medicoesDias || 30) + ' dias', 'agregados: ' + (ret.agregadosDias || 365) + ' dias', 'cyan');
-    html += '</div>';
-    // Ultima medicao
-    if (dm.ultimaMedicao) {
-        html += '<div style="margin-top:10px;padding:10px;background:rgba(255,255,255,0.03);border-radius:8px;font-size:11px;color:var(--text-muted);">';
-        html += '<i class="fas fa-clock" style="color:var(--cyan);margin-right:6px;"></i>Ultima medicao: <b style="color:var(--text-secondary);">' + new Date(dm.ultimaMedicao).toLocaleString('pt-BR') + '</b>';
-        if (dm.primeiraMedicao) {
-            html += ' | Primeira: <b style="color:var(--text-secondary);">' + new Date(dm.primeiraMedicao).toLocaleString('pt-BR') + '</b>';
-        }
-        html += '</div>';
-    }
-    // Arquivos por dia
-    if (dm.arquivos && dm.arquivos.length) {
-        html += '<h4 style="font-size:10px;color:var(--text-muted);text-transform:uppercase;margin:12px 0 6px;">Arquivos por Dia</h4>';
-        html += '<div style="max-height:150px;overflow-y:auto;">';
-        html += '<table class="data-table" style="font-size:10px;"><thead><tr><th>Dia</th><th>Medicoes</th><th>Tamanho</th></tr></thead><tbody>';
-        for (const arq of dm.arquivos.slice().reverse()) {
-            html += '<tr><td>' + esc(arq.dia) + '</td><td>' + arq.medicoes + '</td><td>' + monFormatBytes(arq.tamanhoBytes) + '</td></tr>';
-        }
-        html += '</tbody></table></div>';
-    }
-    html += '</div>';
-    html += '</div>';
-
-    monSetHtmlSeMudou(el, html);
-}
 
 function monArmItem(icon, label, valor, sub, cor) {
     const corMap = { green: 'var(--green)', yellow: 'var(--yellow)', red: 'var(--red)', cyan: 'var(--cyan)', purple: 'var(--purple)', magenta: 'var(--magenta)', muted: 'var(--text-muted)' };
@@ -3313,92 +2886,6 @@ function monAbrirGraficoNovaAba(titulo, htmlConteudo) {
 }
 
 // ==================== RELATORIO DETALHADO DO PC ====================
-function monGerarRelatorioPC() {
-    const s = _monSistema || {};
-    const cpu = s.cpu || {};
-    const mem = s.memoria || {};
-    const up = s.uptime || {};
-    const gpuInfo = s.gpu || {};
-    const disco = (s.disco && s.disco.discos) ? s.disco.discos : [];
-    const rede = (s.rede || [])[0] || {};
-    const info = s.info || {};
-    const alertas = (_monDados && _monDados.alertas) || [];
-    const linhas = (_monDados && _monDados.linhas) || [];
-    const dm = _monArmKPIs || {};
-
-    let html = '';
-    html += '<section><h2>Identificacao</h2>';
-    html += '<table class="tbl"><tr><td>Hostname</td><td>' + esc(s.hostname || '?') + '</td></tr>';
-    html += '<tr><td>IP local</td><td>' + esc(rede.ip || '?') + '</td></tr>';
-    html += '<tr><td>MAC</td><td>' + esc(rede.mac || '?') + '</td></tr>';
-    html += '<tr><td>Plataforma</td><td>' + esc(info.plataforma || '?') + ' ' + esc(info.arquitetura || '') + '</td></tr>';
-    html += '<tr><td>Kernel</td><td>' + esc(info.release || '?') + '</td></tr>';
-    html += '<tr><td>Node.js</td><td>' + esc(info.node || '?') + '</td></tr>';
-    html += '<tr><td>Nucleos CPU</td><td>' + (cpu.nucleos || '?') + ' — ' + esc(cpu.modelo || '') + '</td></tr>';
-    html += '<tr><td>Coletado em</td><td>' + (s.quando ? new Date(s.quando).toLocaleString('pt-BR') : '?') + '</td></tr></table></section>';
-
-    html += '<section><h2>CPU</h2>';
-    html += '<p>Uso atual: <b>' + (cpu.usoPct != null ? cpu.usoPct + '%' : 'Indisponivel') + '</b></p>';
-    if (_monKpiCharts['sys-cpu']) html += '<div class="chart">' + _monKpiCharts['sys-cpu'].html + '</div>';
-    html += '</section>';
-
-    html += '<section><h2>Memoria (RAM)</h2>';
-    html += '<p>Uso: <b>' + (mem.usoPct != null ? mem.usoPct + '%' : '?') + '</b> (' + (mem.usadoGb || '?') + '/' + (mem.totalGb || '?') + ' GB, livre ' + (mem.livreGb || '?') + ' GB)</p>';
-    if (_monKpiCharts['sys-ram']) html += '<div class="chart">' + _monKpiCharts['sys-ram'].html + '</div>';
-    html += '</section>';
-
-    html += '<section><h2>GPU</h2>';
-    if (gpuInfo.gpus && gpuInfo.gpus.length) {
-        for (const g of gpuInfo.gpus) {
-            html += '<p>' + esc(g.nome || '?') + ': ' + (g.usoPct != null ? g.usoPct + '%' : '?') +
-                (g.memoriaTotalMb ? ' | Mem: ' + g.memoriaUsadaMb + '/' + g.memoriaTotalMb + ' MB' : '') +
-                (g.temperaturaC ? ' | Temp: ' + g.temperaturaC + '°C' : '') + '</p>';
-        }
-    } else {
-        html += '<p>' + esc(gpuInfo.indisponivel || 'Indisponivel') + '</p>';
-    }
-    html += '</section>';
-
-    html += '<section><h2>Discos</h2><table class="tbl"><thead><tr><th>Letra</th><th>Total GB</th><th>Usado GB</th><th>Livre GB</th><th>Uso %</th></tr></thead><tbody>';
-    for (const d of disco) {
-        html += '<tr><td>' + esc(d.letra) + '</td><td>' + d.totalGb + '</td><td>' + d.usadoGb + '</td><td>' + d.livreGb + '</td><td>' + d.usoPct + '%</td></tr>';
-    }
-    if (!disco.length) html += '<tr><td colspan="5">Indisponivel</td></tr>';
-    html += '</tbody></table></section>';
-
-    html += '<section><h2>Uptime / Sistema</h2>';
-    html += '<p>Uptime: <b>' + esc(up.uptimeHumano || '?') + '</b> (boot: ' + (up.bootTime ? new Date(up.bootTime).toLocaleString('pt-BR') : '?') + ')</p>';
-    html += '<p>Reinicio detectado: ' + (up.reiniciadoDesdeUltimaColeta ? '<b style="color:#ff4444;">SIM</b>' : 'Nao') + '</p>';
-    html += '</section>';
-
-    html += '<section><h2>Rede</h2>';
-    html += '<p>' + esc(rede.nome || '?') + ' — ' + esc(rede.ip || '?') + ' (MAC: ' + esc(rede.mac || '?') + ')</p>';
-    html += '</section>';
-
-    html += '<section><h2>Hosts Monitorados (' + linhas.length + ')</h2><table class="tbl"><thead><tr><th>Nome</th><th>IP</th><th>Estado</th><th>Latencia</th><th>Falhas</th></tr></thead><tbody>';
-    for (const l of linhas) {
-        html += '<tr><td>' + esc(l.nome || l.ip) + '</td><td>' + esc(l.ip) + '</td><td>' + esc(l.estado) + '</td><td>' + (l.latenciaMediaMs != null ? l.latenciaMediaMs + 'ms' : '—') + '</td><td>' + (l.falhasConsecutivas || 0) + '</td></tr>';
-    }
-    html += '</tbody></table></section>';
-
-    html += '<section><h2>Alertas Ativos (' + alertas.length + ')</h2>';
-    if (alertas.length) {
-        html += '<table class="tbl"><thead><tr><th>Gravidade</th><th>Titulo</th><th>Host</th><th>Confianca</th></tr></thead><tbody>';
-        for (const a of alertas) {
-            html += '<tr><td>' + esc(a.gravidade) + '</td><td>' + esc(a.titulo) + '</td><td>' + esc(a.host) + '</td><td>' + esc(a.confianca) + '</td></tr>';
-        }
-        html += '</tbody></table>';
-    } else {
-        html += '<p>Nenhum alerta ativo.</p>';
-    }
-    html += '</section>';
-
-    html += '<section><h2>Armazenamento</h2>';
-    html += '<p>Medicoes hoje: ' + (dm.medicoesHoje != null ? dm.medicoesHoje : '?') + ' | Total: ' + (dm.totalMedicoes != null ? dm.totalMedicoes : '?') + ' (' + (dm.diasComDados || 0) + ' dias) | Espaco: ' + (dm.tamanhoTotalMB || 0) + ' MB</p>';
-    html += '</section>';
-
-    return html;
-}
 
 
 function monAbrirRelatorioHost(ip) {

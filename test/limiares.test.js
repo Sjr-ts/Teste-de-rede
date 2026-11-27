@@ -157,7 +157,9 @@ test('call sites de latencia/perda/CPU/GPU passam limiares', () => {
     // Os graficos VIVOS continuam todos com limiar (o teste acima valida o SVG).
     assert.ok(lat >= 3, 'latencia sem limiar em ' + lat + ' grafico(s)');
     assert.ok(perda >= 2, 'perda sem limiar em ' + perda + ' grafico(s)');
-    assert.ok(uso >= 5, 'CPU/GPU/RAM sem limiar em ' + uso + ' grafico(s)');
+    // 511 linhas de funcoes mortas (alvos DOM removidos) foram eliminadas,
+    // levando call sites de grafico que nunca chegavam a executar.
+    assert.ok(uso >= 4, 'CPU/GPU/RAM sem limiar em ' + uso + ' grafico(s)');
     assert.ok(disco >= 1, 'disco sem limiar em ' + disco + ' grafico(s)');
 });
 

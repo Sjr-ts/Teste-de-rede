@@ -148,15 +148,6 @@
                 </div>
             </div>
             <div class="header-right">
-                <div class="hdr-actions">
-                    <button class="hdr-icon-btn" id="notifBtn" onclick="toggleNotifPanel(event)" title="Notificações">
-                        <i class="fas fa-bell"></i>
-                        <span class="hdr-badge" id="notifBadge" style="display:none;">0</span>
-                    </button>
-                    <button class="hdr-icon-btn" id="settingsBtn" onclick="toggleSettingsPanel(event)" title="Configurações">
-                        <i class="fas fa-cog"></i>
-                    </button>
-                </div>
                 <button onclick="showManual()" class="btn btn-ghost btn-sm" title="Manual do Sistema" style="margin-right:8px;">
                     <i class="fas fa-question-circle"></i> <span style="display:inline;">Manual</span>
                 </button>
@@ -167,44 +158,6 @@
             </div>
         </header>
 
-        <div class="hdr-dropdown" id="notifPanel" style="display:none;" onclick="event.stopPropagation();">
-            <div class="hdr-dropdown-header">
-                <h4><i class="fas fa-bell"></i> Notificações</h4>
-                <span class="hdr-dropdown-count" id="notifCountLabel">0</span>
-            </div>
-            <div class="hdr-dropdown-body" id="notifList">
-                <div class="hdr-notif-empty"><i class="fas fa-check-circle"></i><p>Nenhuma notificação</p></div>
-            </div>
-            <div class="hdr-dropdown-footer">
-                <button class="btn btn-ghost btn-sm" onclick="hideHdrDropdowns();showSection('logs');"><i class="fas fa-history"></i> Ver histórico</button>
-            </div>
-        </div>
-
-        <div class="hdr-dropdown" id="settingsPanel" style="display:none;" onclick="event.stopPropagation();">
-            <div class="hdr-dropdown-header">
-                <h4><i class="fas fa-cog"></i> Configurações</h4>
-            </div>
-            <div class="hdr-dropdown-body">
-                <p class="settings-label">Plano de Fundo</p>
-                <div class="bg-options" id="bgOptions">
-                    <button class="bg-option" data-bg="dots" onclick="event.stopPropagation();setAppBg('dots')">
-                        <span class="bg-preview bg-preview-dots"></span>
-                        <span class="bg-option-name">Pontos</span>
-                        <i class="fas fa-check bg-option-check"></i>
-                    </button>
-                    <button class="bg-option" data-bg="xbox" onclick="event.stopPropagation();setAppBg('xbox')">
-                        <span class="bg-preview bg-preview-xbox"></span>
-                        <span class="bg-option-name">Xbox</span>
-                        <i class="fas fa-check bg-option-check"></i>
-                    </button>
-                    <button class="bg-option" data-bg="universe" onclick="event.stopPropagation();setAppBg('universe')">
-                        <span class="bg-preview bg-preview-universe"></span>
-                        <span class="bg-option-name">Universo</span>
-                        <i class="fas fa-check bg-option-check"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
 
         <!-- ==================== DASHBOARD ==================== -->
         <section id="painel" class="section-content">
@@ -233,28 +186,6 @@
                     <div id="dashboardManutRows" class="dsh-rows"></div>
                     <div class="dsh-subhead"><i class="fas fa-clipboard-list"></i> Ordens por Prioridade</div>
                     <div id="dashboardOrdemRows" class="dsh-rows"></div>
-                </div>
-                <div class="glass-panel dashboard-chart-half">
-                    <div class="glass-panel-header"><h3><i class="fas fa-history"></i> Atividade Recente</h3><button class="btn btn-ghost btn-sm dsh-link" onclick="showSection('logs')">Ver todas</button></div>
-                    <div id="dashboardAtividade" class="dsh-table-wrap"></div>
-                </div>
-                <div class="glass-panel dashboard-chart-half">
-                    <div class="glass-panel-header"><h3><i class="fas fa-desktop"></i> Computadores</h3><button class="btn btn-ghost btn-sm dsh-link" onclick="showSection('computadores')">Ver lista</button></div>
-                    <div id="dashboardCompList" class="dsh-table-wrap"></div>
-                </div>
-                <div class="glass-panel dashboard-chart-half" id="dshMonWidgetPanel">
-                    <div class="glass-panel-header"><h3><i class="fas fa-heartbeat"></i> Monitoramento da Rede</h3><button class="btn btn-ghost btn-sm dsh-link" onclick="showSection('monitoramento')">Abrir monitoramento</button></div>
-                    <div id="dshMonWidget" style="padding:6px 4px 2px;">
-                        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;">
-                            <div style="min-width:120px;"><div id="dshMonOnline" style="font-size:32px;font-weight:800;color:var(--cyan);line-height:1;">—</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-top:4px;">Acessiveis</div></div>
-                            <div style="min-width:120px;"><div id="dshMonProblemas" style="font-size:32px;font-weight:800;color:var(--yellow);line-height:1;">—</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-top:4px;">Problemas Zabbix</div></div>
-                            <div style="flex:1;min-width:180px;">
-                                <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-bottom:4px;"><span>Disponibilidade</span><span id="dshMonPct">—</span></div>
-                                <div style="height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden;"><div id="dshMonBar" style="height:100%;width:0%;background:var(--green);transition:width .4s ease;"></div></div>
-                                <div id="dshMonUltima" style="font-size:10px;color:var(--text-muted);margin-top:6px;">Carregando...</div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </section>
@@ -475,13 +406,13 @@
 
         <!-- ==================== RELATORIOS ==================== -->
         <section id="relatorios" class="section-content hidden">
-            <div class="print-header">
-                <img src="assets/logo.png" alt="TI" onerror="this.style.display='none'" style="height:40px;">
+            <div class="print-header" style="display:flex;align-items:center;gap:14px;padding:16px 18px;border:1px solid var(--border);border-radius:14px;background:linear-gradient(110deg,rgba(0,229,199,.07),rgba(13,21,38,.9));margin-bottom:16px;">
+                <img src="assets/logo.png" alt="TI" onerror="this.style.display='none'" style="height:32px;">
                 <div>
-                    <h1 style="font-size:20px;color:#00897b;font-weight:800;letter-spacing:-0.3px;">INVENTARIO DE TI</h1>
-                    <p style="font-size:11px;color:#546e7a;font-weight:500;">Sistema de Gestao de Inventario - Relatorio Gerencial</p>
+                    <h1 style="font-size:18px;color:var(--primary);font-weight:800;letter-spacing:-0.3px;">INVENTARIO DE TI</h1>
+                    <p style="font-size:11px;color:var(--text-muted);">Visão gerencial · relatórios</p>
                 </div>
-                <span class="print-date" id="printDate" style="font-size:11px;color:#78909c;font-weight:500;"></span>
+                <span class="print-date" id="printDate" style="margin-left:auto;font-size:11px;color:var(--text-muted);"></span>
             </div>
             <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center;">
                 <button onclick="generateRelatorioGeralPDF()" class="btn btn-primary btn-sm"><i class="fas fa-file-pdf"></i> Relatorio Geral</button>
@@ -531,8 +462,8 @@
                 </div>
             </div>
             <div class="print-footer">
-                <span style="font-weight:600;color:#00897b;">Inventario de TI - Gestao de Equipamentos</span>
-                <span style="color:#78909c;">Documento gerado automaticamente pelo sistema</span>
+                <span style="font-weight:600;color:var(--text-secondary);">Inventário TI · Gestão de Equipamentos</span>
+                <span style="color:var(--text-muted);">Documento gerado automaticamente</span>
                 <span id="printFooterDate"></span>
             </div>
         </section>
