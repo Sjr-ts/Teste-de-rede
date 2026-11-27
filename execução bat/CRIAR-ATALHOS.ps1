@@ -25,10 +25,16 @@ dir = fso.GetParentFolderName(WScript.ScriptFullName)
 det = dir & "\detect-server.ps1"
 ip = "127.0.0.1"
 If fso.FileExists(det) Then
+    ' 0 = SW_HIDE, True = espera. Sem piscar console ao abrir o atalho.
+    tmp = fso.GetSpecialFolder(2) & "\inv-ip-detectado.txt"
     On Error Resume Next
-    Set o = sh.Exec("powershell.exe -NoProfile -ExecutionPolicy Bypass -File """ & det & """")
-    If Err.Number = 0 Then
-        saida = Trim(o.StdOut.ReadAll)
+    fso.DeleteFile tmp, True
+    cmd = "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File """ & det & """ > """ & tmp & """"
+    sh.Run cmd, 0, True
+    If fso.FileExists(tmp) Then
+        Set tf = fso.OpenTextFile(tmp, 1, False)
+        saida = Trim(tf.ReadAll)
+        tf.Close
         If saida <> "" Then ip = saida
     End If
     On Error GoTo 0
@@ -43,9 +49,8 @@ End If
 '@
 
 foreach ($alvo in @($vbsPainel, $vbsZabbix)) {
-    if (-not (Test-Path -LiteralPath $alvo)) {
-        Set-Content -LiteralPath $alvo -Value $vbsConteudo -Encoding ASCII
-    }
+    # Sempre regrava: atualiza atalhos antigos que ainda abriam console.
+    Set-Content -LiteralPath $alvo -Value $vbsConteudo -Encoding ASCII
 }
 
 # ---- 2) atalhos ----

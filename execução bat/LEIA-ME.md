@@ -2,25 +2,27 @@
 
 Esta pasta contém o instalador único para os computadores Windows monitorados.
 
-## 📌 ARQUIVO ÚNICO — é só dar 2 cliques
+## 📌 ARQUIVO ÚNICO — é só dar 2 cliques, SEM PISCAR JANELA
 
-**`INSTALAR.cmd`** — duplo-clique nele e **não digita nada**:
+**`INSTALAR-1-CLIQUE.vbs`** — duplo-clique nele e **não digita nada**:
 
-1. **Auto-eleva a Administrador** (detecção confiável via `WindowsPrincipal` — sem `net session`, que é instável) → aparece o UAC "Sim"
-2. **`INSTALAR.ps1`** assume o controle: cria o log **`instalar.log`** nesta pasta (nada falha em silêncio)
-3. Baixa o MSI oficial do Zabbix da CDN e instala o agente (`SERVER=` do servidor detectado)
-4. Grava a configuração + script de IP adaptativo e inicia o serviço
-5. Cria atalhos na Área de Trabalho e tarefas agendadas (auto-heal boot + 5min)
-6. Descobre o servidor na rede (127.0.0.1 + faixa 192.168.0.100-129)
-7. Abre o Inventário TI **já logado** no navegador
+1. Abre o **`INSTALAR.ps1` com janela oculta** (`-WindowStyle Hidden`) — **nenhuma tela de PowerShell pisca**
+2. **Auto-eleva a Administrador** → aparece **somente o UAC "Sim"** (obrigatório para instalar o serviço)
+3. Tudo roda em silêncio: download do MSI, config, cadastro do PC, atalhos, tarefas
+4. **`instalar.log`** é gravado em tempo real nesta pasta
+5. No final, o próprio `instalar.log` **abre no Bloco de Notas** para você ver tudo o que aconteceu
+6. Abre o Inventário TI **já logado** no navegador
 
-> **Arquitetura:** `INSTALAR.cmd` (lançador fino) → `INSTALAR.ps1` (orquestrador com log + auto-elevação) → `instalar-tudo.bat /silent` (instala o agente). O VBS foi **abandonado** (erros de compilação `800A0405`/`800A01B6`).
+> `INSTALAR.cmd` continua funcionando como wrapper de compatibilidade, mas **use o `.vbs`** para não ver nenhuma janela de console.
+>
+> **Sem flicker também depois de instalado:** as tarefas agendadas (auto-heal a cada 5 min, vigia a cada 1 min e instalador silencioso no boot) usam `-WindowStyle Hidden` / atalho VBS oculto. Nada mais abre console periodicamente.
 
 Tudo que é preciso estar na pasta (ela inteira):
 
 | Arquivo | O que faz |
 |---------|-----------|
-| **`INSTALAR.cmd`** | **← duplo-clique aqui, não digita nada** |
+| **`INSTALAR-1-CLIQUE.vbs`** | **← duplo-clique aqui: instala oculto, sem flicker** |
+| `INSTALAR.cmd` | Wrapper de compatibilidade (chama o VBS acima) |
 | `INSTALAR.ps1` | Orquestrador: auto-elevação, log `instalar.log`, descobre servidor, abre painel |
 | `instalar-tudo.bat` | Instalador do agente (MSI + config + serviço) |
 | `gravar-config.ps1` | Grava `zabbix_agent2.conf` + script `inv-meta.ps1` (IP adaptativo) |

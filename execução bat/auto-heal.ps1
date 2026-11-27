@@ -67,7 +67,7 @@ function Get-ServerIp([string]$atual) {
     #    para SI MESMO e o Zabbix nunca recebia os dados.
     $scan = Join-Path (Get-BaseDir) 'detect-server.ps1'
     if (Test-Path $scan) {
-        $ip = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scan 2>$null |
+        $ip = & powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $scan 2>$null |
               Where-Object { $_ -match '^\d{1,3}(\.\d{1,3}){3}$' } | Select-Object -First 1
         if ($ip -and (Test-ZbxServer "$ip".Trim())) { return "$ip".Trim() }
         if ($ip -and -not (Test-ZbxServer "$ip".Trim())) {

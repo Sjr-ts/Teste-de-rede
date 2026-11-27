@@ -39,7 +39,7 @@ if (-not $Server) {
     # 2) detect-server.ps1 (scan paralelo de toda a sub-rede na porta 5903)
     $det = Join-Path $thisDir 'detect-server.ps1'
     if (Test-Path -LiteralPath $det) {
-        $Server = (& powershell -NoProfile -ExecutionPolicy Bypass -File $det | Select-Object -First 1)
+        $Server = (& powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $det | Select-Object -First 1)
         if ($Server) { $Server = "$Server".Trim() }
     }
 }
@@ -67,7 +67,7 @@ $enc = New-Object System.Text.UTF8Encoding($false)
 # O UserParameter do Agent 2 NAO funciona neste Windows: qualquer comando
 # (ate "echo OK") falha com "fork/exec cmd.exe: Acesso negado". Por isso o
 # metadata e ESTATICO e o auto-heal.ps1 o reescreve quando o IP muda (5 min).
-$metaValor = (& powershell -NoProfile -ExecutionPolicy Bypass -File $meta | Select-Object -First 1)
+$metaValor = (& powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $meta | Select-Object -First 1)
 if ($metaValor) { $metaValor = "$metaValor".Trim() }
 if (-not $metaValor -or $metaValor -like '*sem-ip*') { $metaValor = 'inventario-ti ' + $hostname }
 
@@ -93,4 +93,4 @@ $c += ''
 [System.IO.File]::WriteAllLines($conf, $c, $enc)
 
 Write-Output ('CONF_OK server=' + $Server)
-& powershell -NoProfile -ExecutionPolicy Bypass -File $meta
+& powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $meta

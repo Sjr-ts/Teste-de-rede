@@ -15,7 +15,9 @@ param(
     # Usado quando re-executado ja elevado (UAC aceito): a janela ORIGINAL fica
     # esperando com -Wait e mostra o resultado; a elevada entao NAO pausa no
     # final (senao o -Wait travaria as duas janelas para sempre).
-    [switch]$Elevado
+    [switch]$Elevado,
+    # Lancado pelo INSTALAR-1-CLIQUE.vbs: sem console, sem Read-Host.
+    [switch]$Oculto
 )
 
 $ErrorActionPreference = 'Continue'
@@ -34,6 +36,16 @@ function EhAdmin {
     return $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+# Modo oculto: nunca pede Enter (nao ha console) e abre o log para leitura.
+function Finalizar([int]$codigo) {
+    if ($Oculto) {
+        try { Start-Process -FilePath 'notepad.exe' -ArgumentList "`"$logPath`"" -ErrorAction Stop } catch {}
+    } else {
+        Read-Host '  Pressione Enter para fechar'
+    }
+    exit $codigo
+}
+
 Log '=== INSTALADOR INVENTARIO TI ==='
 Log "scriptDir = $scriptDir"
 Log "usuario   = $([Security.Principal.WindowsIdentity]::GetCurrent().Name)"
@@ -41,7 +53,8 @@ Log "usuario   = $([Security.Principal.WindowsIdentity]::GetCurrent().Name)"
 # ---------------------------------------------------------------- passo 1/2
 if (-not (EhAdmin)) {
     Log 'Nao-admin detectado. Solicitando elevacao (UAC)...' 'AVISO'
-    $argList = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Elevado')
+    # -WindowStyle Hidden: o processo elevado NAO abre console (sem flicker).
+    $argList = @('-NoProfile', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-Elevado')
     Write-Host ''
     Write-Host '  ================================================' -ForegroundColor Cyan
     Write-Host '   INSTALADOR INVENTARIO TI - 1 CLIQUE' -ForegroundColor Cyan
@@ -78,8 +91,7 @@ if (-not (EhAdmin)) {
         Write-Host '  Execute como Administrador (botao direito).' -ForegroundColor Red
         Write-Host ''
     }
-    Read-Host '  Pressione Enter para fechar'
-    exit 0
+    Finalizar 0
 }
 
 Log "Administrador CONFIRMADO ($([Security.Principal.WindowsIdentity]::GetCurrent().Name))." 'OK'
@@ -89,17 +101,28 @@ $bat = Join-Path $scriptDir 'instalar-tudo.bat'
 if (-not (Test-Path -LiteralPath $bat)) {
     Log "instalar-tudo.bat NAO encontrado em: $bat" 'ERRO'
     Write-Host '  ERRO: instalar-tudo.bat nao encontrado ao lado deste arquivo.' -ForegroundColor Red
-    Read-Host '  Pressione Enter para fechar'
-    exit 1
+    Finalizar 1
 }
 
 Log 'Chamando instalar-tudo.bat /silent (pode levar ~60s baixando o MSI)...' 'INFO'
 $batLog = Join-Path $env:TEMP 'zabbix-install.log'
 if (Test-Path -LiteralPath $batLog) { Remove-Item -LiteralPath $batLog -Force -ErrorAction SilentlyContinue }
 
-$batOut = & cmd.exe /c "`"$bat`" /silent" 2>&1
+# -WindowStyle Hidden: nenhuma janela cmd/powershell pisca durante a instalacao.
+$batOutFile = Join-Path $env:TEMP 'zabbix-bat-out.log'
+$batErrFile = Join-Path $env:TEMP 'zabbix-bat-err.log'
+foreach ($f in @($batOutFile, $batErrFile)) {
+    if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue }
+}
+$proc = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', "`"$bat`" /silent") `
+    -WindowStyle Hidden -Wait -PassThru `
+    -RedirectStandardOutput $batOutFile -RedirectStandardError $batErrFile
+$batExit = $proc.ExitCode
+$batOut = @()
+foreach ($f in @($batOutFile, $batErrFile)) {
+    if (Test-Path -LiteralPath $f) { $batOut += @(Get-Content -LiteralPath $f -ErrorAction SilentlyContinue) }
+}
 foreach ($l in $batOut) { if ("$l".Trim()) { Log ('  bat> ' + "$l".Trim()) } }
-$batExit = $LASTEXITCODE
 Log "instalar-tudo.bat terminou (exit=$batExit)." $(if ($batExit -eq 0) { 'OK' } else { 'AVISO' })
 
 # anexa o log proprio do bat (modo silent) para auditoria
@@ -115,7 +138,7 @@ Log 'Descobrindo o servidor na rede (detect-server.ps1)...' 'INFO'
 $server = $null
 $det = Join-Path $scriptDir 'detect-server.ps1'
 if (Test-Path -LiteralPath $det) {
-    $serverIp = (& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $det | Select-Object -First 1)
+    $serverIp = (& powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $det | Select-Object -First 1)
     if ($serverIp) { $serverIp = "$serverIp".Trim() }
     if ($serverIp -match '^\d{1,3}(\.\d{1,3}){3}$') { $server = "http://${serverIp}:5903" }
 }
@@ -147,4 +170,4 @@ Write-Host ''
 # So pausa se for a janela UNICA (sem -Elevado). Com -Elevado, a janela
 # original esta esperando com -Wait e mostrara o resultado - pausar aqui
 # travaria as duas janelas para sempre.
-if (-not $Elevado) { Read-Host '  Pressione Enter para fechar' }
+if (-not $Elevado) { Finalizar 0 }

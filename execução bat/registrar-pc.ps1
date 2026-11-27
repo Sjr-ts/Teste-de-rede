@@ -35,7 +35,7 @@ Log '=== auto-cadastro do computador ==='
 if (-not $Servidor) {
     $det = Join-Path $dir 'detect-server.ps1'
     if (Test-Path -LiteralPath $det) {
-        $Servidor = (& powershell -NoProfile -ExecutionPolicy Bypass -File $det | Select-Object -First 1)
+        $Servidor = (& powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $det | Select-Object -First 1)
         if ($Servidor) { $Servidor = "$Servidor".Trim() }
     }
 }

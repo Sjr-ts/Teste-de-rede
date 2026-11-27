@@ -66,7 +66,7 @@ goto :eof
 
 :ehAdmin
 REM Deteccao CONFIARVEL de admin (WindowsPrincipal). Sai com 0=admin, 1=nao-admin.
-powershell -NoProfile -Command "if ((New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { exit 0 } else { exit 1 }"
+powershell -NoProfile -WindowStyle Hidden -Command "if ((New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { exit 0 } else { exit 1 }"
 exit /b %errorlevel%
 
 :main
@@ -100,7 +100,7 @@ REM Ordem: INV_SERVER_IP (fixo) -> server-ip.txt via detect-server.ps1 -> 127.0.
 set "ZBX_SERVER="
 if defined INV_SERVER_IP set "ZBX_SERVER=%INV_SERVER_IP%"
 if defined ZBX_SERVER goto :ip_srv_pronto
-for /f "usebackq delims=" %%I in (`powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%detect-server.ps1" 2^>nul ^| findstr /r "[0-9][0-9]*\.[0-9]"`) do if not defined ZBX_SERVER set "ZBX_SERVER=%%I"
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%SCRIPT_DIR%detect-server.ps1" 2^>nul ^| findstr /r "[0-9][0-9]*\.[0-9]"`) do if not defined ZBX_SERVER set "ZBX_SERVER=%%I"
 :ip_srv_pronto
 if not defined ZBX_SERVER set "ZBX_SERVER=127.0.0.1"
 call :log "[INFO] Servidor detectado: %ZBX_SERVER%"
@@ -109,7 +109,7 @@ REM ---- Baixa o MSI oficial se faltar ----
 REM (fluxo com goto: evita if/else aninhado que causa erro de parse no cmd)
 if exist "%MSI_PATH%" goto :msi_presente
 call :log "[INFO] Baixando MSI oficial do Zabbix (17.6 MB, aguarde)..."
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $ok=$false; for($i=1; $i -le 3; $i++){ try { Invoke-WebRequest -Uri '%MSI_URL%' -OutFile '%MSI_PATH%' -TimeoutSec 300 -ErrorAction Stop; $ok=$true; break } catch { if($i -lt 3){ Start-Sleep -Seconds 3 } } }; if(-not $ok){ exit 1 }; if((Get-Item -LiteralPath '%MSI_PATH%').Length -lt 1000000){ exit 1 }; exit 0"
+powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $ok=$false; for($i=1; $i -le 3; $i++){ try { Invoke-WebRequest -Uri '%MSI_URL%' -OutFile '%MSI_PATH%' -TimeoutSec 300 -ErrorAction Stop; $ok=$true; break } catch { if($i -lt 3){ Start-Sleep -Seconds 3 } } }; if(-not $ok){ exit 1 }; if((Get-Item -LiteralPath '%MSI_PATH%').Length -lt 1000000){ exit 1 }; exit 0"
 if errorlevel 1 goto :msi_falhou
 call :log "[OK] MSI baixado."
 goto :msi_fim
@@ -153,7 +153,7 @@ call :log "[INFO] Gravando configuracao do agente..."
 REM ---- Grava conf + script PowerShell (gravar-config.ps1) ----
 REM (antes usavamos -EncodedCommand com base64: excedia o limite de 8191 chars do cmd)
 if not exist "%SCRIPT_DIR%gravar-config.ps1" goto :cfg_ausente
-powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%gravar-config.ps1" -Server %ZBX_SERVER%
+powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%SCRIPT_DIR%gravar-config.ps1" -Server %ZBX_SERVER%
 if errorlevel 1 goto :cfg_falhou
 goto :cfg_ok
 
@@ -180,7 +180,7 @@ REM O script descobre o servidor sozinho e preenche somente campos vazios,
 REM preservando o que o suporte ja digitou na aba Computadores.
 if not exist "%SCRIPT_DIR%registrar-pc.ps1" goto :registro_fim
 call :log "[INFO] Cadastrando o PC no Inventario TI..."
-powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%registrar-pc.ps1"
+powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%SCRIPT_DIR%registrar-pc.ps1"
 if errorlevel 1 goto :registro_aviso
 call :log "[OK] PC cadastrado no Inventario TI com dados reais."
 goto :registro_fim
@@ -190,7 +190,7 @@ call :log "[AVISO] Auto-cadastro falhou - complete manualmente na aba Computador
 
 REM ---- Atalhos na Area de Trabalho (abram painel sem depender de IP) ----
 if not exist "%SCRIPT_DIR%CRIAR-ATALHOS.ps1" goto :atalhos_fim
-powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%CRIAR-ATALHOS.ps1"
+powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%SCRIPT_DIR%CRIAR-ATALHOS.ps1"
 if errorlevel 1 goto :atalhos_erro
 call :log "[OK] Atalhos 'INVENTARIO TI' e 'ZABBIX' criados na Area de Trabalho."
 goto :atalhos_fim
@@ -205,9 +205,9 @@ REM Erro do schtasks AGORA e reportado de verdade (antes o :log dizia "criadas"
 REM mesmo quando o schtasks falhava, porque estava dentro de bloco if).
 set "HEAL_PATH=%SCRIPT_DIR%auto-heal.ps1"
 if not exist "%HEAL_PATH%" goto :heal_ausente
-schtasks /create /tn "ZabbixAgent-AutoHeal-Boot" /tr "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%HEAL_PATH%\"" /sc onstart /ru SYSTEM /rl HIGHEST /f > "%TEMP%\zbx-schtasks.log" 2>&1
+schtasks /create /tn "ZabbixAgent-AutoHeal-Boot" /tr "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \"%HEAL_PATH%\"" /sc onstart /ru SYSTEM /rl HIGHEST /f > "%TEMP%\zbx-schtasks.log" 2>&1
 if errorlevel 1 goto :heal_erro
-schtasks /create /tn "ZabbixAgent-AutoHeal-5min" /tr "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%HEAL_PATH%\"" /sc minute /mo 5 /ru SYSTEM /rl HIGHEST /f >> "%TEMP%\zbx-schtasks.log" 2>&1
+schtasks /create /tn "ZabbixAgent-AutoHeal-5min" /tr "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \"%HEAL_PATH%\"" /sc minute /mo 5 /ru SYSTEM /rl HIGHEST /f >> "%TEMP%\zbx-schtasks.log" 2>&1
 if errorlevel 1 goto :heal_erro
 call :log "[OK] Auto-heal ativo (boot + a cada 5 min): reinicia agente e corrige IP/config."
 goto :heal_fim
@@ -298,7 +298,7 @@ call :log "[AVISO] HostMetadata ausente - IP adaptativo pode nao funcionar."
 REM ---- Testa conectividade com o servidor Zabbix (porta 10051) ----
 REM (fluxo com goto: %errorlevel% avaliado em tempo de execucao, nao no parse)
 if not defined ZBX_SERVER goto :zbx_srv_indef
-powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $c = New-Object Net.Sockets.TcpClient; $iar = $c.BeginConnect('%ZBX_SERVER%',10051,$null,$null); $ok = $iar.AsyncWaitHandle.WaitOne(3000); if ($ok) { exit 0 } else { exit 1 } } catch { exit 1 }"
+powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command "try { $c = New-Object Net.Sockets.TcpClient; $iar = $c.BeginConnect('%ZBX_SERVER%',10051,$null,$null); $ok = $iar.AsyncWaitHandle.WaitOne(3000); if ($ok) { exit 0 } else { exit 1 } } catch { exit 1 }"
 if %errorlevel% equ 0 goto :zbx_10051_ok
 call :log "[AVISO] Nao foi possivel contatar %ZBX_SERVER%:10051 - verifique rede/firewall."
 goto :zbx_10051_fim
@@ -315,7 +315,7 @@ call :log "[AVISO] Servidor Zabbix indefinido - pulando teste 10051."
 REM ---- Monitoramento em tempo real: mostra os KPIs do PC no final ----
 REM Dados REAIS lidos da propria aplicacao (sem senha, somente leitura).
 call :log "[INFO] Consultando monitoramento em tempo real..."
-powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $pc='http://%ZBX_SERVER%:5903'; $sess=$null; $body=@{username='admin';senha='admin123'}|ConvertTo-Json -Compress; $null=Invoke-WebRequest -SessionVariable sess -Uri ($pc+'/api/auth/login') -Method Post -ContentType 'application/json' -Body $body -TimeoutSec 10; $s=Invoke-RestMethod -WebSession $sess -Uri ($pc+'/api/monitor/sistema') -TimeoutSec 10; $z=Invoke-RestMethod -WebSession $sess -Uri ($pc+'/api/zabbix/resumo') -TimeoutSec 10; $pct=[char]37; $cpu=if($null -ne $s.cpu.usoPct){[string]$s.cpu.usoPct+$pct}else{'?'}; $ram=if($null -ne $s.memoria.usoPct){[string]$s.memoria.usoPct+$pct}else{'?'}; $dd=($s.disco.discos | Select-Object -First 1); $disco=if($dd -and $null -ne $dd.usoPct){[string]$dd.usoPct+$pct}else{'?'}; $ip=($s.rede | Select-Object -First 1).ip; Write-Output ('  PC: '+$s.hostname+'  IP: '+$ip); Write-Output ('  CPU: '+$cpu+'   RAM: '+$ram+'   Disco: '+$disco+'   Uptime: '+$s.uptime.uptimeHumano); Write-Output ('  Zabbix: '+$z.zabbix.disponiveis+' disponiveis / '+$z.zabbix.totalHosts+' hosts  |  '+$z.problemas.total+' problemas ('+$z.problemas.criticos+' criticos)'); Write-Output ('  Painel em tempo real: '+$pc+'/acesso-automatico.html') } catch { Write-Output ('  Monitoramento indisponivel: '+$_.Exception.Message) }"
+powershell -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command "try { $pc='http://%ZBX_SERVER%:5903'; $sess=$null; $body=@{username='admin';senha='admin123'}|ConvertTo-Json -Compress; $null=Invoke-WebRequest -SessionVariable sess -Uri ($pc+'/api/auth/login') -Method Post -ContentType 'application/json' -Body $body -TimeoutSec 10; $s=Invoke-RestMethod -WebSession $sess -Uri ($pc+'/api/monitor/sistema') -TimeoutSec 10; $z=Invoke-RestMethod -WebSession $sess -Uri ($pc+'/api/zabbix/resumo') -TimeoutSec 10; $pct=[char]37; $cpu=if($null -ne $s.cpu.usoPct){[string]$s.cpu.usoPct+$pct}else{'?'}; $ram=if($null -ne $s.memoria.usoPct){[string]$s.memoria.usoPct+$pct}else{'?'}; $dd=($s.disco.discos | Select-Object -First 1); $disco=if($dd -and $null -ne $dd.usoPct){[string]$dd.usoPct+$pct}else{'?'}; $ip=($s.rede | Select-Object -First 1).ip; Write-Output ('  PC: '+$s.hostname+'  IP: '+$ip); Write-Output ('  CPU: '+$cpu+'   RAM: '+$ram+'   Disco: '+$disco+'   Uptime: '+$s.uptime.uptimeHumano); Write-Output ('  Zabbix: '+$z.zabbix.disponiveis+' disponiveis / '+$z.zabbix.totalHosts+' hosts  |  '+$z.problemas.total+' problemas ('+$z.problemas.criticos+' criticos)'); Write-Output ('  Painel em tempo real: '+$pc+'/acesso-automatico.html') } catch { Write-Output ('  Monitoramento indisponivel: '+$_.Exception.Message) }"
 
 call :log "[FIM] Concluido. Host=%COMPUTERNAME% Server=%ZBX_SERVER%"
 
