@@ -94,7 +94,7 @@ try { Set-Content -LiteralPath $ultimaF -Value $agora.ToString('o') -Encoding AS
 
 $ps1 = Join-Path $dir 'iniciar-servidor.ps1'
 if (Test-Path $ps1) {
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ps1 2>&1 | ForEach-Object { Log ('  init> ' + "$_".Trim()) }
+    & powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $ps1 2>&1 | ForEach-Object { Log ('  init> ' + "$_".Trim()) }
 } else {
     Log 'iniciar-servidor.ps1 ausente - reinicio manual necessario.'
 }
