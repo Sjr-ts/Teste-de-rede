@@ -205,9 +205,9 @@ REM Erro do schtasks AGORA e reportado de verdade (antes o :log dizia "criadas"
 REM mesmo quando o schtasks falhava, porque estava dentro de bloco if).
 set "HEAL_PATH=%SCRIPT_DIR%auto-heal.ps1"
 if not exist "%HEAL_PATH%" goto :heal_ausente
-schtasks /create /tn "ZabbixAgent-AutoHeal-Boot" /tr "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \"%HEAL_PATH%\"" /sc onstart /ru SYSTEM /rl HIGHEST /f > "%TEMP%\zbx-schtasks.log" 2>&1
+schtasks /create /tn "ZabbixAgent-AutoHeal-Boot" /tr "wscript.exe \"%SCRIPT_DIR%EXECUTAR-AUTO-HEAL.vbs\"" /sc onstart /ru SYSTEM /rl HIGHEST /f > "%TEMP%\zbx-schtasks.log" 2>&1
 if errorlevel 1 goto :heal_erro
-schtasks /create /tn "ZabbixAgent-AutoHeal-5min" /tr "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \"%HEAL_PATH%\"" /sc minute /mo 5 /ru SYSTEM /rl HIGHEST /f >> "%TEMP%\zbx-schtasks.log" 2>&1
+schtasks /create /tn "ZabbixAgent-AutoHeal-5min" /tr "wscript.exe \"%SCRIPT_DIR%EXECUTAR-AUTO-HEAL.vbs\"" /sc minute /mo 5 /ru SYSTEM /rl HIGHEST /f >> "%TEMP%\zbx-schtasks.log" 2>&1
 if errorlevel 1 goto :heal_erro
 call :log "[OK] Auto-heal ativo (boot + a cada 5 min): reinicia agente e corrige IP/config."
 goto :heal_fim
@@ -226,7 +226,7 @@ REM Se o servidor travar (event loop congelado), o vigia reinicia sozinho
 REM em ate 1 minuto. Detectado e corrigido em 25/11/2026.
 if not exist "%SCRIPT_DIR%..\vigia-servidor.ps1" goto :vigia_ausente
 set "VIGIA_PATH=%SCRIPT_DIR%..\vigia-servidor.ps1"
-schtasks /create /tn "InventarioTI-Vigia-Servidor" /tr "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"%VIGIA_PATH%\"" /sc minute /mo 1 /f >> "%TEMP%\zbx-schtasks.log" 2>&1
+schtasks /create /tn "InventarioTI-Vigia-Servidor" /tr "wscript.exe \"%SCRIPT_DIR%EXECUTAR-VIGIA.vbs\"" /sc minute /mo 1 /f >> "%TEMP%\zbx-schtasks.log" 2>&1
 if errorlevel 1 goto :vigia_erro
 call :log "[OK] Vigia do servidor ativo (a cada 1 min: reinicia o painel se travar)."
 goto :vigia_fim

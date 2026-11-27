@@ -15,7 +15,7 @@ Esta pasta contém o instalador único para os computadores Windows monitorados.
 
 > `INSTALAR.cmd` continua funcionando como wrapper de compatibilidade, mas **use o `.vbs`** para não ver nenhuma janela de console.
 >
-> **Sem flicker também depois de instalado:** as tarefas agendadas (auto-heal a cada 5 min, vigia a cada 1 min e instalador silencioso no boot) usam `-WindowStyle Hidden` / atalho VBS oculto. Nada mais abre console periodicamente.
+> **Sem flicker também depois de instalado:** as tarefas agendadas (auto-heal a cada 5 min, vigia a cada 1 min e instalador silencioso no boot) rodam via **`EXECUTAR-AUTO-HEAL.vbs`**, **`EXECUTAR-VIGIA.vbs`** e **`instalar-silencioso.vbs`** com `WshShell.Run(cmd, 0, True)`. O `wscript.exe` não tem console e o `SW_HIDE` esconde o PowerShell **desde a criação** — o `-WindowStyle Hidden` sozinho ainda piscava por um instante quando o Agendador de Tarefas criava o processo. Nada mais abre janela periodicamente.
 
 Tudo que é preciso estar na pasta (ela inteira):
 
@@ -30,6 +30,9 @@ Tudo que é preciso estar na pasta (ela inteira):
 | `auto-heal.ps1` | Mantém agente vivo (boot + a cada 5 min) |
 | `CRIAR-ATALHOS.ps1` | Recria os atalhos na Área de Trabalho |
 | `instalar-silencioso.vbs` | Janela oculta para a tarefa agendada no boot/logon |
+| `EXECUTAR-AUTO-HEAL.vbs` | Roda o auto-heal sem console (tarefa boot + 5 min) |
+| `EXECUTAR-VIGIA.vbs` | Roda o vigia do servidor sem console (tarefa 1 min) |
+| `INSTALAR-1-CLIQUE.vbs` | **← entry point recomendado: instala oculto, sem piscar** |
 | `instalar-remoto.ps1` | Instala em outro PC da rede (ex.: 192.168.0.108) |
 | `verificar-agente.ps1` | Confirma se o agente de outro PC está conectado |
 
