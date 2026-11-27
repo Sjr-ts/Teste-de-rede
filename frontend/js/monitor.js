@@ -164,6 +164,16 @@ async function monPollCpuTempoReal() {
     } catch (e) {}
 }
 
+// Barra minima de uso: cor muda com a carga e acompanha o valor em tempo real.
+function monBarraHtml(val) {
+    const m = String(val == null ? '' : val).match(/(\d+(?:\.\d+)?)\s*%/);
+    if (!m) return null;
+    const n = Math.max(0, Math.min(100, Number(m[1])));
+    const cor = 'var(--' + (monCorUso(n) || 'green') + ')';
+    return '<span class="mon-uso"><span class="mon-uso-bar"><i style="width:' + n + '%;background:' + cor + ';"></i></span>' +
+        '<span style="color:var(--cyan);font-weight:700;font-size:11px;">' + esc(String(val).trim()) + '</span></span>';
+}
+
 // Linha do PC local (este servidor) na tabela — match robusto via data-local
 function monLinhaLocalTabela(tabela) {
     return tabela.querySelector('tr[data-local="1"]');
@@ -189,8 +199,8 @@ function monAtualizarCpuNaTabela(cpu, ts) {
     const tds = tr.querySelectorAll('td');
     if (tds.length >= 8) {
         const cpuCell = tds[3];
-        cpuCell.innerHTML = '<span style="color:var(--cyan);font-weight:600;">' + cpu.toFixed(1) + '%</span>' +
-            '<br><span style="font-size:9px;color:var(--text-muted);" title="Contador &apos;% Processor Utility&apos; — o mesmo exibido no Gerenciador de Tarefas">TEMPO REAL</span>' +
+        cpuCell.innerHTML = (monBarraHtml(cpu.toFixed(1) + '%') || '') +
+            '<br><span style="font-size:9px;color:var(--text-muted);" title="Contador % Processor Utility — o mesmo do Gerenciador de Tarefas">TEMPO REAL</span>' +
             '<br>' + monIdadeHtml(ts);
     }
 }
@@ -206,8 +216,7 @@ function monAtualizarGpuNaTabela(gpu, nome, ts) {
     const tds = tr.querySelectorAll('td');
     if (tds.length >= 8) {
         const gpuCell = tds[4];
-        const cor = 'var(--' + (monCorUso(gpu, 'cyan') || 'cyan') + ')';
-        gpuCell.innerHTML = '<span style="color:' + cor + ';font-weight:600;">' + gpu.toFixed(1) + '%</span>' +
+        gpuCell.innerHTML = (monBarraHtml(gpu.toFixed(1) + '%') || '') +
             '<br><span style="font-size:9px;color:var(--text-muted);">' + esc(nome || 'GPU') + '</span>' +
             '<br>' + monIdadeHtml(ts);
     }
@@ -1719,7 +1728,8 @@ function monRenderTopo(sistema, zabbix, painel) {
     const item = (ic, cor, label, valor) =>
         '<div class="mon-topo-item"><i class="fas ' + ic + '" style="color:var(--' + cor + ');"></i>' +
         '<span class="mon-topo-label">' + label + '</span><b style="color:var(--' + cor + ');">' + esc(valor) + '</b></div>';
-    el.innerHTML =
+    const seloVivo = '<span class="mon-live"><i></i> ' + (servico.rodando ? 'Ao vivo' : 'Parado') + '</span>';
+    el.innerHTML = seloVivo +
         item('fa-bolt', servico.rodando ? 'green' : 'red', 'Coletor', servico.rodando ? 'ON' : 'OFF') +
         item('fa-server', z.conectado ? 'green' : 'red', 'Zabbix', z.conectado ? (zb.disponiveis + '/' + zb.totalHosts + ' hosts') : 'OFF') +
         item('fa-clock', 'cyan', 'Ultima coleta', hora) +
@@ -2189,7 +2199,8 @@ function monRenderTabela(p) {
             const corFonte = fonte === 'ZABBIX' ? 'var(--purple)' : (fonte === 'ZABBIX_CACHE' ? 'var(--orange)' : 'var(--green)');
             const texto = String(val).replace(/\s*\(Zabbix\)\s*/g, '').replace(/\s*ZABBIX_DADOS_ANTIGOS\s*/g, '').trim();
             const fonteLabel = fonte === 'ZABBIX_CACHE' ? 'ZABBIX (cache antigo)' : fonte;
-            return '<span style="color:var(--cyan);font-weight:600;">' + esc(texto) + '</span><br><span style="font-size:9px;color:' + corFonte + ';">' + fonteLabel + '</span>';
+            const valorHtml = monBarraHtml(texto) || '<span style="color:var(--cyan);font-weight:600;">' + esc(texto) + '</span>';
+            return valorHtml + '<br><span style="font-size:9px;color:' + corFonte + ';">' + fonteLabel + '</span>';
         }
         const cpuCell = _cellMetrica(l.cpu, 'Indisp.');
         const gpuCell = _cellMetrica(l.gpu, 'Indisp.');

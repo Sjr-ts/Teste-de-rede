@@ -7,26 +7,54 @@
    Monitoramento - linha de status compacta
    ========================================== */
 .mon-topo {
+    position: relative;
+    overflow: hidden;
     display: flex;
     align-items: center;
     gap: 22px;
     flex-wrap: wrap;
-    padding: 11px 16px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: linear-gradient(180deg, var(--bg-surface), var(--bg-panel));
+    padding: 13px 18px;
+    border: 1px solid rgba(0, 229, 199, .18);
+    border-radius: 14px;
+    background: linear-gradient(110deg, rgba(0, 229, 199, .07), rgba(13, 21, 38, .94) 32%, rgba(178, 77, 255, .06));
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .28), inset 0 1px 0 rgba(255, 255, 255, .05);
+}
+.mon-topo::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(560px 90px at 0% 0%, rgba(0, 229, 199, .12), transparent 65%);
 }
 .mon-topo-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    white-space: nowrap;
+    position: relative;
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; white-space: nowrap;
 }
-.mon-topo-item i { font-size: 13px; }
-.mon-topo-item b { font-size: 13px; font-weight: 700; }
-.mon-topo-label { color: var(--text-secondary); font-size: 10px; text-transform: uppercase; letter-spacing: .5px; }
-.mon-topo-sep { width: 1px; height: 20px; background: var(--border); }
+.mon-topo-item i { font-size: 14px; }
+.mon-topo-item b { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.mon-topo-label { color: var(--text-secondary); font-size: 10px; text-transform: uppercase; letter-spacing: .6px; font-weight: 700; }
+.mon-topo-sep { width: 1px; height: 22px; background: linear-gradient(transparent, rgba(255,255,255,.16), transparent); }
+.mon-live {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 20px;
+    background: var(--green-bg); color: var(--green);
+    font-size: 9px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
+}
+.mon-live i {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+    animation: monPulse 1.7s ease-out infinite;
+}
+@keyframes monPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(0, 230, 118, .55); opacity: 1; }
+    55% { box-shadow: 0 0 0 7px rgba(0, 230, 118, 0); opacity: .75; }
+}
+/* Barras minhas de uso dentro da tabela de equipamentos */
+.mon-uso { display: inline-flex; align-items: center; gap: 7px; }
+.mon-uso-bar {
+    width: 30px; height: 4px; border-radius: 3px;
+    background: rgba(255, 255, 255, .09); overflow: hidden; flex: none;
+}
+.mon-uso-bar i { display: block; height: 100%; border-radius: 3px; transition: width .4s ease; }
+#monitoramento:not(.hidden) { animation: monEnter .38s ease both; }
+@keyframes monEnter { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: none; } }
 @media (max-width: 900px) {
     .mon-topo { gap: 12px; }
     .mon-topo-sep { display: none; }
@@ -542,23 +570,30 @@ body {
     gap: 10px; margin-bottom: 18px;
 }
 .kpi-card {
-    background: var(--bg-panel);
+    background: linear-gradient(150deg, var(--bg-elevated), var(--bg-panel) 55%);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 14px 16px;
+    border-radius: 14px;
+    padding: 15px 17px;
     position: relative; overflow: hidden;
     display: flex; flex-direction: column;
-    min-height: 98px;
+    min-height: 104px;
     cursor: pointer;
-    transition: border-color 0.16s ease, background-color 0.16s ease;
+    transition: transform var(--transition-base), border-color 0.16s ease, box-shadow var(--transition-base);
+}
+.kpi-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--primary), var(--accent));
+    opacity: .45; transition: opacity var(--transition-base);
 }
 .kpi-card:hover {
+    transform: translateY(-3px);
     border-color: var(--border-hover);
-    background: var(--bg-elevated);
+    box-shadow: 0 14px 30px rgba(0, 0, 0, .38);
 }
+.kpi-card:hover::before { opacity: 1; }
 .kpi-card.active {
     border-color: var(--cyan);
-    box-shadow: 0 0 0 1px var(--cyan);
+    box-shadow: 0 0 0 1px var(--cyan), 0 0 24px rgba(0, 229, 199, .16);
 }
 .kpi-top {
     display: flex; align-items: center; gap: 7px;
